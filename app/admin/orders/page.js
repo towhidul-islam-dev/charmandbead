@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { getAllOrders, updateOrderStatus } from "@/actions/order";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import Image from "next/image"; // Optimization: Modern Image Handling
+import { getAllOrders, updateOrderStatus, deleteOrder } from "@/actions/order";
 import {
-  User, Search, Eye, TrendingUp, Package, Calendar,
-  ChevronDown, CheckSquare, Square, Truck, CheckCircle, XCircle, Clock, 
-  RefreshCw, Ban, Filter
+  User, Search, Eye, TrendingUp, CheckSquare, Square, 
+  ChevronLeft, ChevronRight, X, Printer, Trash2
 } from "lucide-react";
-import Link from "next/link";
 import toast from "react-hot-toast";
 
 const statusColors = {
@@ -24,191 +23,257 @@ export default function AdminOrdersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [selectedOrders, setSelectedOrders] = useState([]);
-  const [lastSynced, setLastSynced] = useState(new Date());
+  const [viewingOrder, setViewingOrder] = useState(null);
+
+  // --- PAGINATION STATE ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalOrders, setTotalOrders] = useState(0);
+
+  // --- OPTIMIZED FETCHING ---
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    // Calling the new server action with pagination and search params
+    const res = await getAllOrders(currentPage, 10, searchTerm, statusFilter);
+    if (res.success) {
+      setOrders(res.orders);
+      setTotalPages(res.totalPages);
+      setTotalOrders(res.totalOrders);
+    }
+    setLoading(false);
+  }, [currentPage, searchTerm, statusFilter]);
 
   useEffect(() => {
-    fetchOrders();
-    // Auto-refresh data every 60 seconds
-    const interval = setInterval(fetchOrders, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    // Optimization: Debounce search to reduce DB load
+    const delayDebounceFn = setTimeout(() => {
+      fetchOrders();
+    }, 500);
 
-  async function fetchOrders() {
-    const data = await getAllOrders();
-    setOrders(data || []);
-    setLastSynced(new Date());
-    setLoading(false);
-  }
+    return () => clearTimeout(delayDebounceFn);
+  }, [fetchOrders]);
 
-  const stats = useMemo(() => ({
-    totalRevenue: orders.reduce((acc, o) => acc + (o.totalAmount || 0), 0),
-    delivered: orders.filter(o => o.status === "Delivered").length,
-    shipped: orders.filter(o => o.status === "Shipped").length,
-    processing: orders.filter(o => o.status === "Processing").length,
-    pending: orders.filter(o => o.status === "Pending").length,
-    cancelled: orders.filter(o => o.status === "Cancelled").length,
-  }), [orders]);
-
+  // --- HANDLERS ---
   const handleStatusChange = async (orderId, newStatus) => {
     const res = await updateOrderStatus(orderId, newStatus);
     if (res.success) {
-      toast.success(`Updated to ${newStatus}`);
+      toast.success(`Order ${newStatus}`);
+      fetchOrders(); // Refresh only the current page
+    }
+  };
+
+  const handleDelete = async (orderId) => {
+    if (!confirm("Delete this order? This will update VIP spending records.")) return;
+    const res = await deleteOrder(orderId);
+    if (res.success) {
+      toast.success("Order deleted");
       fetchOrders();
     }
   };
 
-  const handleBulkUpdate = async (newStatus) => {
-    const loadingToast = toast.loading(`Updating ${selectedOrders.length} orders...`);
-    try {
-      await Promise.all(selectedOrders.map(id => updateOrderStatus(id, newStatus)));
-      toast.success(`Bulk update: ${newStatus}`, { id: loadingToast });
-      setSelectedOrders([]);
-      fetchOrders();
-    } catch (error) {
-      toast.error("Failed", { id: loadingToast });
-    }
-  };
-
-  const filteredOrders = orders.filter((order) => {
-    const matchesSearch = 
-      order._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.shippingAddress?.name?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "All" || order.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const gridLayout = "md:grid-cols-[50px_110px_1.5fr_100px_100px_180px_120px]";
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center font-black text-[#EA638C] animate-pulse">SYNCING SERVER...</div>;
+  const gridLayout = "md:grid-cols-[50px_110px_1.5fr_100px_100px_180px_140px]";
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] pt-24 pb-20 px-4 md:px-8 lg:px-12">
+    <div className="min-h-screen bg-[#FAFAFA] pt-10 pb-20 px-4 md:px-12">
       <div className="mx-auto max-w-7xl">
         
-        {/* --- DYNAMIC STATS --- */}
-        <div className="grid grid-cols-2 gap-3 mb-8 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
-          <StatCard title="Revenue" value={`৳${stats.totalRevenue.toLocaleString()}`} icon={<TrendingUp size={18}/>} color="text-[#EA638C]" />
-          <StatCard title="Delivered" value={stats.delivered} icon={<CheckCircle size={18}/>} color="text-green-500" />
-          <StatCard title="Shipped" value={stats.shipped} icon={<Truck size={18}/>} color="text-blue-500" />
-          <StatCard title="Processing" value={stats.processing} icon={<RefreshCw size={18}/>} color="text-purple-500" />
-          <StatCard title="Pending" value={stats.pending} icon={<Clock size={18}/>} color="text-amber-500" />
-          <StatCard title="Cancelled" value={stats.cancelled} icon={<Ban size={18}/>} color="text-red-500" />
-        </div>
-
-        {/* --- HEADER & FILTERS --- */}
+        {/* --- HEADER --- */}
         <div className="flex flex-col gap-4 mb-8 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl italic font-black text-gray-900 uppercase">Orders</h1>
-            <p className="text-[8px] font-black text-gray-400 tracking-widest mt-1 uppercase flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> 
-              Last Live Sync: {lastSynced.toLocaleTimeString()}
+            <h1 className="text-2xl italic font-black text-gray-900 uppercase">Order Manager</h1>
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">
+               Showing {orders.length} of {totalOrders} results
             </p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
-            {/* Status Quick Filter */}
-            <div className="relative">
-              <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
-              <select 
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="pl-10 pr-8 py-3 bg-white border-none shadow-sm rounded-2xl text-[10px] font-black uppercase tracking-widest appearance-none focus:ring-2 focus:ring-[#EA638C]/20"
-              >
-                <option value="All">All Status</option>
-                {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
+            <select 
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+              className="px-4 py-3 bg-white rounded-2xl text-[10px] font-black uppercase shadow-sm outline-none border-none cursor-pointer"
+            >
+              <option value="All">All Status</option>
+              {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
 
-            {/* Search */}
             <div className="relative w-full md:w-64">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <Search className="absolute text-gray-400 -translate-y-1/2 left-4 top-1/2" size={16} />
               <input
                 type="text"
-                placeholder="FIND ORDER..."
-                className="w-full pl-11 pr-4 py-3 rounded-2xl border-none shadow-sm text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#EA638C]/20"
-                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="ID, Name, or Phone..."
+                className="w-full pl-11 pr-4 py-3 rounded-2xl border-none shadow-sm text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-[#EA638C]/10"
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               />
             </div>
           </div>
         </div>
 
-        {/* --- TABLE SECTION --- */}
-        <div className="bg-white md:rounded-[2.5rem] md:shadow-sm md:border md:border-gray-50 overflow-hidden">
-          <div className={`hidden px-8 py-5 border-b border-gray-100 md:grid ${gridLayout} items-center bg-gray-50/40`}>
-            <button onClick={() => setSelectedOrders(selectedOrders.length === filteredOrders.length ? [] : filteredOrders.map(o => o._id))}>
-              {selectedOrders.length === filteredOrders.length && filteredOrders.length > 0 ? <CheckSquare size={18} /> : <Square size={18} />}
-            </button>
-            <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Details</span>
-            <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Customer</span>
-            <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Items</span>
-            <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Total</span>
-            <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest">State</span>
-            <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest text-right">Action</span>
+        {/* --- TABLE --- */}
+        <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-50 overflow-hidden min-h-[500px]">
+          <div className={`hidden px-8 py-5 border-b border-gray-100 md:grid ${gridLayout} items-center bg-gray-50/40 text-[9px] font-black uppercase text-gray-400 tracking-widest`}>
+             <span>Select</span>
+             <span>Ref / Date</span>
+             <span>Customer</span>
+             <span>Items</span>
+             <span>Total</span>
+             <span>Status</span>
+             <span className="text-right">Action</span>
           </div>
 
-          <div className="divide-y divide-gray-100">
-            {filteredOrders.length > 0 ? filteredOrders.map((order) => (
-              <div key={order._id} className={`flex flex-col md:grid ${gridLayout} p-6 md:px-8 md:py-6 items-start md:items-center transition-all ${selectedOrders.includes(order._id) ? 'bg-blue-50/40' : 'hover:bg-gray-50/50'}`}>
-                <button onClick={() => setSelectedOrders(prev => prev.includes(order._id) ? prev.filter(i => i !== order._id) : [...prev, order._id])} className="mb-4 md:mb-0">
-                  {selectedOrders.includes(order._id) ? <CheckSquare size={20} className="text-[#3E442B]" /> : <Square size={20} className="text-gray-200" />}
+          <div className={`divide-y divide-gray-100 ${loading ? 'opacity-40 animate-pulse' : ''}`}>
+            {orders.length > 0 ? orders.map((order) => (
+              <div key={order._id} className={`flex flex-col md:grid ${gridLayout} p-6 md:px-8 md:py-6 items-center hover:bg-gray-50/50 transition-all`}>
+                <button onClick={() => setSelectedOrders(prev => prev.includes(order._id) ? prev.filter(id => id !== order._id) : [...prev, order._id])}>
+                  {selectedOrders.includes(order._id) ? <CheckSquare size={18} className="text-[#EA638C]" /> : <Square size={18} className="text-gray-200" />}
                 </button>
-                <div className="mb-2 md:mb-0">
-                  <p className="text-xs font-bold text-gray-900">#{order._id.slice(-8)}</p>
-                  <p className="text-[9px] font-black uppercase text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</p>
+                
+                <div>
+                  <p className="text-xs font-bold text-gray-900">#{order._id.slice(-6).toUpperCase()}</p>
+                  <p className="text-[9px] font-black text-gray-400 uppercase">{new Date(order.createdAt).toLocaleDateString()}</p>
                 </div>
-                <div className="flex items-center gap-3 mb-2 md:mb-0 min-w-0 pr-4">
+
+                <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-pink-50 flex items-center justify-center text-[#EA638C] flex-shrink-0"><User size={14} /></div>
                   <p className="text-[10px] font-black uppercase text-gray-700 truncate">{order.shippingAddress?.name || "Guest"}</p>
                 </div>
-                <div className="flex -space-x-2 mb-2 md:mb-0">
+
+                <div className="flex -space-x-2">
                   {order.items.slice(0, 3).map((item, i) => (
-                    <img key={i} src={item.variant?.image || "/placeholder.png"} className="w-7 h-7 border-2 border-white rounded-lg shadow-sm" alt="p" />
+                    <div key={i} className="relative w-7 h-7 rounded-lg overflow-hidden border-2 border-white shadow-sm bg-white">
+                      <Image src={item.variant?.image || "/placeholder.png"} fill alt="p" className="object-cover" sizes="28px" />
+                    </div>
                   ))}
                 </div>
-                <div className="mb-2 md:mb-0 font-black text-gray-900 text-sm">৳{order.totalAmount.toLocaleString()}</div>
-                <div className="relative w-full md:w-[160px] mb-4 md:mb-0">
+
+                <div className="text-sm font-black text-gray-900">৳{order.totalAmount.toLocaleString()}</div>
+
+                <div className="pr-4 w-full md:w-auto">
                   <select
                     value={order.status}
                     onChange={(e) => handleStatusChange(order._id, e.target.value)}
-                    className={`w-full appearance-none text-[9px] font-black uppercase tracking-widest px-4 py-2.5 rounded-xl border-2 transition-all pr-10 ${statusColors[order.status]}`}
+                    className={`w-full text-[9px] font-black uppercase px-3 py-2 rounded-xl border appearance-none text-center cursor-pointer transition-colors ${statusColors[order.status]}`}
                   >
                     {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
-                  <ChevronDown size={12} className="absolute right-4 top-1/2 -translate-y-1/2 opacity-40 pointer-events-none" />
                 </div>
-                <div className="w-full md:text-right">
-                  <Link href={`/dashboard/orders/${order._id}`} className="flex md:inline-flex items-center justify-center gap-2 w-full md:w-auto text-[9px] font-black uppercase text-[#3E442B] border-2 border-gray-100 px-3 py-2.5 rounded-xl hover:bg-[#3E442B] hover:text-white transition-all">
-                    <Eye size={12} /> View
-                  </Link>
+
+                <div className="flex gap-2 w-full md:justify-end mt-4 md:mt-0">
+                  <button onClick={() => setViewingOrder(order)} className="flex-1 md:flex-none p-2.5 bg-gray-50 rounded-xl hover:bg-black hover:text-white transition-all"><Eye size={16}/></button>
+                  <button onClick={() => handleDelete(order._id)} className="flex-1 md:flex-none p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Trash2 size={16}/></button>
                 </div>
               </div>
-            )) : <div className="p-20 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">No results for this filter</div>}
+            )) : (
+              <div className="flex flex-col items-center justify-center p-20 text-gray-400">
+                <Search size={40} className="mb-4 opacity-20" />
+                <p className="text-[10px] font-black uppercase tracking-widest">No Records Found</p>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* --- BULK ACTION BAR --- */}
-        {selectedOrders.length > 0 && (
-          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-[#3E442B] text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-6 animate-in slide-in-from-bottom-5">
-             <span className="text-[10px] font-black uppercase">{selectedOrders.length} SELECTED</span>
-             <div className="h-4 w-[1px] bg-white/20" />
-             <div className="flex gap-4">
-                <button onClick={() => handleBulkUpdate('Shipped')} className="text-[9px] font-black uppercase hover:text-blue-300">Ship</button>
-                <button onClick={() => handleBulkUpdate('Delivered')} className="text-[9px] font-black uppercase hover:text-green-300">Deliver</button>
-                <button onClick={() => setSelectedOrders([])} className="opacity-50 hover:opacity-100 transition-opacity"><XCircle size={16}/></button>
-             </div>
+        {/* --- PAGINATION --- */}
+        <div className="mt-8 flex items-center justify-center gap-6">
+          <button 
+            disabled={currentPage === 1 || loading}
+            onClick={() => setCurrentPage(p => p - 1)}
+            className="p-3 bg-white rounded-2xl shadow-sm disabled:opacity-20 hover:scale-105 transition-transform"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          
+          <div className="flex flex-col items-center">
+             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Page</span>
+             <span className="text-sm font-black italic">{currentPage} / {totalPages}</span>
           </div>
+
+          <button 
+            disabled={currentPage === totalPages || loading}
+            onClick={() => setCurrentPage(p => p + 1)}
+            className="p-3 bg-white rounded-2xl shadow-sm disabled:opacity-20 hover:scale-105 transition-transform"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+
+        {/* --- MODAL --- */}
+        {viewingOrder && (
+          <OrderDetailsModal 
+            order={viewingOrder} 
+            onClose={() => setViewingOrder(null)} 
+          />
         )}
       </div>
     </div>
   );
 }
 
-function StatCard({ title, value, icon, color }) {
+function OrderDetailsModal({ order, onClose }) {
+  const [includePrice, setIncludePrice] = useState(true);
+
   return (
-    <div className="bg-white p-5 rounded-[2rem] border border-gray-100 flex flex-col justify-between h-28 shadow-sm">
-      <div className={`${color}`}>{icon}</div>
-      <div>
-        <p className="text-[8px] font-black uppercase text-gray-400 tracking-tighter">{title}</p>
-        <h2 className="text-lg font-black text-gray-900 truncate">{value}</h2>
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" onClick={onClose} />
+      <div className="relative w-full max-w-2xl bg-white rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 print:shadow-none print:rounded-none">
+        
+        {/* Modal Header */}
+        <div className="flex justify-between items-center p-6 border-b bg-gray-50/50 print:hidden">
+          <div className="flex items-center gap-3">
+             <div className="w-2 h-2 rounded-full bg-green-500" />
+             <h2 className="text-xs font-black uppercase tracking-widest">Order Details</h2>
+          </div>
+          <button onClick={onClose} className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-100"><X size={18}/></button>
+        </div>
+
+        {/* Print Toggles */}
+        <div className="px-8 py-4 bg-indigo-50/50 flex items-center justify-between print:hidden border-b border-indigo-100">
+           <span className="text-[9px] font-black text-indigo-600 uppercase">Document Mode:</span>
+           <div className="bg-white p-1 rounded-xl flex border border-indigo-100">
+              <button onClick={() => setIncludePrice(true)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase ${includePrice ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400'}`}>Invoice</button>
+              <button onClick={() => setIncludePrice(false)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase ${!includePrice ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400'}`}>Packing Slip</button>
+           </div>
+        </div>
+
+        <div className="p-8 max-h-[60vh] overflow-y-auto print:max-h-none">
+           {/* Items List */}
+           <div className="space-y-3">
+             {order.items.map((item, i) => (
+               <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                 <div className="relative w-14 h-14 rounded-xl overflow-hidden border-2 border-white shadow-sm">
+                   <Image src={item.variant?.image} fill alt="product" className="object-cover" sizes="56px" unoptimized />
+                 </div>
+                 <div className="flex-1">
+                   <p className="text-[10px] font-black uppercase text-gray-900">{item.productName}</p>
+                   <p className="text-[9px] text-gray-500 font-bold uppercase mt-0.5">Size: {item.variant?.size} | Qty: {item.quantity}</p>
+                 </div>
+                 {includePrice && <p className="font-black text-sm">৳{item.price * item.quantity}</p>}
+               </div>
+             ))}
+           </div>
+
+           {/* Summary Section */}
+           <div className="mt-8 pt-8 border-t flex flex-col md:flex-row justify-between gap-6">
+              <div className="space-y-1">
+                <p className="text-[9px] font-black text-gray-400 uppercase">Shipping To</p>
+                <p className="text-xs font-black uppercase text-gray-900">{order.shippingAddress?.name}</p>
+                <p className="text-[10px] font-medium text-gray-500">{order.shippingAddress?.address}, {order.shippingAddress?.city}</p>
+                <p className="text-[10px] font-bold text-gray-700">{order.shippingAddress?.phone}</p>
+              </div>
+              
+              {includePrice && (
+                <div className="text-right p-6 bg-gray-900 text-white rounded-[2rem] min-w-[180px]">
+                  <p className="text-[9px] font-black text-gray-400 uppercase">Amount Due</p>
+                  <p className="text-2xl italic font-black">৳{order.totalAmount.toLocaleString()}</p>
+                </div>
+              )}
+           </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="p-6 bg-white border-t flex gap-4 print:hidden">
+          <button onClick={() => window.print()} className="flex-1 bg-black text-white py-4 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:opacity-90 shadow-xl transition-all">
+            <Printer size={16} /> Generate PDF
+          </button>
+          <button onClick={onClose} className="flex-[0.4] bg-gray-100 text-gray-400 py-4 rounded-2xl text-[10px] font-black uppercase hover:bg-gray-200 transition-all">Close</button>
+        </div>
       </div>
     </div>
   );

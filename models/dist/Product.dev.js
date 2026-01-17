@@ -51,7 +51,11 @@ var ProductSchema = new _mongoose["default"].Schema({
     type: Boolean,
     "default": false
   },
-  variants: [VariantSchema]
+  variants: [VariantSchema],
+  isArchived: {
+    type: Boolean,
+    "default": false
+  }
 }, {
   timestamps: true
 });

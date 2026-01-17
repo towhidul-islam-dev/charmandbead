@@ -33,6 +33,8 @@ const UserSchema = new mongoose.Schema({
     city: String,
     isDefault: { type: Boolean, default: false }
   }],
+  isVIP: { type: Boolean, default: false },
+  vipDiscount: { type: Number, default: 5 },
 }, { timestamps: true });
 
 // PRE-SAVE HOOK: Hash the password

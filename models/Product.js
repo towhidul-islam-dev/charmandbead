@@ -21,6 +21,10 @@ const ProductSchema = new mongoose.Schema({
   isNewArrival: { type: Boolean, default: false },
   hasVariants: { type: Boolean, default: false },
   variants: [VariantSchema],
+  isArchived: { 
+    type: Boolean, 
+    default: false 
+  },
 }, { timestamps: true });
 
 export default mongoose.models.Product || mongoose.model("Product", ProductSchema);

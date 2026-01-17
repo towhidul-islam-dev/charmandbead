@@ -1,44 +1,45 @@
 'use client'; 
 
 import Link from 'next/link';
-import { usePathname,useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { 
     HomeIcon, 
     UserGroupIcon, 
     CubeIcon, 
     ShoppingCartIcon,
-    SparklesIcon // 💡 Added for New Arrivals
+    SparklesIcon, 
+    ChatBubbleLeftRightIcon 
 } from '@heroicons/react/24/outline';
 import AdminDesktopSidebar from './AdminDesktopSidebar';
 
 const navItems = [
     { name: 'Dashboard', href: '/admin', icon: HomeIcon },
     { name: 'Products', href: '/admin/products', icon: CubeIcon },
-    // 💡 NEW: Added New Arrivals management link
-    // { name: 'New Arrivals', href: '/admin/products?newArrival=true', icon: SparklesIcon }, 
     { name: 'New Arrivals', href: '/admin/new-arrivals', icon: SparklesIcon }, 
     { name: 'Cart', href: '/admin/cart-review', icon: ShoppingCartIcon }, 
     { name: 'Orders', href: '/admin/orders', icon: ShoppingCartIcon },
     { name: 'Users', href: '/admin/users', icon: UserGroupIcon },
+    { name: 'Reviews', href: '/admin/reviews', icon: ChatBubbleLeftRightIcon }, // 🟢 Fixed Icon
 ];
 
 export default function AdminSidebar({ user, globalData }) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    // Improved isActive to handle the query string for New Arrivals
+
     const isActive = (item) => {
+        // 1. Safe SearchParams Check
+        const isNewArrivalActive = searchParams ? searchParams.get('newArrival') === 'true' : false;
+
+        // 2. Exact match for Dashboard
         if (item.href === '/admin') return pathname === '/admin';
     
-    // Check if the current URL has ?newArrival=true
-    const isNewArrivalActive = searchParams.get('newArrival') === 'true';
-    
-    // Special check for the New Arrivals menu item
-    if (item.name === 'New Arrivals') {
-        return pathname.startsWith('/admin/new-arrivals') && isNewArrivalActive;
-    }
+        // 3. Special check for the New Arrivals menu item
+        if (item.name === 'New Arrivals') {
+            return pathname.startsWith('/admin/new-arrivals') || isNewArrivalActive;
+        }
 
-    // For other items, ensure they are active only if newArrival is NOT true
-    return pathname.startsWith(item.href) && !isNewArrivalActive;
+        // 4. Default check: Ensure path matches and we aren't in a "New Arrival" view
+        return pathname.startsWith(item.href) && !isNewArrivalActive;
     };
 
     return (

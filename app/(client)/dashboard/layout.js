@@ -1,8 +1,10 @@
-"use client"; // Required for usePathname
+"use client"; 
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { User, ShoppingBag, Heart, MapPin, LayoutDashboard, LogOut } from 'lucide-react';
+// 💡 STEP 1: Import the signOut function
+import { signOut } from 'next-auth/react';
 
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
@@ -14,6 +16,14 @@ export default function DashboardLayout({ children }) {
     { name: 'Addresses', href: '/dashboard/address', icon: MapPin },
     { name: 'Profile', href: '/dashboard/profile', icon: User },
   ];
+
+  // 💡 STEP 2: Create a logout handler
+  const handleLogout = async () => {
+    await signOut({ 
+      callbackUrl: '/login', // Redirect to login page after logout
+      redirect: true 
+    });
+  };
 
   return (
     <div className="flex flex-col gap-8 px-4 pb-20 mx-auto mt-20 max-w-7xl md:mt-28 md:flex-row">
@@ -32,7 +42,6 @@ export default function DashboardLayout({ children }) {
 
           <nav className="space-y-2">
             {menuItems.map((item) => {
-              // Check if the current path matches the item link
               const isActive = pathname === item.href;
 
               return (
@@ -50,14 +59,17 @@ export default function DashboardLayout({ children }) {
                     {item.name}
                   </div>
                   
-                  {/* Subtle dot indicator for active tab */}
                   {isActive && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
                 </Link>
               );
             })}
             
             <div className="pt-4 mt-4 border-t border-gray-50">
-              <button className="w-full flex items-center gap-3 px-5 py-3.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-2xl transition-all font-black uppercase text-[10px] tracking-widest group">
+              {/* 💡 STEP 3: Add onClick to the logout button */}
+              <button 
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-5 py-3.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-2xl transition-all font-black uppercase text-[10px] tracking-widest group"
+              >
                 <LogOut size={18} className="transition-transform group-hover:-translate-x-1" />
                 Logout
               </button>

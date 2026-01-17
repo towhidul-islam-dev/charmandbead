@@ -2,15 +2,19 @@ import { getProducts } from "@/lib/data";
 import { Zap, ShieldCheck, Truck, Sparkles } from "lucide-react";
 import FeatureShowcase from "@/components/FeatureShowcase";
 
-export default async function FeaturesPage() {
-  const { products: rawProducts, success } = await getProducts(12);
+// 🟢 FORCE FRESH DATA: Ensures archived items are removed from this page immediately
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-  // 💡 FIX: Serialize the products to plain JavaScript objects
-  // This converts MongoDB ObjectIds and Dates into simple strings
-  const products = rawProducts ? JSON.parse(JSON.stringify(rawProducts)) : [];
+export default async function FeaturesPage() {
+  // 🟢 PASS 'false': Only fetch products that are NOT archived
+  const { products: rawProducts, success } = await getProducts(false);
+
+  // 💡 Serialize the products to plain JavaScript objects
+  const products = success && rawProducts ? JSON.parse(JSON.stringify(rawProducts)) : [];
 
   return (
-    <main className="min-h-screen pb-20 bg-white">
+    <main className="min-h-screen pb-20">
       {/* Header */}
       <section className="px-4 py-12 mt-16 text-center md:mt-20 md:py-16">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-pink-50 text-[#EA638C] text-[10px] font-black uppercase tracking-[0.2em] mb-6">
@@ -40,8 +44,14 @@ export default async function FeaturesPage() {
 
       {/* Showcase */}
       <section className="px-2 mx-auto max-w-7xl md:px-8">
-        {/* Pass the serialized products here */}
-        <FeatureShowcase products={products} />
+        {/* If no products are found (or all are archived), you could show a fallback or the showcase handle it */}
+        {products.length > 0 ? (
+          <FeatureShowcase products={products} />
+        ) : (
+          <div className="py-20 text-center border-2 border-dashed border-gray-100 rounded-[3rem]">
+            <p className="text-[10px] font-black tracking-widest text-gray-400 uppercase">Updating Collection...</p>
+          </div>
+        )}
       </section>
     </main>
   );

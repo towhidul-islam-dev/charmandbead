@@ -5,16 +5,20 @@ import Link from "next/link";
 import { Sparkles, ArrowRight, Instagram, ArrowUpRight } from "lucide-react";
 import QRCode from "react-qr-code";
 
+// 🟢 FORCE FRESH DATA: Ensures that when you archive an item in admin, 
+// it disappears from the homepage immediately for users.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function HomePage() {
-  const { products: rawProducts, success } = await getProducts(4);
+  // 🟢 PASS 'false': This triggers the { isArchived: { $ne: true } } filter in your lib/data.js
+  const { products: rawProducts, success } = await getProducts(false); 
   const instagramUrl = "https://www.instagram.com/charm.and.bead";
 
   // --- SERIALIZATION LOGIC START ---
-  // This converts MongoDB ObjectIds and Buffers into plain strings
   const products = success && rawProducts ? rawProducts.map(product => ({
     ...product,
     _id: product._id.toString(),
-    // If your data contains variants, serialize their IDs too
     variants: product.variants?.map(v => ({
       ...v,
       _id: v._id.toString()
@@ -59,7 +63,7 @@ export default async function HomePage() {
           </Link>
         </div>
 
-        {/* Use the new 'products' variable here */}
+        {/* 🟢 The Grid: This now automatically excludes archived items */}
         {success && products.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
             {products.map((product) => (
@@ -74,7 +78,6 @@ export default async function HomePage() {
 
         {/* Instagram QR Section */}
         <div className="mt-24 relative overflow-hidden bg-white rounded-[3rem] md:rounded-[4rem] border border-gray-100 shadow-2xl shadow-gray-100 flex flex-col md:flex-row items-stretch mx-2">
-          
           <div className="z-10 flex-1 p-10 md:p-16 lg:p-20">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#EA638C]/10 text-[#EA638C] mb-6">
               <Instagram size={14} />
@@ -100,7 +103,6 @@ export default async function HomePage() {
           <div className="w-full md:w-[400px] bg-[#3E442B] p-12 flex flex-col items-center justify-center relative min-h-[400px]">
             <div className="relative group">
               <div className="absolute -inset-4 bg-[#EA638C]/30 rounded-[2.5rem] blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-              
               <div className="relative bg-white p-6 rounded-[2.5rem] shadow-2xl transition-transform duration-500 group-hover:scale-105">
                 <div className="p-2 border border-gray-100 border-dashed rounded-xl">
                   <QRCode 

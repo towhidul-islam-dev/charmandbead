@@ -10,10 +10,12 @@ var _mongoose = _interopRequireDefault(require("mongoose"));
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "default": obj }; }
 
 var OrderSchema = new _mongoose["default"].Schema({
+  // 1. Indexing User: Critical for 'getUserOrders' and VIP syncing
   user: {
     type: _mongoose["default"].Schema.Types.ObjectId,
     ref: "User",
-    required: true
+    required: true,
+    index: true
   },
   items: [{
     product: {
@@ -34,7 +36,6 @@ var OrderSchema = new _mongoose["default"].Schema({
     type: Number,
     "default": 0
   },
-  // 💡 Added this field
   paidAmount: {
     type: Number,
     "default": 0
@@ -44,10 +45,12 @@ var OrderSchema = new _mongoose["default"].Schema({
     "default": 0
   },
   shippingAddress: Object,
+  // 2. Indexing Status: Critical for the Admin Dashboard filters
   status: {
     type: String,
     "enum": ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"],
-    "default": "Pending"
+    "default": "Pending",
+    index: true
   },
   paymentStatus: {
     type: String,
@@ -77,6 +80,15 @@ var OrderSchema = new _mongoose["default"].Schema({
   }]
 }, {
   timestamps: true
+}); // 3. Compound Index: Accelerates the "Sort by Newest" logic used in your getAllOrders
+
+OrderSchema.index({
+  createdAt: -1
+}); // 4. Text Index: If you want to make search even faster for names/phones (Optional but recommended)
+
+OrderSchema.index({
+  "shippingAddress.name": "text",
+  "shippingAddress.phone": "text"
 });
 
 var _default = _mongoose["default"].models.Order || _mongoose["default"].model("Order", OrderSchema);

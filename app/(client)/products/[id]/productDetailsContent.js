@@ -6,14 +6,14 @@ import ProductPurchaseSection from "@/components/ProductPurchaseSection";
 export default function ProductDetailsContent({ product }) {
   if (!product) return null;
 
-  // Initialize gallery with all available images (main + variant images)
   const allImages = Array.from(new Set([
     ...(Array.isArray(product?.imageUrl) ? product.imageUrl : [product?.imageUrl]),
-    ...(product?.variants?.map(v => v.image).filter(Boolean) || [])
+    ...(product?.variants?.map(v => v.imageUrl || v.image).filter(Boolean) || [])
   ])).filter(img => img !== "/placeholder.png");
 
   const [mainImage, setMainImage] = useState(allImages[0] || "/placeholder.png");
 
+  // Overall product stock for the top badge
   const stockCount = product.stock || 0;
   const displayMoq = product.hasVariants 
     ? Math.min(...product.variants.map(v => v.minOrderQuantity || 1)) 
@@ -31,7 +31,6 @@ export default function ProductDetailsContent({ product }) {
           />
         </div>
 
-        {/* VARIANT THUMBNAILS GALLERY */}
         {allImages.length > 1 && (
           <div className="flex flex-wrap gap-3 px-2">
             {allImages.map((img, idx) => (
@@ -60,7 +59,7 @@ export default function ProductDetailsContent({ product }) {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-lg ${
-              stockCount > 0 ? "bg-gray-900 text-white" : "bg-red-100 text-red-600"
+              stockCount > 0 ? "bg-gray-900 text-white" : "bg-red-500 text-white"
             }`}>
               {stockCount > 0 ? "In Stock" : "Out of Stock"}
             </span>
@@ -83,12 +82,12 @@ export default function ProductDetailsContent({ product }) {
            <p className="font-medium leading-relaxed text-gray-600">{product.description}</p>
         </div>
 
+        {/* 💡 THE PROGRESS BAR LOGIC LIVES INSIDE THIS COMPONENT */}
         <div className={stockCount <= 0 ? "opacity-50 pointer-events-none" : ""}>
           <ProductPurchaseSection 
             product={product} 
             productSizes={product.hasVariants ? [...new Set(product.variants.map(v => v.size))] : ["Standard"]}
             isOutOfStock={stockCount <= 0}
-            // This is the CRITICAL part: it updates the main image when the user interacts with variant rows
             onVariantChange={(imageUrl) => {
               if (imageUrl) setMainImage(imageUrl);
             }} 

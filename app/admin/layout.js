@@ -1,47 +1,32 @@
 import { Suspense } from 'react';
+import { auth } from '@/lib/auth'; 
 import { redirect } from 'next/navigation';
-import { verifyAuthToken } from '@/lib/auth';
 import AdminSidebar from '@/components/AdminSidebar'; 
 import AdminHeader from '@/components/AdminHeader'; 
-import { getNewOrdersCount } from '@/actions/order'; // 💡 Import the real action
+import { getNewOrdersCount } from '@/actions/order';
 
 export default async function AdminLayout({ children }) {
-    
-    const { user, error } = await verifyAuthToken();
+    const session = await auth();
+    if (!session || session.user?.role !== 'admin') redirect('/login');
 
-    // Auth Protection
-    if (error) {
-        redirect('/login'); 
-    }
-
-    if (user.role !== 'admin') {
-        redirect('/'); 
-    }
-    
-    // 💡 REAL DATA FETCH: Get actual count from MongoDB
+    const user = session.user;
     const newOrdersCount = await getNewOrdersCount();
-    
-    // Prepare globalData with the real count
-    const globalData = {
-        newOrdersCount: newOrdersCount || 0,
-        totalProducts: 0, // You can add a getProductsCount() action similarly
-    };
+    const globalData = { newOrdersCount: newOrdersCount || 0 };
 
     return (
-        <div className="flex h-screen w-full bg-gray-50 overflow-hidden">
+        <div className="relative flex min-h-screen bg-gray-50">
+            {/* 🟢 THE NUCLEAR SIDEBAR: Fixed, high z-index, forced width */}
+            <div className="hidden md:block fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 z-[9999]">
+                <Suspense fallback={<div className="w-full h-full bg-gray-100 animate-pulse" />}>
+                    <AdminSidebar user={user} globalData={globalData} /> 
+                </Suspense>
+            </div>
             
-            {/* Sidebar now receives the real database count */}
-            <Suspense fallback={<div className="w-64 bg-white animate-pulse" />}>
-                <AdminSidebar user={user} globalData={globalData} /> 
-            </Suspense>
-            
-            <div className="flex flex-col flex-1 min-w-0 h-full">
+            {/* 🟢 THE CONTENT: Pushed to the right using ml-64 */}
+            <div className="flex flex-col flex-1 min-w-0 md:ml-64">
                 <AdminHeader user={user} />
-                
-                <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8 pb-24 md:pb-8">
-                    <div className="max-w-[1600px] mx-auto w-full">
-                        {children}
-                    </div>
+                <main className="p-4 md:p-10">
+                    {children}
                 </main>
             </div>
         </div>

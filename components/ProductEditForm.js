@@ -39,7 +39,7 @@ export default function ProductEditForm({ initialData, productId }) {
     };
     
     // --- Mock Categories for the dropdown (Adjust these to your actual list) ---
-    const categories = ['Metals', 'Stones', 'Findings', 'Tools', 'Other'];
+    const categories = ['Resin Materials', 'Silver Materials', 'Stainless Steel', 'Tools', 'Glass Beads', 'Stone Beads'];
 
     return (
         <form action={formAction} className="p-6 space-y-6 bg-white rounded-lg shadow-xl">

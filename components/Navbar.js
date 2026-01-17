@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image"; // Optimization: Optimized image handling
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
-  ShoppingCartIcon,
   HeartIcon,
   Bars3Icon,
   XMarkIcon,
   Squares2X2Icon,
 } from "@heroicons/react/24/outline";
+import ShoppingCartIcon from "@heroicons/react/24/outline/ShoppingCartIcon";
 import { useSession, signOut } from "next-auth/react";
 import { useWishlist } from "@/Context/WishlistContext";
 import { useCart } from "@/Context/CartContext";
@@ -17,9 +18,9 @@ import { useCart } from "@/Context/CartContext";
 const clientLinks = [
   { name: "Products", href: "/products", icon: Squares2X2Icon },
   { name: "Featured", href: "/featured" },
+  { name: "New arrivals", href: "/new-arrivals" },
   { name: "Reviews", href: "/reviews" },
   { name: "Contact", href: "/contact" },
-  { name: "New arrivals", href: "/new-arrivals" },
 ];
 
 const ClientHeader = ({ pathname }) => {
@@ -46,12 +47,19 @@ const ClientHeader = ({ pathname }) => {
         <div className="flex items-center justify-between h-full px-6 mx-auto max-w-7xl">
           
           {/* --- BRANDING SECTION --- */}
-          <Link href="/" className="flex items-center gap-3 group">
+          <Link href="/" className="flex items-center gap-3 group" aria-label="Charm & Bead Home">
             <div className="relative flex items-center justify-center w-12 h-12 md:w-14 md:h-14 overflow-hidden rounded-full bg-[#FBB6E6] transition-transform duration-300 group-hover:scale-105 shadow-sm">
-              <img src="/logo.svg" alt="Logo" className="object-cover w-full h-full" />
+              <Image 
+                src="/logo.svg" 
+                alt="Logo" 
+                width={56} 
+                height={56} 
+                priority 
+                className="object-cover w-full h-full"
+              />
             </div>
             <div className="flex flex-col justify-center">
-              <span className="text-xl md:text-2xl font-medium italic tracking-tight text-[#3E442B] leading-none font-serif" style={{ fontFamily: "'Playfair Display', serif" }}>
+              <span className="text-xl md:text-2xl font-medium italic tracking-tight text-[#3E442B] leading-none font-serif">
                 CHARM&BEAD
               </span>
               <span className="text-[9px] md:text-[10px] font-bold tracking-[0.2em] text-[#EA638C] uppercase mt-1">
@@ -60,7 +68,7 @@ const ClientHeader = ({ pathname }) => {
             </div>
           </Link>
 
-          {/* --- DESKTOP NAVIGATION LINKS --- */}
+          {/* --- DESKTOP NAVIGATION --- */}
           <nav className="items-center hidden space-x-1 md:flex">
             <Link href="/" className={getLinkClasses("/")}>Home</Link>
             {clientLinks.map((link) => (
@@ -72,8 +80,8 @@ const ClientHeader = ({ pathname }) => {
 
           {/* --- DESKTOP ACTIONS --- */}
           <div className="items-center hidden space-x-5 md:flex">
-            {/* Wishlist Icon */}
-            <Link href="/dashboard/wishlist" className="relative p-2 group">
+            {/* Wishlist */}
+            <Link href="/dashboard/wishlist" className="relative p-2 group" aria-label={`Wishlist with ${wishlistCount} items`}>
               <HeartIcon className="text-[#3E442B] h-6 w-6 group-hover:text-red-500 transition-colors" />
               {wishlistCount > 0 && (
                 <span className="absolute top-0 right-0 h-4 w-4 rounded-full bg-[#EA638C] text-[9px] font-black text-white flex items-center justify-center">
@@ -82,8 +90,8 @@ const ClientHeader = ({ pathname }) => {
               )}
             </Link>
 
-            {/* Cart Icon */}
-            <Link href="/cart" className="relative p-2 group">
+            {/* Cart */}
+            <Link href="/cart" className="relative p-2 group" aria-label={`Cart with ${cartCount} items`}>
               <ShoppingCartIcon className="text-[#3E442B] h-6 w-6 group-hover:text-[#EA638C] transition-colors" />
               {cartCount > 0 && (
                 <span className="absolute top-0 right-0 h-4 w-4 rounded-full bg-[#3E442B] text-[9px] font-black text-white flex items-center justify-center">
@@ -92,14 +100,16 @@ const ClientHeader = ({ pathname }) => {
               )}
             </Link>
 
-            {/* Profile/Login Logic */}
+            {/* Profile/Login */}
             {session ? (
               <Link href="/dashboard/orders" className="flex items-center gap-2 py-1 pl-1 pr-3 transition-colors bg-white border border-gray-100 shadow-sm rounded-2xl hover:bg-gray-50">
-                <div className="w-8 h-8 overflow-hidden border-2 border-white shadow-sm rounded-xl">
-                  <img 
+                <div className="relative w-8 h-8 overflow-hidden border-2 border-white shadow-sm rounded-xl">
+                  <Image 
                     src={session.user?.image || `https://ui-avatars.com/api/?name=${session.user?.name}`} 
-                    className="object-cover w-full h-full" 
-                    alt="profile" 
+                    alt="User profile"
+                    fill
+                    sizes="32px"
+                    className="object-cover"
                   />
                 </div>
                 <span className="text-[10px] font-black text-[#3E442B] uppercase">Profile</span>
@@ -117,34 +127,34 @@ const ClientHeader = ({ pathname }) => {
           </div>
 
           {/* Mobile Menu Toggle */}
-          <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 md:hidden text-[#3E442B]">
+          <button 
+            onClick={() => setIsMenuOpen(!isMenuOpen)} 
+            className="p-2 md:hidden text-[#3E442B]"
+            aria-label="Toggle mobile menu"
+          >
             {isMenuOpen ? <XMarkIcon className="w-6 h-6" /> : <Bars3Icon className="w-6 h-6" />}
           </button>
         </div>
         
-        {/* Mobile Sidebar/Menu */}
+        {/* Mobile Sidebar */}
         {isMenuOpen && (
           <div className="absolute left-0 flex flex-col w-full p-4 space-y-2 duration-300 bg-white border-b shadow-xl top-16 md:hidden animate-in slide-in-from-top">
             {clientLinks.map((link) => (
-              <Link key={link.name} href={link.href} onClick={() => setIsMenuOpen(false)} className="font-black uppercase text-xs p-4 text-[#3E442B] hover:bg-gray-50 rounded-xl">
+              <Link 
+                key={link.name} 
+                href={link.href} 
+                onClick={() => setIsMenuOpen(false)} 
+                className="font-black uppercase text-xs p-4 text-[#3E442B] hover:bg-gray-50 rounded-xl"
+              >
                 {link.name}
               </Link>
             ))}
-            {!session && (
-              <div className="grid grid-cols-2 gap-3 pt-4 mt-2 border-t border-gray-100">
-                <Link href="/login" onClick={() => setIsMenuOpen(false)} className="text-center font-black uppercase text-[10px] tracking-widest p-4 text-[#3E442B] bg-gray-50 rounded-xl">
-                  Login
-                </Link>
-                <Link href="/register" onClick={() => setIsMenuOpen(false)} className="text-center font-black uppercase text-[10px] tracking-widest p-4 text-white bg-[#EA638C] rounded-xl">
-                  Register
-                </Link>
-              </div>
-            )}
           </div>
         )}
       </header>
 
-      <div className="h-16 md:h-0" />
+      {/* Optimization: Ensure spacer matches header height exactly to prevent CLS */}
+      <div className="h-16 md:h-20" />
     </>
   );
 };
@@ -158,7 +168,7 @@ export default function Navbar() {
       <>
         <header className="fixed top-0 left-0 z-50 flex items-center w-full h-16 px-8 text-white shadow-lg bg-[#3E442B]">
           <Link href="/admin/dashboard" className="flex items-center gap-2">
-            <img src="/logo.svg" alt="Admin Logo" className="w-8 h-8 invert" />
+            <Image src="/logo.svg" alt="Admin Logo" width={32} height={32} className="invert" />
             <span className="text-xl font-bold tracking-tight text-[#EA638C]">
               Admin Console
             </span>

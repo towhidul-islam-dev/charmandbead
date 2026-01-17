@@ -45,6 +45,8 @@ export async function saveProduct(prevState, formData) {
       description: formData.get("description"),
       category: formData.get("category"),
       isNewArrival: formData.get("isNewArrival") === "true",
+      // 🟢 Handles boolean conversion from formData
+      isArchived: formData.get("isArchived") === "true", 
       hasVariants: hasVariants,
       imageUrl: imageUrl, 
     };
@@ -53,11 +55,8 @@ export async function saveProduct(prevState, formData) {
     if (hasVariants) {
       const rawVariants = JSON.parse(formData.get("variantsJson") || "[]");
       
-      // Process each variant to check for new images
       const processedVariants = await Promise.all(rawVariants.map(async (v, index) => {
         let vImageUrl = v.imageUrl || "";
-        
-        // Check if a specific file was uploaded for this variant index
         const variantFile = formData.get(`variantImage_${index}`);
         if (variantFile && variantFile instanceof File && variantFile.size > 0) {
           const uploadedVUrl = await uploadToCloudinary(variantFile);
@@ -84,10 +83,7 @@ export async function saveProduct(prevState, formData) {
       productData.variants = [];
     }
 
-    // --- DEBUG LOG ---
-    console.log("🚀 SAVING TO DB:", JSON.stringify(productData, null, 2));
-
-    if (id) {
+    if (id && id !== "undefined") {
       await Product.findByIdAndUpdate(id, productData);
     } else {
       await new Product(productData).save();
@@ -99,6 +95,25 @@ export async function saveProduct(prevState, formData) {
   } catch (error) {
     console.error("Save Error:", error);
     return { success: false, message: error.message };
+  }
+}
+
+// 🟢 Dedicated Action for the Admin Table Button
+export async function toggleArchiveProduct(productId) {
+  try {
+    await mongodb();
+    const product = await Product.findById(productId);
+    if (!product) return { success: false, message: "Product not found" };
+
+    product.isArchived = !product.isArchived;
+    await product.save();
+
+    revalidatePath("/admin/products");
+    revalidatePath("/products"); 
+    return { success: true, newState: product.isArchived };
+  } catch (error) {
+    console.error("Archive Error:", error);
+    return { success: false, message: "Failed to toggle archive status" };
   }
 }
 

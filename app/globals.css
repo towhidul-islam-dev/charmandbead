@@ -30,16 +30,29 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
 }
 
 /* ... existing tailwind imports like @tailwind base; ... */
 
 @media print {
   /* Hide everything except the order card */
-  nav, footer, .back-link, button, .tracking-bar-container {
+  nav,
+  footer,
+  .back-link,
+  button,
+  .tracking-bar-container {
     display: none !important;
   }
-  
+
   body {
     background: white !important;
     padding: 0 !important;
@@ -52,4 +65,16 @@ body {
     margin: 0 !important;
     width: 100% !important;
   }
+}
+
+@keyframes whatsapp-shake {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(5deg); }
+  50% { transform: rotate(0deg); }
+  75% { transform: rotate(-5deg); }
+  100% { transform: rotate(0deg); }
+}
+
+.whatsapp-hover-effect:hover {
+  animation: whatsapp-shake 0.3s ease-in-out infinite;
 }

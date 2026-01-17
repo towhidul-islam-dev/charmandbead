@@ -1,8 +1,13 @@
+// app/admin/products/page.js
+export const dynamic = 'force-dynamic'; // 🟢 Prevents static caching
+export const revalidate = 0;           // 🟢 Ensures fresh data on every request
+
 import { getProducts } from "@/lib/data";
 import AdminProductsClient from "./AdminProductsClient";
 
 export default async function AdminProductsPage() {
-  const { products, success, error } = await getProducts();
+  // We pass 'true' to get all products (including archived)
+  const { products, success, error } = await getProducts(true);
 
   if (!success) {
     return (
@@ -12,11 +17,7 @@ export default async function AdminProductsPage() {
     );
   }
 
-  // CONVERT DATA TO PLAIN OBJECTS HERE
-  // This removes the "toJSON methods" and "buffer" error by 
-  // turning the MongoDB objects into simple strings/objects.
   const serializedProducts = JSON.parse(JSON.stringify(products));
 
-  // Pass the cleaned data to the Client Component
   return <AdminProductsClient initialProducts={serializedProducts} />;
 }

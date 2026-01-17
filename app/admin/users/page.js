@@ -1,117 +1,158 @@
-// app/admin/users/page.jsx (Server Component)
-
 import { getUsers } from "@/lib/data";
-import { Phone, MapPin } from "lucide-react"; // Optional: for consistent icons
+import RoleSelect from "@/components/admin/RoleSelect";
+import UserDetailsModal from "@/components/admin/UserDetailsModal";
+import { ShieldCheck, Users, Filter, Zap } from "lucide-react";
+import Link from "next/link";
 
-export default async function AdminUsersPage() {
+const SUPER_ADMIN_EMAILS = ["towhidulislam12@gmail.com", "dev@admin.com"];
+
+export default async function AdminUsersPage({ searchParams }) {
+  // 🟢 1. FIX: Await searchParams for Next.js 15/16
+  const resolvedSearchParams = await searchParams;
+  const activeFilter = resolvedSearchParams?.filter || "all";
+
   const { users, success, error } = await getUsers();
-
+  
   if (!success) {
     return (
-      <div className="p-4 text-red-500 md:p-8">
-        Error loading users: {error}
+      <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center">
+        <div className="p-4 mb-4 rounded-full bg-red-50">
+          <ShieldCheck className="w-12 h-12 text-red-500" />
+        </div>
+        <h2 className="text-xl font-black tracking-tighter text-[#3E442B] uppercase">Access Error</h2>
+        <p className="max-w-md mt-2 font-medium text-red-500">{error}</p>
       </div>
     );
   }
 
+  // 🟢 2. FILTER LOGIC
+  const filteredUsers = users.filter((user) => {
+    const isVIP = user.isVIP || (user.totalSpent >= 10000);
+    if (activeFilter === "vip") return isVIP;
+    if (activeFilter === "regular") return !isVIP;
+    return true; 
+  });
+
   return (
     <div className="p-4 mx-auto md:p-8 max-w-7xl">
-      <h2 className="mb-6 text-2xl font-bold">
-        Registered Users ({users.length})
-      </h2>
+      {/* Header Section */}
+      <div className="flex flex-col justify-between gap-6 mb-10 md:flex-row md:items-end">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="bg-[#EA638C]/10 px-2 py-1 rounded-lg border border-[#EA638C]/20">
+              <span className="text-[10px] font-black text-[#EA638C] uppercase tracking-widest flex items-center gap-1">
+                <Users size={12} /> System Administration
+              </span>
+            </div>
+          </div>
+          <h2 className="text-4xl italic font-black leading-none tracking-tighter text-[#3E442B] uppercase">
+            User <span className="text-[#EA638C]">Management</span>
+          </h2>
+        </div>
 
-      <div className="overflow-x-auto bg-white rounded-lg shadow-xl">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
-                Name
-              </th>
-              <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
-                Email
-              </th>
-              <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
-                Role
-              </th>
-              {/* 💡 NEW COLUMNS */}
-              <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
-                Phone
-              </th>
-              <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
-                Address
-              </th>
-              <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
-                Member Since
-              </th>
-              <th className="px-6 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {users.map((user) => (
-              <tr key={user._id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">
-                  {user.name}
-                  {user.addresses?.length > 1 && (
-                    <span className="ml-2 text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">
-                      +{user.addresses.length - 1} more
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
-                  {user.email}
-                </td>
-                <td className="px-6 py-4 text-sm font-bold whitespace-nowrap">
-                  <span
-                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === "admin" ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}`}
-                  >
-                    {user.role || "user"}
-                  </span>
-                </td>
+        {/* 🟢 THEMED FILTER CONTROLS */}
+        <div className="flex items-center gap-2 bg-[#F3F4F6] p-1.5 rounded-2xl border border-gray-200">
+          <Link 
+            href="/admin/users?filter=all"
+            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeFilter === 'all' ? 'bg-[#3E442B] text-white shadow-lg shadow-[#3E442B]/20' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            All Members
+          </Link>
+          <Link 
+            href="/admin/users?filter=vip"
+            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeFilter === 'vip' ? 'bg-yellow-400 text-black shadow-lg shadow-yellow-400/20' : 'text-gray-400 hover:text-yellow-600'}`}
+          >
+            <Zap size={10} fill={activeFilter === 'vip' ? 'black' : 'none'} /> VIP Tier
+          </Link>
+          <Link 
+            href="/admin/users?filter=regular"
+            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeFilter === 'regular' ? 'bg-white text-[#3E442B] border border-gray-200 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            Regular
+          </Link>
+        </div>
+      </div>
 
-                {/* 💡 NEW DATA: Phone Number */}
-                <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap font-medium">
-                  {user.addresses?.[0]?.phone ? (
-                    <span className="flex items-center gap-1">
-                      {user.addresses[0].phone}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400 italic text-xs font-normal">
-                      N/A
-                    </span>
-                  )}
-                </td>
+      {/* Table Section */}
+      <div className="bg-white rounded-[3rem] shadow-2xl shadow-gray-200/50 border border-gray-100 overflow-hidden">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100 bg-gray-50/50">
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+            <Filter size={14} className="text-[#EA638C]" /> 
+            Directory: <span className="text-[#3E442B]">{activeFilter}</span> ({filteredUsers.length} total)
+          </span>
+        </div>
 
-                {/* 💡 UPDATED DATA: Address (Accessing the array index 0) */}
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {user.addresses?.[0]?.street ? (
-                    <div
-                      className="max-w-xs truncate"
-                      title={`${user.addresses[0].street}, ${user.addresses[0].city}`}
-                    >
-                      {user.addresses[0].street}, {user.addresses[0].city}
-                    </div>
-                  ) : (
-                    <span className="text-gray-400 italic text-xs">
-                      No address
-                    </span>
-                  )}
-                </td>
-
-                <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
-                  {new Date(user.createdAt).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 text-sm font-medium text-right whitespace-nowrap">
-                  <a
-                    href={`/admin/users/edit/${user._id}`}
-                    className="text-indigo-600 hover:text-indigo-900"
-                  >
-                    Edit
-                  </a>
-                </td>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-100">
+            <thead className="bg-gray-50/50">
+              <tr>
+                <th className="px-8 py-6 text-[10px] font-black uppercase text-gray-400 text-left tracking-widest">Creator Profile</th>
+                <th className="px-6 py-6 text-[10px] font-black uppercase text-gray-400 text-left tracking-widest">Access Level</th>
+                <th className="px-6 py-6 text-[10px] font-black uppercase text-gray-400 text-left tracking-widest">Investment (৳)</th>
+                <th className="px-6 py-6 text-[10px] font-black uppercase text-gray-400 text-left tracking-widest">Joined</th>
+                <th className="px-8 py-6"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-50">
+              {filteredUsers.length > 0 ? filteredUsers.map((user) => {
+                const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(user.email);
+                const isVIP = user.isVIP || (user.totalSpent >= 10000);
+                
+                return (
+                  <tr key={user._id} className="transition-colors group hover:bg-pink-50/30">
+                    <td className="px-8 py-6 whitespace-nowrap">
+                      <div className="flex items-center gap-4">
+                        <div className="relative">
+                           <div className={`flex items-center justify-center w-10 h-10 overflow-hidden border shadow-sm rounded-2xl ${isVIP ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-gray-100'}`}>
+                              {user.image ? <img src={user.image} alt="" className="object-cover w-full h-full" /> : <span className="text-sm font-black text-gray-300">{user.name.charAt(0)}</span>}
+                           </div>
+                           {isVIP && (
+                             <div className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-black p-0.5 rounded-full border-2 border-white shadow-sm animate-pulse">
+                               <Zap size={8} fill="currentColor" />
+                             </div>
+                           )}
+                        </div>
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm italic font-black tracking-tight text-[#3E442B] uppercase">{user.name}</span>
+                            {isVIP && <span className="bg-yellow-400 text-black text-[7px] font-black px-1.5 py-0.5 rounded-md uppercase">PRO VIP</span>}
+                          </div>
+                          <span className="text-[11px] font-medium text-gray-400">{user.email}</span>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-6 whitespace-nowrap">
+                      {isSuperAdmin ? (
+                        <span className="text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2 py-1 rounded-lg">Super Admin</span>
+                      ) : (
+                        <RoleSelect userId={user._id.toString()} currentRole={user.role || "user"} />
+                      )}
+                    </td>
+
+                    <td className="px-6 py-6 text-xs font-black whitespace-nowrap text-[#3E442B]">
+                      ৳{(user.totalSpent || 0).toLocaleString()}
+                    </td>
+
+                    <td className="px-6 py-6 whitespace-nowrap text-[11px] font-black text-gray-400 uppercase">
+                      {new Date(user.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </td>
+
+                    <td className="px-8 py-6 text-right">
+                      <UserDetailsModal user={JSON.parse(JSON.stringify(user))} orders={user.orders} totalSpent={user.totalSpent || 0} />
+                    </td>
+                  </tr>
+                );
+              }) : (
+                <tr>
+                  <td colSpan="5" className="py-32 text-center text-[10px] font-black uppercase text-gray-300 tracking-[0.3em]">
+                    No members found in this category
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
