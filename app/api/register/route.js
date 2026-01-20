@@ -1,70 +1,50 @@
-import connectToDatabase from '@/lib/mongodb';
+import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import { NextResponse } from 'next/server';
 
-// --- POST (User Registration) ---
 export async function POST(request) {
   try {
-    await connectToDatabase();
+    await dbConnect();
     
-    // Get email and password from the client request
-    const { name, email, password } = await request.json();
+    const body = await request.json();
+    const { name, email, password } = body;
     
-    if (!name || !email || !password || name.trim() === '' || email.trim() === '' || password.length < 6) {
-      return NextResponse.json(
-        { message: 'All fields (Name, Email, Password) are required and must be valid.' }, 
-        { status: 400 } // 400 Bad Request
-      );
+    // Validation
+    if (!name || !email || !password) {
+      return NextResponse.json({ message: 'All fields are required.' }, { status: 400 });
     }
 
-    // 1. Check if user already exists
-    const existingUser = await User.findOne({ email });
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Check if user exists
+    const existingUser = await User.findOne({ email: cleanEmail });
     if (existingUser) {
-      return NextResponse.json({ message: 'User already exists' }, { status: 409 });
+      return NextResponse.json({ message: 'Email already in use.' }, { status: 409 });
     }
 
-    // 2. Create the new user. The password hashing happens automatically 
-    //    via the 'pre-save' hook defined in models/User.js!
+    // Create user - Note: hashing happens in models/User.js
     const newUser = await User.create({ 
-      // 💡 Clean up the name string before creating
       name: name.trim(), 
-      email, 
+      email: cleanEmail, 
       password 
     });
 
-    // 3. (Optional but recommended) Return only necessary user data
-    const safeUser = { 
-      id: newUser._id, 
-      name: newUser.name,
-      email: newUser.email, 
-      role: newUser.role 
-    };
-
     return NextResponse.json({ 
-      message: 'Registration successful yahoo!!!', 
-      user: safeUser 
+      message: 'Registration successful!', 
+      user: { id: newUser._id, name: newUser.name, email: newUser.email } 
     }, { status: 201 });
 
   } catch (error) {
-    console.error("Registration Error:", error);
-    // Handle Mongoose validation errors (e.g., invalid email format)
-  
-    if (error.code === 11000) {
-        return NextResponse.json({ 
-            message: 'User already exists with this email address.',
-            field: 'email'
-        }, { status: 409 }); 
+    console.error("CRITICAL_REGISTRATION_ERROR:", error);
+    
+    // Specific MongoDB Error Handling
+    if (error.name === 'MongoServerError' && error.code === 11000) {
+        return NextResponse.json({ message: 'Email already exists in database.' }, { status: 409 });
     }
 
-    if (error.name === 'ValidationError') {
-        return NextResponse.json({ 
-            message: 'Validation failed.',
-            details: error.message 
-        }, { status: 400 }); 
-    }
     return NextResponse.json({ 
-      message: 'Failed to register user',
-      details: error.message 
+      message: 'Server Error', 
+      details: error.message // 💡 This will show the real error in the browser console
     }, { status: 500 });
   }
 }

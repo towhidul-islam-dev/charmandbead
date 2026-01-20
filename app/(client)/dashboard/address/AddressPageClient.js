@@ -139,7 +139,7 @@ export default function AddressPageClient({ initialData }) {
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="space-y-2">
-            <label className="ml-1 text-[10px] font-black text-gray-400 uppercase tracking-widest">Area / City</label>
+            <label className="ml-1 text-[10px] font-black text-gray-400 uppercase tracking-widest">Area / City / Thana</label>
             <div className="relative">
               <MapPin className="absolute left-4 top-3.5 text-gray-300" size={18} />
               <input 

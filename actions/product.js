@@ -6,7 +6,7 @@ import Product from "@/models/Product";
 import { v2 as cloudinary } from "cloudinary";
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
@@ -29,12 +29,17 @@ async function uploadToCloudinary(file) {
 export async function saveProduct(prevState, formData) {
   try {
     await mongodb();
-    const id = formData.get("id");
+    
+    // Ensure id is truly present and not just an empty string/null string
+    const rawId = formData.get("id");
+    const id = (rawId && rawId !== "undefined" && rawId !== "") ? rawId : null;
+    
     const hasVariants = formData.get("hasVariants") === "true";
 
     // 1. Handle Main Image Upload
     let imageUrl = formData.get("existingImage") || "";
     const mainImageFile = formData.get("imageFile");
+    
     if (mainImageFile && mainImageFile instanceof File && mainImageFile.size > 0) {
       const uploadedUrl = await uploadToCloudinary(mainImageFile);
       if (uploadedUrl) imageUrl = uploadedUrl;
@@ -43,9 +48,11 @@ export async function saveProduct(prevState, formData) {
     let productData = {
       name: formData.get("name"),
       description: formData.get("description"),
-      category: formData.get("category"),
+      // 🆕 Multilayer Category Handling
+      category: formData.get("category"),       // e.g., "Beads"
+      subCategory: formData.get("subCategory"), // e.g., "Crystal Beads"
+      
       isNewArrival: formData.get("isNewArrival") === "true",
-      // 🟢 Handles boolean conversion from formData
       isArchived: formData.get("isArchived") === "true", 
       hasVariants: hasVariants,
       imageUrl: imageUrl, 
@@ -58,6 +65,7 @@ export async function saveProduct(prevState, formData) {
       const processedVariants = await Promise.all(rawVariants.map(async (v, index) => {
         let vImageUrl = v.imageUrl || "";
         const variantFile = formData.get(`variantImage_${index}`);
+        
         if (variantFile && variantFile instanceof File && variantFile.size > 0) {
           const uploadedVUrl = await uploadToCloudinary(variantFile);
           if (uploadedVUrl) vImageUrl = uploadedVUrl;
@@ -73,6 +81,7 @@ export async function saveProduct(prevState, formData) {
       }));
 
       productData.variants = processedVariants;
+      // Set base product stats based on the first variant
       productData.price = processedVariants[0]?.price || 0;
       productData.stock = processedVariants.reduce((acc, curr) => acc + curr.stock, 0);
       productData.minOrderQuantity = processedVariants[0]?.minOrderQuantity || 1;
@@ -83,18 +92,24 @@ export async function saveProduct(prevState, formData) {
       productData.variants = [];
     }
 
-    if (id && id !== "undefined") {
+    // 3. Save or Update
+    if (id) {
       await Product.findByIdAndUpdate(id, productData);
     } else {
-      await new Product(productData).save();
+      // Logic for new products
+      const newProduct = new Product(productData);
+      await newProduct.save();
     }
 
+    // 4. Cache Clearing
     revalidatePath("/admin/products");
     revalidatePath("/products");
+    revalidatePath("/"); // Revalidate home if it shows categories
+    
     return { success: true, message: "Product saved successfully!" };
   } catch (error) {
     console.error("Save Error:", error);
-    return { success: false, message: error.message };
+    return { success: false, message: error.message || "An unexpected error occurred" };
   }
 }
 
@@ -132,5 +147,54 @@ export async function removeFromNewArrivals(productId) {
     return { success: true, message: "Removed from New Arrivals" };
   } catch (error) {
     return { success: false, message: "Failed to remove product" };
+  }
+}
+
+export async function deleteProduct(productId) {
+  try {
+    await mongodb();
+
+    // 1. Find the product to get the image URL
+    const product = await Product.findById(productId);
+    if (!product) return { success: false, message: "Product not found" };
+
+    // 2. Helper to extract Public ID from Cloudinary URL
+    // Format: .../folder/public_id.jpg -> folder/public_id
+    const extractPublicId = (url) => {
+      if (!url || !url.includes("cloudinary")) return null;
+      const parts = url.split("/");
+      const fileName = parts.pop(); // image.jpg
+      const folder = parts.pop();   // ecom-products
+      return `${folder}/${fileName.split(".")[0]}`;
+    };
+
+    // 3. Delete Main Image from Cloudinary
+    const mainPublicId = extractPublicId(product.imageUrl);
+    if (mainPublicId) {
+      await cloudinary.uploader.destroy(mainPublicId);
+    }
+
+    // 4. Delete Variant Images from Cloudinary
+    if (product.hasVariants && product.variants.length > 0) {
+      for (const variant of product.variants) {
+        const vPublicId = extractPublicId(variant.imageUrl);
+        if (vPublicId) {
+          await cloudinary.uploader.destroy(vPublicId);
+        }
+      }
+    }
+
+    // 5. Delete from Database
+    await Product.findByIdAndDelete(productId);
+
+    // 6. Refresh Cache
+    revalidatePath("/admin/products");
+    revalidatePath("/products");
+    revalidatePath("/");
+
+    return { success: true, message: "Product and images deleted permanently" };
+  } catch (error) {
+    console.error("Delete Error:", error);
+    return { success: false, message: "Failed to delete product" };
   }
 }

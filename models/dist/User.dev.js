@@ -22,22 +22,29 @@ var UserSchema = new _mongoose["default"].Schema({
     required: [true, 'Email is required'],
     unique: true,
     lowercase: true,
-    // 💡 Added: Ensures email is always stored in lowercase
     trim: true,
-    // 💡 Added: Removes accidental spaces
     match: [/.+@.+\..+/, 'Must use a valid email address']
   },
   password: {
     type: String,
     required: [true, 'Password is required'],
-    select: false // 💡 Correct: This hides password from normal API responses
-
+    select: false
+  },
+  phone: {
+    type: String,
+    "default": ""
   },
   role: {
     type: String,
     "enum": ['user', 'admin'],
     "default": 'user'
   },
+  // 💡 Added wishlist field to store product references
+  wishlist: [{
+    type: _mongoose["default"].Schema.Types.ObjectId,
+    ref: 'Product' // 👈 Make sure this matches your Product model name exactly
+
+  }],
   addresses: [{
     label: String,
     fullName: String,
@@ -49,6 +56,14 @@ var UserSchema = new _mongoose["default"].Schema({
       "default": false
     }
   }],
+  image: {
+    type: String,
+    "default": ""
+  },
+  imagePublicId: {
+    type: String,
+    "default": ""
+  },
   isVIP: {
     type: Boolean,
     "default": false
@@ -59,9 +74,9 @@ var UserSchema = new _mongoose["default"].Schema({
   }
 }, {
   timestamps: true
-}); // PRE-SAVE HOOK: Hash the password
+}); // ✅ FIXED PRE-SAVE HOOK
 
-UserSchema.pre('save', function _callee(next) {
+UserSchema.pre('save', function _callee() {
   var salt;
   return regeneratorRuntime.async(function _callee$(_context) {
     while (1) {
@@ -72,7 +87,7 @@ UserSchema.pre('save', function _callee(next) {
             break;
           }
 
-          return _context.abrupt("return", next());
+          return _context.abrupt("return");
 
         case 2:
           _context.prev = 2;
@@ -86,22 +101,21 @@ UserSchema.pre('save', function _callee(next) {
 
         case 8:
           this.password = _context.sent;
-          next();
-          _context.next = 15;
+          _context.next = 14;
           break;
 
-        case 12:
-          _context.prev = 12;
+        case 11:
+          _context.prev = 11;
           _context.t0 = _context["catch"](2);
-          next(_context.t0);
+          throw _context.t0;
 
-        case 15:
+        case 14:
         case "end":
           return _context.stop();
       }
     }
-  }, null, this, [[2, 12]]);
-}); // Method to compare passwords
+  }, null, this, [[2, 11]]);
+});
 
 UserSchema.methods.comparePassword = function _callee2(candidatePassword) {
   return regeneratorRuntime.async(function _callee2$(_context2) {
@@ -113,7 +127,7 @@ UserSchema.methods.comparePassword = function _callee2(candidatePassword) {
             break;
           }
 
-          throw new Error("Password field not selected in query");
+          return _context2.abrupt("return", false);
 
         case 2:
           _context2.next = 4;
@@ -130,6 +144,7 @@ UserSchema.methods.comparePassword = function _callee2(candidatePassword) {
   }, null, this);
 };
 
-var _default = _mongoose["default"].models.User || _mongoose["default"].model('User', UserSchema);
+var User = _mongoose["default"].models.User || _mongoose["default"].model('User', UserSchema);
 
+var _default = User;
 exports["default"] = _default;

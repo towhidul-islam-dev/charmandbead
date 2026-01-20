@@ -11,22 +11,34 @@ export async function createReview(formData) {
   try {
     await connectDB();
     
-    const description = formData.get('description');
-    const imageUrl = formData.get('imageUrl');
-    const isFeatured = formData.get('isFeatured') === 'true';
+    // Support both FormData (from Admin) and Plain Objects (from User Dashboard)
+    const isForm = formData instanceof FormData;
+    const description = isForm ? formData.get('description') : formData.description;
+    const imageUrl = isForm ? formData.get('imageUrl') : formData.imageUrl;
+    const rating = isForm ? formData.get('rating') : formData.rating;
+    const isFeatured = isForm ? formData.get('isFeatured') === 'true' : formData.isFeatured;
 
-    await Review.create({
+    if (!imageUrl || !description) {
+        return { success: false, error: "Image and description are required." };
+    }
+
+    const newReview = await Review.create({
       description,
       imageUrl,
-      isFeatured
+      rating: Number(rating) || 5, // Default to 5 if not provided
+      isFeatured: isFeatured || false
     });
 
     revalidatePath('/admin/reviews');
-    revalidatePath('/reviews');
     revalidatePath('/'); 
 
-    return { success: true, message: "Review posted successfully!" };
+    return { 
+        success: true, 
+        message: "Review posted successfully!", 
+        review: JSON.parse(JSON.stringify(newReview)) 
+    };
   } catch (error) {
+    console.error("❌ DB Create Error:", error);
     return { success: false, error: error.message };
   }
 }
@@ -49,14 +61,16 @@ export async function getAllReviews() {
 
 /**
  * 3. Delete a Review
+ * Explicitly exported to fix build error
  */
 export async function deleteReview(id) {
   try {
     await connectDB();
-    await Review.findByIdAndDelete(id);
+    const result = await Review.findByIdAndDelete(id);
     
+    if (!result) return { success: false, error: "Review not found" };
+
     revalidatePath('/admin/reviews');
-    revalidatePath('/reviews');
     revalidatePath('/'); 
     
     return { success: true, message: "Review deleted successfully" };
@@ -66,14 +80,33 @@ export async function deleteReview(id) {
 }
 
 /**
- * 4. Get Featured Reviews (THE MISSING PIECE)
- * This fetches ONLY reviews where isFeatured is true.
+ * 4. Update Review
+ */
+export async function updateReview(id, updateData) {
+  try {
+    await connectDB();
+    await Review.findByIdAndUpdate(id, updateData, { new: true });
+
+    revalidatePath('/');
+    revalidatePath('/admin/reviews');
+
+    return { success: true, message: "Review updated successfully" };
+  } catch (error) {
+    return { success: false, error: "Failed to update review" };
+  }
+}
+
+/**
+ * 5. Get Featured Reviews
  */
 export async function getFeaturedReviews() {
   try {
     await connectDB();
-    // We only fetch the top 6 featured reviews for the homepage
-    const reviews = await Review.find({ isFeatured: true }).sort({ createdAt: -1 }).limit(6).lean();
+    const reviews = await Review.find({ isFeatured: true })
+      .sort({ createdAt: -1 })
+      .limit(8)
+      .lean();
+
     return { 
         success: true, 
         reviews: JSON.parse(JSON.stringify(reviews)) 

@@ -11,20 +11,24 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Email is required'],
     unique: true,
-    lowercase: true, // 💡 Added: Ensures email is always stored in lowercase
-    trim: true,      // 💡 Added: Removes accidental spaces
+    lowercase: true,
+    trim: true,
     match: [/.+@.+\..+/, 'Must use a valid email address'],
   },
   password: {
     type: String,
     required: [true, 'Password is required'],
-    select: false, // 💡 Correct: This hides password from normal API responses
+    select: false, 
   },
-  role: {
-    type: String,
-    enum: ['user', 'admin'],
-    default: 'user',
-  },
+  phone: { type: String, default: "" },
+  role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  
+  // 💡 Added wishlist field to store product references
+  wishlist: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product' // 👈 Make sure this matches your Product model name exactly
+  }],
+
   addresses: [{
     label: String,
     fullName: String,
@@ -33,30 +37,28 @@ const UserSchema = new mongoose.Schema({
     city: String,
     isDefault: { type: Boolean, default: false }
   }],
+  image: { type: String, default: "" },
+  imagePublicId: { type: String, default: "" },
   isVIP: { type: Boolean, default: false },
   vipDiscount: { type: Number, default: 5 },
 }, { timestamps: true });
 
-// PRE-SAVE HOOK: Hash the password
-UserSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
-  
+// ✅ FIXED PRE-SAVE HOOK
+UserSchema.pre('save', async function() {
+  if (!this.isModified('password')) return;
+
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
-    next();
   } catch (err) {
-    next(err);
+    throw err; 
   }
 });
 
-// Method to compare passwords
 UserSchema.methods.comparePassword = async function(candidatePassword) {
-    // ⚠️ IMPORTANT: This method only works if 'password' was included in the query
-    if (!this.password) {
-        throw new Error("Password field not selected in query");
-    }
+    if (!this.password) return false; 
     return await bcrypt.compare(candidatePassword, this.password);
 };
 
-export default mongoose.models.User || mongoose.model('User', UserSchema);
+const User = mongoose.models.User || mongoose.model('User', UserSchema);
+export default User;

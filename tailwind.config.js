@@ -13,13 +13,11 @@ export default {
           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
       },
       colors: {
-        'brand-primary': '#3E442B', // A vibrant, deep pink (Raspberry)
-        'brand-secondary' : "#04471C",
-        'brand-accent': '#F9B4ED', // A lighter, softer pink
-        'pink': {
-          600: '#EA638C', // Now 'bg-blue-600' will render your brand pink
-          700: '#D81B60', 
-        }
+        brand: {
+          green: "#3E442B",
+          pink: "#EA638C",
+          lightPink: "#FBB6E6",
+        },
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
@@ -31,8 +29,8 @@ export default {
         "custom-min-h": "500px",
         "custom-h-form": "600px",
       },
-      minWidth : {
-        'custome-w' : "400px",
+      minWidth: {
+        "custome-w": "400px",
       },
       gridTemplateColumns: {
         footerLayout: "repeat(auto-fit, minmax(14rem, 1fr))",
@@ -55,8 +53,8 @@ export default {
         moveInRight: "moveInRight .5s ease-in-out 1 forwards",
         cartAnimate: "cartAnimate 1s ease-in-out infinite forwards",
         cartDeleteBtnAnimate: "cartDeleteBtnAnimate .4s ease-in-out 1 forwards",
-        mobileNavIn : "mobileNavIn .5s ease-in-out 1 frowards",  
-        mobileNavOut : "mobileNavOut .5s ease-in-out 1 frowards"  
+        mobileNavIn: "mobileNavIn .5s ease-in-out 1 frowards",
+        mobileNavOut: "mobileNavOut .5s ease-in-out 1 frowards",
       },
       keyframes: {
         bounce: {
@@ -96,14 +94,14 @@ export default {
             opacity: 1,
           },
         },
-        mobileNavIn : {
-          "0%" : {transform: "translateX(0%)" , opacity: 0},
-          "100%" : {transform: "translateX(-100%)" , opacity: 1},
+        mobileNavIn: {
+          "0%": { transform: "translateX(0%)", opacity: 0 },
+          "100%": { transform: "translateX(-100%)", opacity: 1 },
         },
-        mobileNavOut : {
-          "0%" : {inset : "0% 0% 0% 30%" , opacity: 1},
-          "100%" : {inset : "0% 0% 0% 100%" , opacity : 0}
-        }
+        mobileNavOut: {
+          "0%": { inset: "0% 0% 0% 30%", opacity: 1 },
+          "100%": { inset: "0% 0% 0% 100%", opacity: 0 },
+        },
       },
     },
   },

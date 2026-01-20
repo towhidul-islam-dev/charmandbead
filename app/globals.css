@@ -78,3 +78,7 @@ body {
 .whatsapp-hover-effect:hover {
   animation: whatsapp-shake 0.3s ease-in-out infinite;
 }
+
+[data-sonner-toaster] {
+  margin-top: 80px !important; /* This keeps toasts below your 20rem Navbar height */
+}

@@ -5,6 +5,7 @@ import { WishlistProvider } from "@/Context/WishlistContext";
 import { Toaster } from "react-hot-toast";
 import { Playfair_Display } from 'next/font/google';
 import ConnectivityListener from "@/components/ConnectivityListener";
+import LoginNotifier from "@/components/LoginNotifier";
 
 const playfair = Playfair_Display({ 
   subsets: ['latin'],
@@ -81,14 +82,30 @@ export default function ClientLayout({ children }) {
   return (
     <CartProvider>
       <WishlistProvider>
-        <Toaster position="bottom-center" />
+        {/* 🟢 LoginNotifier handles the "Welcome Back VIP" logic silently */}
+        <LoginNotifier />
+
+        {/* 🟢 Sonner Toaster allows for the rich colors and dark themes we want for VIPs */}
+        <Toaster 
+          position="top-right" 
+          richColors 
+          closeButton
+          theme="light"
+          toastOptions={{
+            style: { borderRadius: '1rem' },
+          }}
+        />
+
         <ConnectivityListener />
 
-        <div className={`${playfair.variable} flex flex-col min-h-screen font-serif`}>
+        <div className={`${playfair.variable} flex flex-col min-h-screen font-serif gap-0 overflow-x-hidden`}>
           <Navbar /> 
-          <main className="flex-grow"> 
+
+          {/* Added flex-1 to push footer down and ensure layout stability */}
+          <main className="flex-1 flex flex-col pt-0 mt-0"> 
             {children}
           </main>
+
           <Footer />
         </div>
       </WishlistProvider>

@@ -5,6 +5,7 @@ import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 import Order from "@/models/Order"; // 🚨 Added Order Import
 import { auth } from "@/lib/auth";
+import { uploadImage, deleteImage } from "@/lib/cloudinary";
 
 // 💡 MUST MATCH YOUR auth.js LIST
 const SUPER_ADMIN_EMAILS = [
@@ -141,32 +142,68 @@ export async function updateUserRole(userId, newRole) {
 /**
  * Updated profile with better nesting support
  */
+// actions/userActions.js
 export async function updateProfile(formData) {
   try {
     const session = await auth();
     if (!session) throw new Error("Unauthorized");
 
     await dbConnect();
+    const user = await User.findOne({ email: session.user.email });
+    if (!user) throw new Error("User not found");
+
     const name = formData.get("name");
-    const imageUrl = formData.get("image");
+    const phone = formData.get("phone");
+    const imageBase64 = formData.get("image"); 
 
-    const updateData = { name };
-    if (imageUrl) updateData.image = imageUrl;
+    const updateData = { name, phone };
 
-    await User.findOneAndUpdate(
+    // Handle Cloudinary Image Swap
+    if (imageBase64 && imageBase64.startsWith("data:image")) {
+      // 1. Delete old image from Cloudinary
+      if (user.imagePublicId) {
+        await deleteImage(user.imagePublicId);
+      }
+
+      // 2. Upload new image
+      const uploadResult = await uploadImage(imageBase64, "user_profiles");
+      if (uploadResult) {
+        updateData.image = uploadResult.url;
+        updateData.imagePublicId = uploadResult.public_id;
+      }
+    }
+
+    const updatedUser = await User.findOneAndUpdate(
       { email: session.user.email },
-      { $set: updateData }
+      { $set: updateData },
+      { new: true }
     );
 
-    // 🟢 If user is a customer, check their VIP progress
-    const user = await User.findOne({ email: session.user.email });
-    await syncVIPStatus(user._id);
-
     revalidatePath("/profile");
-    revalidatePath("/dashboard");
     revalidatePath("/admin/users");
-    revalidatePath("/");
+    
+    return { 
+      success: true, 
+      user: JSON.parse(JSON.stringify(updatedUser)) 
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
 
+export async function deleteAccount() {
+  try {
+    const session = await auth();
+    if (!session) throw new Error("Unauthorized");
+
+    await dbConnect();
+    const user = await User.findOne({ email: session.user.email });
+    
+    if (user?.imagePublicId) {
+      await deleteImage(user.imagePublicId);
+    }
+
+    await User.findByIdAndDelete(user._id);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };

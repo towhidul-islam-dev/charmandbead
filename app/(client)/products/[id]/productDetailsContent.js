@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Truck, ShieldCheck, RotateCcw, ShoppingCart } from "lucide-react";
+import { Truck, ShieldCheck, RotateCcw, ShoppingCart, Zap } from "lucide-react";
 import ProductPurchaseSection from "@/components/ProductPurchaseSection";
 
 export default function ProductDetailsContent({ product }) {
@@ -13,11 +13,19 @@ export default function ProductDetailsContent({ product }) {
 
   const [mainImage, setMainImage] = useState(allImages[0] || "/placeholder.png");
 
-  // Overall product stock for the top badge
-  const stockCount = product.stock || 0;
+  // Calculate Total Physical Stock
+  const stockCount = product.hasVariants 
+    ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
+    : (Number(product.stock) || 0);
+  
+  // Calculate display MOQ
   const displayMoq = product.hasVariants 
     ? Math.min(...product.variants.map(v => v.minOrderQuantity || 1)) 
     : (product.minOrderQuantity || 1);
+
+  // Determine Stock Urgency for the Eye-Catchy Badge
+  const isLowStock = stockCount > 0 && stockCount <= (displayMoq * 3);
+  const isOutOfStock = stockCount <= 0;
 
   return (
     <div className="grid items-start grid-cols-1 gap-10 p-4 lg:grid-cols-12 xl:gap-16 md:p-8">
@@ -58,16 +66,25 @@ export default function ProductDetailsContent({ product }) {
       <div className="space-y-8 lg:col-span-7">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-lg ${
-              stockCount > 0 ? "bg-gray-900 text-white" : "bg-red-500 text-white"
-            }`}>
-              {stockCount > 0 ? "In Stock" : "Out of Stock"}
-            </span>
+            
+            {/* 🟢 EYE-CATCHY STOCK STATUS BADGE */}
+            <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full transition-all duration-500 shadow-sm
+              ${isOutOfStock ? 'bg-red-500 text-white' : 
+                isLowStock ? 'bg-orange-100 text-orange-600 border border-orange-200 animate-pulse' : 
+                'bg-gray-900 text-white'}`}>
+              
+              {!isOutOfStock && <div className={`w-1.5 h-1.5 rounded-full ${isLowStock ? 'bg-orange-600' : 'bg-green-400'}`} />}
+              
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                {isOutOfStock ? "Sold Out" : isLowStock ? `Hurry! Only ${stockCount} left` : "In Stock"}
+              </span>
+            </div>
 
+            {/* 🟢 WHOLESALE MOQ BADGE */}
             {displayMoq > 1 && (
-              <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-3 py-1 rounded-lg border border-pink-100">
-                <ShoppingCart size={12} />
-                <span>Min. Order From: {displayMoq} Units</span>
+              <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-4 py-1.5 rounded-full border border-pink-100">
+                <Zap size={12} className="fill-current" />
+                <span>Min. Order: {displayMoq} Units</span>
               </div>
             )}
           </div>
@@ -82,12 +99,11 @@ export default function ProductDetailsContent({ product }) {
            <p className="font-medium leading-relaxed text-gray-600">{product.description}</p>
         </div>
 
-        {/* 💡 THE PROGRESS BAR LOGIC LIVES INSIDE THIS COMPONENT */}
-        <div className={stockCount <= 0 ? "opacity-50 pointer-events-none" : ""}>
+        {/* PURCHASE SECTION */}
+        <div className={isOutOfStock ? "opacity-60 pointer-events-none" : ""}>
           <ProductPurchaseSection 
             product={product} 
-            productSizes={product.hasVariants ? [...new Set(product.variants.map(v => v.size))] : ["Standard"]}
-            isOutOfStock={stockCount <= 0}
+            isOutOfStock={isOutOfStock}
             onVariantChange={(imageUrl) => {
               if (imageUrl) setMainImage(imageUrl);
             }} 

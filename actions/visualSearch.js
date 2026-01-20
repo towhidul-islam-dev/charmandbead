@@ -9,24 +9,35 @@ const openai = new OpenAI({
 export async function searchByImage(formData) {
   try {
     const file = formData.get("image");
-    if (!file) return { success: false, message: "No image provided" };
+    if (!file || file.size === 0) {
+      return { success: false, message: "No image provided" };
+    }
 
-    // Convert file to base64
+    // 1. Detect Mime Type dynamically
+    const mimeType = file.type || "image/jpeg";
+
+    // 2. Convert to Buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const base64Image = buffer.toString("base64");
 
+    // 3. Call OpenAI
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Fast and cheap for visual tagging
+      model: "gpt-4o-mini", 
       messages: [
         {
           role: "user",
           content: [
-            { type: "text", text: "Identify the main material or product in this image. Return only ONE or TWO words (e.g., 'Pink Beads', 'Crystal', 'Gold Wire')." },
+            { 
+              type: "text", 
+              text: "You are an e-commerce assistant. Identify the main material or jewelry component in this image. Return only the name of the object, e.g., 'Blue Beads'. No punctuation." 
+            },
             {
               type: "image_url",
               image_url: {
-                url: `data:image/jpeg;base64,${base64Image}`,
+                // 🆕 Use dynamic mimeType
+                url: `data:${mimeType};base64,${base64Image}`,
+                detail: "low" // 💡 "low" is cheaper, faster, and usually enough for simple labels
               },
             },
           ],
@@ -34,10 +45,16 @@ export async function searchByImage(formData) {
       ],
     });
 
-    const label = response.choices[0].message.content.trim();
+    const label = response.choices[0].message.content.trim().replace(/[.\x22]/g, "");
     return { success: true, label };
   } catch (error) {
-    console.error("Visual Search Error:", error);
-    return { success: false, message: "Failed to analyze image" };
+    // 💡 Log the exact error to your terminal for debugging
+    console.error("OpenAI API Error:", error.response?.data || error.message);
+    
+    // Check for specific OpenAI errors
+    if (error.message.includes("401")) return { success: false, message: "Invalid API Key" };
+    if (error.message.includes("413")) return { success: false, message: "Image too large for AI" };
+    
+    return { success: false, message: "AI failed to recognize the image" };
   }
 }

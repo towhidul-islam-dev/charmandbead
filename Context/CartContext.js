@@ -6,7 +6,7 @@ const CartContext = createContext();
 export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState([]);
 
-  // 1. Load from localStorage on mount
+  // 1. Load from localStorage
   useEffect(() => {
     const savedCart = localStorage.getItem("charm_cart");
     if (savedCart) {
@@ -23,70 +23,61 @@ export const CartProvider = ({ children }) => {
     localStorage.setItem("charm_cart", JSON.stringify(cart));
   }, [cart]);
 
-  /**
-   * addToCart handles two scenarios:
-   * A) Adding NEW item from Product Page: addToCart(product, variant, qty)
-   * B) Updating EXISTING item from Cart Page: addToCart(cartItem, delta)
-   */
   const addToCart = (product, variantOrDelta, quantity = 0) => {
     setCart((prev) => {
-      let targetProductId, targetVariantId, qChange;
+      let targetUniqueKey;
+      let qChange;
+      let isNewAddition = false;
 
-      // DETECT SOURCE: Is 'product' a cart item or a base product?
-      const isCartUpdate = !!product.uniqueKey; 
-
-      if (isCartUpdate) {
-        // SCENARIO B: Update from Cart Page
-        targetProductId = product.productId;
-        targetVariantId = product.variantId;
-        qChange = Number(variantOrDelta); // This is the increment (+5, -5, etc)
+      // --- 🟢 STEP 1: NORMALIZE INPUTS ---
+      // Detection logic: If the first argument has a uniqueKey AND the second is a number, it's a Cart Page update.
+      if (product.uniqueKey && typeof variantOrDelta === "number") {
+        targetUniqueKey = product.uniqueKey;
+        qChange = variantOrDelta;
       } else {
-        // SCENARIO A: New add from Product Page
-        targetProductId = product._id;
-        targetVariantId = variantOrDelta?._id || `std-${product._id}`;
+        // It's a Product Page addition (Single or Bulk)
+        // Ensure we use the uniqueKey generated in the Purchase Section
+        targetUniqueKey = product.uniqueKey || `${product._id}-${variantOrDelta?._id || 'std'}`;
         qChange = Number(quantity);
+        isNewAddition = true;
       }
 
-      const existingIndex = prev.findIndex(
-        (item) => item.productId === targetProductId && item.variantId === targetVariantId
-      );
+      const existingIndex = prev.findIndex((item) => item.uniqueKey === targetUniqueKey);
 
-      // --- LOGIC: UPDATE EXISTING ITEM ---
+      // --- 🟢 STEP 2: UPDATE EXISTING ---
       if (existingIndex !== -1) {
         const updatedCart = [...prev];
         const item = updatedCart[existingIndex];
-        
-        // Always respect the MOQ saved inside the cart item
         const itemMoq = Number(item.minOrderQuantity) || 1;
         
         let newQty = item.quantity + qChange;
 
-        // Safety: Never drop below MOQ
-        if (newQty < itemMoq) newQty = itemMoq;
+        // If updating from Cart Page, don't let it drop below MOQ
+        if (!isNewAddition && newQty < itemMoq) newQty = itemMoq;
 
-        // Prevention: Avoid double-increments in React Strict Mode
-        // If the quantity is already where we want it, return current state
-        if (item.quantity === newQty && isCartUpdate) return prev;
+        // Strict mode prevention
+        if (item.quantity === newQty && !isNewAddition) return prev;
 
         updatedCart[existingIndex] = { ...item, quantity: newQty };
         return updatedCart;
       }
 
-      // --- LOGIC: ADD NEW ITEM ---
-      // Get MOQ from variant first, then product, default to 1
-      const itemMoq = Number(variantOrDelta?.minOrderQuantity || product.minOrderQuantity || 1);
+      // --- 🟢 STEP 3: ADD NEW ---
+      // If we are here, it's a variant that isn't in the cart yet
+      const itemMoq = Number(product.minOrderQuantity || variantOrDelta?.minOrderQuantity || 1);
       
       const newItem = {
-        productId: targetProductId,
-        variantId: targetVariantId,
-        uniqueKey: `${targetProductId}-${targetVariantId}`,
+        productId: product.productId || product._id,
+        variantId: variantOrDelta?._id || product.variantId || `std-${product._id}`,
+        uniqueKey: targetUniqueKey,
         name: product.name,
-        price: Number(variantOrDelta?.price || product.price || 0),
-        imageUrl: variantOrDelta?.imageUrl || product.imageUrl || "/placeholder.png",
-        size: variantOrDelta?.size || "Standard",
-        color: variantOrDelta?.color || "Default",
-        minOrderQuantity: itemMoq, 
-        quantity: Math.max(itemMoq, qChange), // Ensure starting qty >= MOQ
+        price: Number(product.price || variantOrDelta?.price || 0),
+        imageUrl: product.imageUrl || variantOrDelta?.imageUrl || "/placeholder.png",
+        size: product.size || variantOrDelta?.size || "Standard",
+        color: product.color || variantOrDelta?.color || "Default",
+        minOrderQuantity: itemMoq,
+        stock: product.stock || variantOrDelta?.stock || 0,
+        quantity: Math.max(itemMoq, qChange),
       };
 
       return [...prev, newItem];
@@ -104,13 +95,12 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = () => setCart([]);
 
-  // --- MEMOIZED TOTALS ---
   const cartTotal = useMemo(() => {
     return cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   }, [cart]);
 
   const cartCount = useMemo(() => {
-    return cart.length; 
+    return cart.reduce((acc, item) => acc + item.quantity, 0); // Count total units
   }, [cart]);
 
   return (
