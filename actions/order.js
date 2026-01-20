@@ -4,13 +4,18 @@ import dbConnect from "@/lib/mongodb";
 import Order from "@/models/Order";
 import Product from "@/models/Product"; 
 import User from "@/models/User";
+import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 import { sendShippingUpdateEmail } from "@/lib/mail";
 
 /**
- * 1. CREATE ORDER (The missing function)
+ * 1. CREATE ORDER (Atomic Transaction Logic)
  */
 export async function createOrder(orderData) {
+  // Start a MongoDB Session for Transactional Integrity
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     await dbConnect();
 
@@ -26,12 +31,44 @@ export async function createOrder(orderData) {
       phone 
     } = orderData;
 
-    // 1. Map items to match your Schema's variant structure
+    // A. Validate and Deduct Stock Atomically
+    for (const item of items) {
+      const quantityToDeduct = Number(item.quantity);
+      const productId = item.productId || item._id;
+
+      // Logic for Variant vs Simple Product
+      const isVariant = item.color || item.size;
+
+      const filter = isVariant 
+        ? { 
+            _id: productId, 
+            "variants.color": item.color, 
+            "variants.size": item.size,
+            "variants.stock": { $gte: quantityToDeduct } // Atomic Check
+          }
+        : { 
+            _id: productId, 
+            stock: { $gte: quantityToDeduct } 
+          };
+
+      const update = isVariant
+        ? { $inc: { "variants.$.stock": -quantityToDeduct } }
+        : { $inc: { stock: -quantityToDeduct } };
+
+      const productUpdate = await Product.updateOne(filter, update, { session });
+
+      if (productUpdate.modifiedCount === 0) {
+        // This triggers if stock is insufficient OR product/variant doesn't exist
+        throw new Error(`Stock error: ${item.name} (${item.color || ''}) is no longer available in the requested quantity.`);
+      }
+    }
+
+    // B. Map items to match your Schema
     const formattedItems = items.map(item => ({
-      product: item._id || item.id,
+      product: item.productId || item._id,
       productName: item.name,
       variant: {
-        name: item.color || "Default", // Storing color as variant name
+        name: item.color || "Default",
         image: item.imageUrl || "",
         size: item.size || "N/A",
       },
@@ -39,8 +76,7 @@ export async function createOrder(orderData) {
       price: Number(item.price),
     }));
 
-    // 2. Determine payment status based on your Schema's Enum
-    // Options: "Unpaid", "Partially Paid", "Paid"
+    // C. Determine payment status
     let statusOfPayment = "Unpaid";
     if (paymentMethod === "Online") {
        statusOfPayment = "Paid";
@@ -48,33 +84,25 @@ export async function createOrder(orderData) {
        statusOfPayment = "Partially Paid";
     }
 
-    // 3. Create the order
-    const newOrder = await Order.create({
+    // D. Create the order
+    const [newOrder] = await Order.create([{
       user: userId,
       items: formattedItems,
-      shippingAddress: {
-        ...shippingAddress,
-        phone: phone, // Injected from checkout state
-      },
+      shippingAddress: { ...shippingAddress, phone },
       totalAmount: Number(totalAmount),
       deliveryCharge: Number(deliveryCharge),
       paidAmount: Number(paidAmount),
       dueAmount: Number(dueAmount),
       status: "Pending",
       paymentStatus: statusOfPayment,
-    });
+    }], { session });
 
-    // 4. Update product stock
-    for (const item of formattedItems) {
-      if (item.product) {
-        await Product.findByIdAndUpdate(item.product, {
-          $inc: { stock: -item.quantity }
-        });
-      }
-    }
+    // If we reach here, commit all changes to the database
+    await session.commitTransaction();
 
     revalidatePath("/admin/orders");
     revalidatePath("/dashboard/orders");
+    revalidatePath("/admin/products");
 
     return { 
       success: true, 
@@ -82,63 +110,20 @@ export async function createOrder(orderData) {
       orderId: newOrder._id.toString() 
     };
   } catch (error) {
-    console.error("❌ Schema/Database Error:", error);
+    // If ANY part fails, undo all stock deductions
+    await session.abortTransaction();
+    console.error("❌ Checkout Error:", error);
     return { 
       success: false, 
-      message: error.code === 11000 ? "Order already exists" : error.message 
+      message: error.message 
     };
+  } finally {
+    session.endSession();
   }
 }
 
 /**
- * 2. UNIQUE SYNC FUNCTION
- */
-export async function syncVIPStatus(userId) {
-  try {
-    await dbConnect();
-    const stats = await Order.aggregate([
-      { $match: { user: userId, status: "Delivered" } },
-      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
-    ]);
-
-    const totalSpent = stats.length > 0 ? stats[0].total : 0;
-    const isVIP = totalSpent >= 10000;
-
-    await User.findByIdAndUpdate(userId, {
-      totalSpent: totalSpent,
-      isVIP: isVIP
-    });
-
-    return { success: true, totalSpent, isVIP };
-  } catch (error) {
-    console.error("VIP Sync Error:", error);
-    return { success: false };
-  }
-}
-
-export async function getNewOrdersCount() {
-  try {
-    await dbConnect();
-    return await Order.countDocuments({ status: "Pending" });
-  } catch (error) {
-    console.error("Error fetching new orders count:", error);
-    return 0;
-  }
-}
-
-export async function getOrderById(orderId) {
-  try {
-    await dbConnect();
-    const order = await Order.findById(orderId).lean();
-    if (!order) return null;
-    return JSON.parse(JSON.stringify(order));
-  } catch (error) {
-    return null;
-  }
-}
-
-/**
- * 3. UPDATE ORDER STATUS
+ * 2. UPDATE ORDER STATUS (Includes Stock Return Logic)
  */
 export async function updateOrderStatus(orderId, newStatus, trackingNumber = null) {
   try {
@@ -147,12 +132,20 @@ export async function updateOrderStatus(orderId, newStatus, trackingNumber = nul
     const oldOrder = await Order.findById(orderId);
     if (!oldOrder) throw new Error("Order not found");
 
-    // Stock Return Logic (If cancelled)
+    // Stock Return Logic for Cancellations
     if (newStatus === "Cancelled" && oldOrder.status !== "Cancelled") {
       for (const item of oldOrder.items) {
-        await Product.findByIdAndUpdate(item.product, {
-          $inc: { stock: item.quantity }
-        });
+        const isVariant = item.variant && item.variant.name !== "Default";
+        
+        const filter = isVariant 
+          ? { _id: item.product, "variants.color": item.variant.name, "variants.size": item.variant.size }
+          : { _id: item.product };
+
+        const update = isVariant
+          ? { $inc: { "variants.$.stock": item.quantity } }
+          : { $inc: { stock: item.quantity } };
+
+        await Product.updateOne(filter, update);
       }
     }
 
@@ -162,20 +155,20 @@ export async function updateOrderStatus(orderId, newStatus, trackingNumber = nul
     if (newStatus === "Delivered") {
       updateData.paymentStatus = "Paid";
       updateData.paidAmount = oldOrder.totalAmount;
+      updateData.dueAmount = 0;
     }
 
     const updatedOrder = await Order.findByIdAndUpdate(orderId, updateData, { new: true });
 
-    // VIP Sync
+    // VIP Sync on Delivery
     if (newStatus === "Delivered" && updatedOrder.user) {
       await syncVIPStatus(updatedOrder.user);
     }
 
-    // Email logic
+    // Shipping Notification
     if (newStatus === "Shipped") {
       try {
-        const emailPayload = JSON.parse(JSON.stringify(updatedOrder.toObject()));
-        await sendShippingUpdateEmail(emailPayload);
+        await sendShippingUpdateEmail(JSON.parse(JSON.stringify(updatedOrder)));
       } catch (err) {
         console.error("Email failed:", err);
       }
@@ -189,12 +182,29 @@ export async function updateOrderStatus(orderId, newStatus, trackingNumber = nul
 }
 
 /**
- * 4. DASHBOARD STATS (Fixed dbConnect typo)
+ * 3. DASHBOARD & UTILS
  */
+export async function syncVIPStatus(userId) {
+  try {
+    await dbConnect();
+    const stats = await Order.aggregate([
+      { $match: { user: userId, status: "Delivered" } },
+      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
+    ]);
+
+    const totalSpent = stats.length > 0 ? stats[0].total : 0;
+    const isVIP = totalSpent >= 10000;
+
+    await User.findByIdAndUpdate(userId, { totalSpent, isVIP });
+    return { success: true, totalSpent, isVIP };
+  } catch (error) {
+    return { success: false };
+  }
+}
+
 export async function getDashboardStats() {
   try {
-    await dbConnect(); // Changed from connectDB
-
+    await dbConnect();
     const revenueData = await Order.aggregate([
       { $match: { status: { $ne: "Cancelled" } } },
       { $group: { _id: null, total: { $sum: "$totalAmount" } } }
@@ -209,26 +219,19 @@ export async function getDashboardStats() {
 
     return {
       success: true,
-      stats: {
-        totalRevenue,
-        activeOrders,
-        totalUsers,
-        conversionRate: 3.2
-      }
+      stats: { totalRevenue, activeOrders, totalUsers, conversionRate: 3.2 }
     };
   } catch (error) {
-    console.error("Dashboard Stats Error:", error);
-    return { success: false, error: "Failed to fetch stats" };
+    return { success: false };
   }
 }
 
 /**
- * 5. FETCHING FUNCTIONS
+ * 4. FETCHING FUNCTIONS
  */
 export async function getAllOrders(page = 1, limit = 10, search = "", status = "All") {
   try {
     await dbConnect();
-    
     const query = {};
     if (status !== "All") query.status = status;
     if (search) {
@@ -256,6 +259,16 @@ export async function getAllOrders(page = 1, limit = 10, search = "", status = "
   }
 }
 
+export async function getOrderById(orderId) {
+  try {
+    await dbConnect();
+    const order = await Order.findById(orderId).lean();
+    return order ? JSON.parse(JSON.stringify(order)) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 export async function deleteOrder(orderId) {
   try {
     await dbConnect();
@@ -280,5 +293,14 @@ export async function getUserOrders(userId) {
     return JSON.parse(JSON.stringify(orders));
   } catch (error) {
     return [];
+  }
+}
+
+export async function getNewOrdersCount() {
+  try {
+    await dbConnect();
+    return await Order.countDocuments({ status: "Pending" });
+  } catch (error) {
+    return 0;
   }
 }

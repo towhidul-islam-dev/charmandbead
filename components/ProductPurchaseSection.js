@@ -1,92 +1,119 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Minus, Plus, ShoppingBag } from "lucide-react";
+import { Minus, Plus, ShoppingBag, AlertCircle, BellRing } from "lucide-react";
 import { useCart } from "@/Context/CartContext";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { registerStockNotification } from "@/actions/notify"; // Ensure you created this action
 import toast from "react-hot-toast";
 
 export default function ProductPurchaseSection({ product, onVariantChange }) {
   const { addToCart } = useCart();
   const router = useRouter();
+  const { data: session } = useSession();
   const variants = product.variants || [];
 
   const [quantities, setQuantities] = useState({});
 
+  // 1. Initial Quantity Setup & Stock Validation
   useEffect(() => {
     const initialQtys = {};
     variants.forEach((v) => {
       const vKey = v._id || `${v.color}-${v.size}`;
-      initialQtys[vKey] = 0; 
+      const moq = v.minOrderQuantity || product.minOrderQuantity || 1;
+      
+      // If stock is less than MOQ, we cannot sell it (force 0)
+      initialQtys[vKey] = (v.stock < moq) ? 0 : (quantities[vKey] || 0);
     });
     setQuantities(initialQtys);
   }, [variants]);
 
-  // 🟢 UPDATED: Wholesale Quantity Logic (MOQ Steps)
+  // 2. Background Refresh to keep stock counts accurate
+  useEffect(() => {
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 60000); // Refresh every 1 minute
+    return () => clearInterval(interval);
+  }, [router]);
+
+  // 3. Handle Quantity Changes with MOQ Steps
   const handleUpdateQty = (vKey, direction, moq, stock) => {
+    router.refresh(); // Fetch latest stock before calculating
     const currentQty = quantities[vKey] || 0;
     let newQty;
 
     if (direction > 0) {
-      // INCREMENT LOGIC
-      if (currentQty === 0) {
-        newQty = moq; // Jump to MOQ on first click
-      } else {
-        newQty = currentQty + moq; // Increment by MOQ steps
-      }
+      newQty = currentQty === 0 ? moq : currentQty + moq;
     } else {
-      // DECREMENT LOGIC
-      if (currentQty <= moq) {
-        newQty = 0; // Reset to 0 if at or below MOQ
-      } else {
-        newQty = currentQty - moq; // Decrement by MOQ steps
-      }
+      newQty = currentQty <= moq ? 0 : currentQty - moq;
     }
 
-    // Validation
+    // Stock limit check
     if (newQty > stock) {
-      toast.error(`Only ${stock} units available`);
+      toast.error(`Only ${stock} units available in stock`);
       return;
     }
 
     setQuantities((prev) => ({ ...prev, [vKey]: newQty }));
   };
 
+  // 4. Register for "Back in Stock" notification
+  const handleNotifyMe = async (v) => {
+    if (!session) {
+      toast.error("Please login to register for alerts");
+      return;
+    }
+
+    const res = await registerStockNotification({
+      userId: session.user.id,
+      email: session.user.email,
+      productId: product._id,
+      variantKey: `${v.color}-${v.size}`
+    });
+
+    if (res.success) toast.success(res.message);
+    else toast.error(res.message);
+  };
+
+  // 5. Bulk Add all selected variants to Cart
   const handleBulkAdd = () => {
     const itemsToAdd = variants.filter(v => {
-        const vKey = v._id || `${v.color}-${v.size}`;
-        return quantities[vKey] > 0;
+      const vKey = v._id || `${v.color}-${v.size}`;
+      return quantities[vKey] > 0;
     });
 
     if (itemsToAdd.length === 0) {
-        toast.error("Please select quantity for at least one variant");
-        return;
+      toast.error("Select quantity for at least one variant");
+      return;
     }
 
     itemsToAdd.forEach(v => {
-        const vKey = v._id || `${v.color}-${v.size}`;
-        const qty = quantities[vKey];
-        
-        const cartItem = {
-            productId: product._id,
-            name: product.name,
-            uniqueKey: `${product._id}-${v.color}-${v.size}`, 
-            color: v.color,
-            size: v.size,
-            price: v.price || product.price,
-            imageUrl: v.image || v.imageUrl || product.imageUrl,
-            stock: v.stock || 0,
-            minOrderQuantity: v.minOrderQuantity || product.minOrderQuantity || 1,
-        };
-        addToCart(cartItem, null, qty);
+      const vKey = v._id || `${v.color}-${v.size}`;
+      const qty = quantities[vKey];
+      
+      const cartItem = {
+        productId: product._id,
+        name: product.name,
+        uniqueKey: `${product._id}-${v.color}-${v.size}`, 
+        color: v.color,
+        size: v.size,
+        price: v.price || product.price,
+        imageUrl: v.image || v.imageUrl || product.imageUrl,
+        stock: v.stock || 0,
+        minOrderQuantity: v.minOrderQuantity || product.minOrderQuantity || 1,
+      };
+      addToCart(cartItem, null, qty);
     });
 
-    toast.success(`Added ${itemsToAdd.length} variant(s) to bag`);
+    toast.success(`Successfully added selections to bag`);
     
-    // Optional: Reset quantities after adding
+    // Reset inputs
     const resetQtys = {};
     variants.forEach(v => resetQtys[v._id || `${v.color}-${v.size}`] = 0);
     setQuantities(resetQtys);
   };
+
+  const totalSelected = Object.values(quantities).reduce((a, b) => a + b, 0);
 
   return (
     <div className="flex flex-col gap-6 mt-10">
@@ -96,7 +123,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
             <tr>
               <th className="px-6 py-5">Variant Details</th>
               <th className="px-6 py-5">Unit Price</th>
-              <th className="px-6 py-5 text-center">Stock</th>
+              <th className="px-6 py-5 text-center">In Stock</th>
               <th className="px-6 py-5 text-right">Set Quantity</th>
             </tr>
           </thead>
@@ -106,49 +133,69 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
               const moq = v.minOrderQuantity || product.minOrderQuantity || 1;
               const stock = v.stock || 0;
               const currentQty = quantities[vKey] || 0;
+              const isUnavailable = stock < moq;
 
               return (
-                <tr key={vKey} className="transition-colors hover:bg-gray-50/50 group">
+                <tr key={vKey} className={`transition-colors group ${isUnavailable ? 'bg-gray-50/40' : 'hover:bg-gray-50/25'}`}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => onVariantChange(v.image || v.imageUrl)}>
-                      <div className="w-10 h-10 overflow-hidden border border-gray-100 rounded-lg shrink-0">
+                      <div className={`w-10 h-10 overflow-hidden border border-gray-100 rounded-lg shrink-0 ${isUnavailable ? 'grayscale opacity-50' : ''}`}>
                         <img src={v.image || v.imageUrl} className="object-cover w-full h-full" alt={v.color} />
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-black text-gray-800 uppercase text-[12px]">{v.color}</span>
+                        <span className={`font-black uppercase text-[12px] ${isUnavailable ? 'text-gray-400' : 'text-gray-800'}`}>{v.color}</span>
                         <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{v.size}</span>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 font-black text-gray-900">৳{v.price || product.price}</td>
-                  <td className={`px-6 py-4 font-bold text-center ${stock < moq ? 'text-red-500' : 'text-gray-500'}`}>
-                    {stock}
+                  <td className={`px-6 py-4 font-black ${isUnavailable ? 'text-gray-300' : 'text-gray-900'}`}>
+                    ৳{v.price || product.price}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    {isUnavailable ? (
+                      <div className="flex flex-col items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1 text-[8px] font-black text-red-400 uppercase bg-red-50 px-2 py-0.5 rounded-full border border-red-100">
+                          <AlertCircle size={10} /> Sold Out
+                        </span>
+                        <button 
+                          onClick={() => handleNotifyMe(v)}
+                          className="flex items-center gap-1 text-[8px] font-black text-[#EA638C] uppercase hover:scale-105 transition-transform"
+                        >
+                          <BellRing size={10} /> Notify Me
+                        </button>
+                      </div>
+                    ) : (
+                      <span className={`font-bold ${stock <= moq * 2 ? 'text-orange-500 font-black' : 'text-gray-500'}`}>
+                        {stock}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex flex-col items-end gap-1">
-                        <div className="inline-flex items-center p-1 bg-gray-100 rounded-xl border border-gray-200 shadow-inner">
+                      <div className={`inline-flex items-center p-1 rounded-xl border transition-all ${isUnavailable ? 'bg-gray-100 border-gray-100 opacity-20' : 'bg-gray-100 border-gray-200 shadow-inner'}`}>
                         <button 
-                            onClick={() => handleUpdateQty(vKey, -1, moq, stock)} 
-                            className="p-1.5 hover:text-[#EA638C] transition-colors"
+                          onClick={() => handleUpdateQty(vKey, -1, moq, stock)} 
+                          disabled={isUnavailable || currentQty === 0}
+                          className="p-1.5 hover:text-[#EA638C] transition-colors disabled:opacity-0"
                         >
-                            <Minus size={14} strokeWidth={3}/>
+                          <Minus size={14} strokeWidth={3}/>
                         </button>
                         
-                        <span className={`px-3 font-black min-w-[40px] text-center transition-all ${currentQty > 0 ? 'text-[#EA638C] text-sm' : 'text-gray-400 text-xs'}`}>
-                            {currentQty}
+                        <span className={`px-3 font-black min-w-[40px] text-center ${currentQty > 0 ? 'text-[#EA638C] text-sm' : 'text-gray-400 text-xs'}`}>
+                          {currentQty}
                         </span>
 
                         <button 
-                            onClick={() => handleUpdateQty(vKey, 1, moq, stock)} 
-                            disabled={stock < moq}
-                            className="p-1.5 hover:text-[#EA638C] transition-colors disabled:opacity-10"
+                          onClick={() => handleUpdateQty(vKey, 1, moq, stock)} 
+                          disabled={isUnavailable || (currentQty + moq) > stock}
+                          className="p-1.5 hover:text-[#EA638C] transition-colors disabled:opacity-0"
                         >
-                            <Plus size={14} strokeWidth={3}/>
+                          <Plus size={14} strokeWidth={3}/>
                         </button>
-                        </div>
-                        {moq > 1 && (
-                            <span className="text-[7px] font-black text-gray-400 uppercase pr-2">Step: {moq}</span>
-                        )}
+                      </div>
+                      {moq > 1 && !isUnavailable && (
+                        <span className="text-[7px] font-black text-gray-400 uppercase pr-2 italic tracking-tighter">Min: {moq} Unit Steps</span>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -158,23 +205,27 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
         </table>
       </div>
 
-      {/* FIXED CONSOLIDATED BAR */}
-      <div className="sticky bottom-6 flex items-center justify-between gap-4 p-5 bg-gray-900 rounded-[2rem] shadow-2xl border border-white/10">
+      {/* SUMMARY BAR */}
+      <div className="sticky bottom-6 flex items-center justify-between gap-4 p-5 bg-gray-900 rounded-[2.5rem] shadow-2xl border border-white/10 mx-2 sm:mx-0">
         <div className="hidden sm:block pl-4">
-            <p className="text-white text-[12px] font-black uppercase italic leading-none">Wholesale Summary</p>
-            <p className="text-gray-400 text-[9px] font-bold uppercase tracking-widest mt-1">
-                {Object.values(quantities).reduce((a, b) => a + b, 0)} Units Selected
+            <p className="text-white text-[12px] font-black uppercase italic leading-none">Wholesale Selection</p>
+            <p className="text-[#EA638C] text-[10px] font-black uppercase tracking-widest mt-1">
+                {totalSelected} Items Selected
             </p>
         </div>
         <div className="flex w-full gap-3 sm:w-auto">
             <button 
                 onClick={handleBulkAdd}
-                className="flex-1 sm:flex-none bg-[#EA638C] text-white px-10 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#d54d76] active:scale-95 transition-all shadow-lg"
+                disabled={totalSelected === 0}
+                className="flex-1 sm:flex-none bg-[#EA638C] text-white px-12 py-4 rounded-full font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#d54d76] active:scale-95 transition-all shadow-lg shadow-pink-500/20 disabled:bg-gray-700 disabled:shadow-none"
             >
-                <ShoppingBag size={16} /> Add To Bag
+                <ShoppingBag size={16} /> {totalSelected > 0 ? `Add Selected (৳${totalSelected * (variants[0]?.price || product.price)})` : "Add to Bag"}
             </button>
-            <button onClick={() => router.push("/cart")} className="bg-white/10 text-white px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-white/20 transition-all">
-                Bag
+            <button 
+              onClick={() => router.push("/cart")} 
+              className="bg-white/10 text-white px-6 py-4 rounded-full font-black text-[11px] uppercase tracking-widest hover:bg-white/20 transition-all border border-white/10"
+            >
+              Bag
             </button>
         </div>
       </div>

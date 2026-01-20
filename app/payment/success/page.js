@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { getOrderById } from "@/actions/order";
+import { processOrderStock } from "@/actions/inventoryWatcher"; // ⬅️ New Import
 import { useCart } from "@/Context/CartContext";
 import Link from "next/link";
 import {
@@ -46,11 +47,18 @@ function SuccessContent() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
-    async function fetchOrder() {
+    async function fetchAndProcessOrder() {
       if (orderId) {
         try {
           const data = await getOrderById(orderId);
           setOrder(data);
+
+          // 🟢 INTEGRATED STOCK LOGIC
+          // Check if stock has already been deducted for this order to prevent double-deduction on refresh
+          if (data && !data.stockProcessed) {
+            console.log("Processing inventory levels...");
+            await processOrderStock(data);
+          }
 
           // 💡 Sync local storage key with CheckoutPage
           const saved = localStorage.getItem("checkoutItems");
@@ -66,14 +74,12 @@ function SuccessContent() {
       }
       setLoading(false);
     }
-    fetchOrder();
+    fetchAndProcessOrder();
   }, [orderId, deleteSelectedItems]);
 
   const generateInvoice = async (orderData) => {
     if (!orderData || !orderData.items) return;
 
-    console.log("invoice data item : ", orderData.items);
-    
     setIsGenerating(true);
     const toastId = toast.loading("Styling your premium invoice...");
 
@@ -83,11 +89,9 @@ function SuccessContent() {
       const darkColor = [31, 41, 55];    // Gray-800
       const lightGray = [156, 163, 175]; // Gray-400
 
-      // 💡 FIX: Define these variables at the start of the function
       const itemsSubtotal = orderData.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
       const delivery = orderData.deliveryCharge || 0;
 
-      // 1. Process Images
       const images = await Promise.all(
         orderData.items.map(async (item) => {
           try {
@@ -97,20 +101,18 @@ function SuccessContent() {
         })
       );
 
-      // 2. Modern Header & Branding
       doc.setFillColor(brandColor[0], brandColor[1], brandColor[2]);
       doc.rect(0, 0, 210, 40, "F"); 
 
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(24);
       doc.setFont("helvetica", "bold");
-      doc.text("WHOLESALE STORE", 14, 25);
+      doc.text("CHARM STORE", 14, 25);
       
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text("PREMIUM CONSTRUCTION MATERIALS", 14, 32);
+      doc.text("PREMIUM WHOLESALE COMMERCE", 14, 32);
 
-      // 3. Status Stamp
       const isPaid = (orderData.dueAmount ?? 0) <= 0;
       doc.setDrawColor(255, 255, 255);
       doc.setLineWidth(0.5);
@@ -119,7 +121,6 @@ function SuccessContent() {
       doc.setFont("helvetica", "bold");
       doc.text(isPaid ? "FULLY PAID" : "PARTIAL COD", 172.5, 23, { align: "center" });
 
-      // 4. Invoice Info Grid
       doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
       doc.setFontSize(12);
       doc.text("INVOICE DETAILS", 14, 55);
@@ -138,15 +139,14 @@ function SuccessContent() {
       doc.text(`#INV-${orderData._id.slice(-6).toUpperCase()}`, 40, 65);
       doc.text(new Date(orderData.createdAt).toLocaleDateString('en-GB'), 40, 70);
       
-      doc.text(orderData.shippingAddress?.name || orderData.name || "Customer", 120, 70);
+      doc.text(orderData.shippingAddress?.name || "Customer", 120, 70);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
-      doc.text(`${orderData.shippingAddress?.street || ""}, ${orderData.shippingAddress?.city || ""}`, 120, 75, { maxWidth: 70 });
+      doc.text(`${orderData.shippingAddress?.address || ""}`, 120, 75, { maxWidth: 70 });
 
-      // 5. Product Table
       const tableRows = orderData.items.map((item) => [
         "", 
-        { content: `${item.name}\n${item.variant?.size || ""}`, styles: { fontStyle: 'bold', fontSize: 10 } },
+        { content: `${item.name}\n${item.color || ""} ${item.size || ""}`, styles: { fontStyle: 'bold', fontSize: 10 } },
         item.quantity,
         `TK ${item.price.toLocaleString()}`,
         `TK ${(item.price * item.quantity).toLocaleString()}`,
@@ -157,18 +157,8 @@ function SuccessContent() {
         head: [["", "PRODUCT DESCRIPTION", "QTY", "PRICE", "TOTAL"]],
         body: tableRows,
         theme: 'plain',
-        headStyles: { 
-            fillColor: [249, 250, 251], 
-            textColor: brandColor, 
-            fontStyle: 'bold',
-            fontSize: 9
-        },
-        columnStyles: { 
-            0: { cellWidth: 25 },
-            2: { halign: 'center' },
-            3: { halign: 'right' },
-            4: { halign: 'right' }
-        },
+        headStyles: { fillColor: [249, 250, 251], textColor: brandColor, fontStyle: 'bold', fontSize: 9 },
+        columnStyles: { 0: { cellWidth: 25 }, 2: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
         styles: { minCellHeight: 25, valign: "middle" },
         didDrawCell: (data) => {
           if (data.section === "body" && data.column.index === 0) {
@@ -180,7 +170,6 @@ function SuccessContent() {
         },
       });
 
-      // 6. Summary Section
       const finalY = doc.lastAutoTable.finalY + 15;
       const summaryX = 140;
       const valueX = 195;
@@ -194,10 +183,7 @@ function SuccessContent() {
 
       drawSummaryRow("Subtotal", `TK ${itemsSubtotal.toLocaleString()}`, finalY);
       drawSummaryRow("Shipping", `+ TK ${delivery.toLocaleString()}`, finalY + 7);
-      
-      doc.setDrawColor(229, 231, 235);
       doc.line(summaryX, finalY + 10, valueX, finalY + 10);
-
       drawSummaryRow("Total Amount", `TK ${(orderData?.totalAmount ?? 0).toLocaleString()}`, finalY + 17, true);
       drawSummaryRow("Paid Online", `- TK ${(orderData?.paidAmount ?? 0).toLocaleString()}`, finalY + 24, false, brandColor);
       
@@ -207,13 +193,12 @@ function SuccessContent() {
           drawSummaryRow("Balance Due (COD)", `TK ${(orderData?.dueAmount ?? 0).toLocaleString()}`, finalY + 34, true, [220, 38, 38]);
       }
 
-      // 7. Footer
       doc.setFontSize(8);
       doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
-      doc.text("Thank you for choosing Wholesale Store.", 105, 285, { align: "center" });
+      doc.text("Thank you for shopping with Charm Store.", 105, 285, { align: "center" });
 
       doc.save(`Invoice_${orderData._id.slice(-6).toUpperCase()}.pdf`);
-      toast.success("Invoice Ready!", { id: toastId });
+      toast.success("Invoice Downloaded!", { id: toastId });
     } catch (error) {
       console.error(error);
       toast.error("Error generating PDF", { id: toastId });
@@ -223,12 +208,15 @@ function SuccessContent() {
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-screen">
-      <Loader2 className="animate-spin text-[#EA638C]" size={40} />
+    <div className="flex items-center justify-center min-h-screen bg-white">
+      <div className="text-center">
+        <Loader2 className="animate-spin text-[#EA638C] mx-auto mb-4" size={48} />
+        <p className="font-black uppercase tracking-widest text-gray-400 text-xs">Confirming Order...</p>
+      </div>
     </div>
   );
   
-  if (!order) return <div className="p-10 font-bold text-center">Order not found.</div>;
+  if (!order) return <div className="p-10 font-black text-center text-gray-400">ORDER NOT FOUND</div>;
 
   const subtotal = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const isPartial = (order.dueAmount ?? 0) > 0;
@@ -243,7 +231,6 @@ function SuccessContent() {
         <h1 className="mb-2 text-3xl italic font-black tracking-tighter text-gray-900 uppercase">Success!</h1>
         <p className="mb-8 font-bold text-gray-500">Order #INV-{order._id.slice(-6).toUpperCase()} is confirmed.</p>
 
-        {/* 💡 Notice for Partial COD Orders */}
         {isPartial && (
           <div className="mb-8 p-6 bg-orange-50 border-2 border-orange-100 rounded-[2rem] flex items-center gap-4 text-left">
             <div className="p-2 text-white bg-orange-500 rounded-full">
@@ -274,7 +261,6 @@ function SuccessContent() {
               <span>৳{subtotal.toLocaleString()}</span>
             </div>
             
-            {/* 💡 Separate Delivery Charge */}
             <div className="flex justify-between text-sm font-medium text-gray-500">
               <span className="flex items-center gap-1"><Truck size={14} /> Delivery Charge:</span>
               <span>+ ৳{(order.deliveryCharge ?? 0).toLocaleString()}</span>

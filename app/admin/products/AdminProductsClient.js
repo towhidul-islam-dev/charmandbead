@@ -3,15 +3,11 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { 
-  Search, 
-  EyeOff, 
-  Eye, 
-  Database,   // Replaces CircleStack
-  IndianRupee, // Note: This exists in some versions, but 'Currency' or 'Banknote' are safer if it fails
-  AlertTriangle, 
-  Clock 
+  Search, EyeOff, Eye, Database, Banknote, 
+  AlertTriangle, Clock, Plus, Loader2 
 } from "lucide-react";
 import DeleteButton from "@/components/DeleteButton";
+import RestockModal from "@/components/RestockModal"; // ⬅️ Import the new Modal
 import { toggleArchiveProduct } from "@/actions/product";
 import toast, { Toaster } from "react-hot-toast";
 
@@ -20,8 +16,11 @@ export default function AdminProductsClient({ initialProducts }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [loadingId, setLoadingId] = useState(null);
+  
+  // --- Restock Modal State ---
+  const [activeRestockProduct, setActiveRestockProduct] = useState(null);
 
-  // --- 1. Dashboard Logic ---
+  // --- Dashboard Stats Logic ---
   const stats = useMemo(() => {
     return {
       totalItems: products.length,
@@ -40,21 +39,10 @@ export default function AdminProductsClient({ initialProducts }) {
       if (result.success) {
         setProducts((currentList) =>
           currentList.map((p) =>
-            String(p._id) === String(productId)
-              ? { ...p, isArchived: result.newState }
-              : p
+            String(p._id) === String(productId) ? { ...p, isArchived: result.newState } : p
           )
         );
-        toast.success(result.newState ? "Product Archived" : "Product Published", {
-          style: {
-            background: "#000",
-            color: "#fff",
-            borderRadius: "16px",
-            fontSize: "12px",
-            fontWeight: "900",
-            border: "2px solid #EA638C",
-          },
-        });
+        toast.success(result.newState ? "Product Archived" : "Product Published");
       }
     } catch (err) {
       toast.error("Something went wrong");
@@ -78,27 +66,31 @@ export default function AdminProductsClient({ initialProducts }) {
 
   return (
     <div className="p-4 mx-auto md:p-8 max-w-7xl">
-      <Toaster position="bottom-right" reverseOrder={false} />
+      <Toaster position="bottom-right" />
 
-      {/* --- Header Section --- */}
+      {/* --- Restock Modal Trigger --- */}
+      {activeRestockProduct && (
+        <RestockModal 
+          product={activeRestockProduct} 
+          onClose={() => setActiveRestockProduct(null)} 
+          onRefresh={() => window.location.reload()} // Simple refresh to sync DB changes
+        />
+      )}
+
+      {/* --- Header --- */}
       <div className="flex flex-col items-start justify-between gap-4 mb-8 md:flex-row md:items-end">
         <div>
           <h2 className="text-3xl italic font-black tracking-tight text-gray-900 uppercase">
             Product <span className="text-[#EA638C]">Inventory</span>
           </h2>
-          <p className="mt-1 text-[10px] font-black tracking-[0.2em] text-gray-400 uppercase">
-            Management Dashboard
-          </p>
+          <p className="mt-1 text-[10px] font-black tracking-[0.2em] text-gray-400 uppercase">Management Dashboard</p>
         </div>
-        <Link
-          href="/admin/products/create"
-          className="px-8 py-3 text-white bg-[#EA638C] font-black rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-[#EA638C]/20 hover:scale-105 transition-transform"
-        >
+        <Link href="/admin/products/create" className="px-8 py-3 text-white bg-[#EA638C] font-black rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-[#EA638C]/20 hover:scale-105 transition-transform">
           + Add Product
         </Link>
       </div>
 
-      {/* --- 2. Stats Cards --- */}
+      {/* --- Stats Cards --- */}
       <div className="grid grid-cols-1 gap-6 mb-8 md:grid-cols-3">
         <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="p-4 text-blue-600 bg-blue-50 rounded-2xl"><Database size={24} /></div>
@@ -108,7 +100,7 @@ export default function AdminProductsClient({ initialProducts }) {
           </div>
         </div>
         <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="p-4 text-green-600 bg-green-50 rounded-2xl"><IndianRupee size={24} /></div>
+          <div className="p-4 text-green-600 bg-green-50 rounded-2xl"><Banknote size={24} /></div>
           <div>
             <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Inv. Value</p>
             <p className="text-2xl italic font-black">৳{stats.totalValue.toLocaleString()}</p>
@@ -118,12 +110,12 @@ export default function AdminProductsClient({ initialProducts }) {
           <div className="p-4 bg-amber-50 rounded-2xl text-amber-600"><AlertTriangle size={24} /></div>
           <div>
             <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Low Stock</p>
-            <p className="text-2xl italic font-black text-amber-600">{stats.lowStockCount} <span className="ml-1 text-xs not-italic text-gray-400 uppercase">Alerts</span></p>
+            <p className="text-2xl italic font-black text-amber-600">{stats.lowStockCount}</p>
           </div>
         </div>
       </div>
 
-      {/* Filter Section */}
+      {/* --- Filters --- */}
       <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
         <div className="relative md:col-span-2">
           <Search className="absolute text-gray-400 -translate-y-1/2 left-4 top-1/2" size={18} />
@@ -144,7 +136,7 @@ export default function AdminProductsClient({ initialProducts }) {
         </select>
       </div>
 
-      {/* Table Section */}
+      {/* --- Table --- */}
       <div className="overflow-hidden bg-white rounded-[2.5rem] shadow-2xl border border-gray-50">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-50">
@@ -152,9 +144,9 @@ export default function AdminProductsClient({ initialProducts }) {
               <tr className="text-[9px] font-black uppercase tracking-widest text-gray-400">
                 <th className="px-6 py-5 text-left">Listing Details</th>
                 <th className="px-6 py-5 text-left">Category</th>
-                <th className="px-6 py-5 text-left">Stock Level</th>
+                <th className="px-6 py-5 text-left text-[#EA638C]">Stock Level</th>
                 <th className="px-6 py-5 text-left">Pricing</th>
-                <th className="px-6 py-5 text-left text-[#EA638C]">Last Updated</th>
+                <th className="px-6 py-5 text-left">Last Updated</th>
                 <th className="px-6 py-5 text-right">Actions</th>
               </tr>
             </thead>
@@ -181,31 +173,34 @@ export default function AdminProductsClient({ initialProducts }) {
                     </td>
 
                     <td className="px-6 py-4">
-                       <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-gray-100 text-gray-600">
-                          {product.category}
-                       </span>
+                       <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-gray-100 text-gray-600">{product.category}</span>
                     </td>
 
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-black uppercase ${totalStock <= 5 ? "text-red-500" : "text-gray-600"}`}>
+                      {/* 🟢 Clickable Stock Area triggers Restock Modal */}
+                      <div 
+                        onClick={() => setActiveRestockProduct(product)}
+                        className="flex items-center gap-2 cursor-pointer group w-fit"
+                      >
+                        <span className={`text-xs font-black uppercase ${totalStock <= 5 ? "text-red-500" : "text-gray-900"}`}>
                           {totalStock} Units
                         </span>
+                        <div className="p-1.5 bg-gray-50 rounded-lg group-hover:bg-[#EA638C] group-hover:text-white transition-all">
+                          <Plus size={12} />
+                        </div>
                         {totalStock <= 5 && !product.isArchived && (
                           <span className="flex w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                         )}
                       </div>
                     </td>
 
-                    <td className="px-6 py-4 text-sm italic font-black text-gray-900">
-                      ৳{product.price}
-                    </td>
+                    <td className="px-6 py-4 text-sm italic font-black text-gray-900">৳{product.price}</td>
 
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1.5 text-gray-400">
                         <Clock size={12} />
                         <span className="text-[10px] font-bold uppercase tracking-tighter">
-                          {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'}) : 'N/A'}
+                          {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('en-GB') : 'N/A'}
                         </span>
                       </div>
                     </td>
@@ -217,18 +212,11 @@ export default function AdminProductsClient({ initialProducts }) {
                           disabled={loadingId === String(product._id)}
                           className={`p-2 rounded-xl transition-all ${product.isArchived ? "bg-yellow-400 text-black" : "bg-gray-100 text-gray-400 hover:bg-black hover:text-white"}`}
                         >
-                          {loadingId === String(product._id) ? (
-                            <div className="w-5 h-5 border-2 border-current rounded-full border-t-transparent animate-spin" />
-                          ) : product.isArchived ? <Eye size={18} /> : <EyeOff size={18} />}
+                          {loadingId === String(product._id) ? <Loader2 size={18} className="animate-spin" /> : product.isArchived ? <Eye size={18} /> : <EyeOff size={18} />}
                         </button>
 
-                        <Link
-                          href={`/admin/products/edit/${product._id}`}
-                          className="p-2 text-gray-400 transition-all bg-gray-100 rounded-xl hover:bg-black hover:text-white"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
+                        <Link href={`/admin/products/edit/${product._id}`} className="p-2 text-gray-400 transition-all bg-gray-100 rounded-xl hover:bg-black hover:text-white">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         </Link>
                         
                         <DeleteButton productId={product._id} productName={product.name} />
