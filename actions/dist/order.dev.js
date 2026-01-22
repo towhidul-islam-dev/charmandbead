@@ -48,7 +48,7 @@ function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
  * 1. CREATE ORDER (Atomic Transaction Logic)
  */
 function createOrder(orderData) {
-  var session, userId, items, shippingAddress, totalAmount, paidAmount, dueAmount, deliveryCharge, paymentMethod, phone, _iteratorNormalCompletion, _didIteratorError, _iteratorError, _iterator, _step, item, quantityToDeduct, productId, isVariant, filter, update, productUpdate, formattedItems, statusOfPayment, _ref, _ref2, newOrder;
+  var session, userId, items, shippingAddress, totalAmount, paidAmount, dueAmount, deliveryCharge, paymentMethod, mobileBankingFee, phone, _iteratorNormalCompletion, _didIteratorError, _iteratorError, _iterator, _step, item, quantityToDeduct, productId, isVariant, filter, update, productUpdate, formattedItems, statusOfPayment, _ref, _ref2, newOrder;
 
   return regeneratorRuntime.async(function createOrder$(_context) {
     while (1) {
@@ -65,7 +65,7 @@ function createOrder(orderData) {
           return regeneratorRuntime.awrap((0, _mongodb["default"])());
 
         case 7:
-          userId = orderData.userId, items = orderData.items, shippingAddress = orderData.shippingAddress, totalAmount = orderData.totalAmount, paidAmount = orderData.paidAmount, dueAmount = orderData.dueAmount, deliveryCharge = orderData.deliveryCharge, paymentMethod = orderData.paymentMethod, phone = orderData.phone; // A. Validate and Deduct Stock Atomically
+          userId = orderData.userId, items = orderData.items, shippingAddress = orderData.shippingAddress, totalAmount = orderData.totalAmount, paidAmount = orderData.paidAmount, dueAmount = orderData.dueAmount, deliveryCharge = orderData.deliveryCharge, paymentMethod = orderData.paymentMethod, mobileBankingFee = orderData.mobileBankingFee, phone = orderData.phone; // A. Validate and Deduct Stock Atomically
 
           _iteratorNormalCompletion = true;
           _didIteratorError = false;
@@ -81,8 +81,7 @@ function createOrder(orderData) {
 
           item = _step.value;
           quantityToDeduct = Number(item.quantity);
-          productId = item.productId || item._id; // Logic for Variant vs Simple Product
-
+          productId = item.productId || item._id;
           isVariant = item.color || item.size;
           filter = isVariant ? {
             _id: productId,
@@ -90,8 +89,7 @@ function createOrder(orderData) {
             "variants.size": item.size,
             "variants.stock": {
               $gte: quantityToDeduct
-            } // Atomic Check
-
+            }
           } : {
             _id: productId,
             stock: {
@@ -120,7 +118,7 @@ function createOrder(orderData) {
             break;
           }
 
-          throw new Error("Stock error: ".concat(item.name, " (").concat(item.color || '', ") is no longer available in the requested quantity."));
+          throw new Error("Stock error: ".concat(item.name, " (").concat(item.color || '', ") is no longer available."));
 
         case 25:
           _iteratorNormalCompletion = true;
@@ -162,7 +160,7 @@ function createOrder(orderData) {
           return _context.finish(34);
 
         case 42:
-          // B. Map items to match your Schema
+          // B. Map items
           formattedItems = items.map(function (item) {
             return {
               product: item.productId || item._id,
@@ -195,8 +193,13 @@ function createOrder(orderData) {
             }),
             totalAmount: Number(totalAmount),
             deliveryCharge: Number(deliveryCharge),
+            mobileBankingFee: Number(mobileBankingFee || 0),
+            // 🟢 Added this line
+            paymentMethod: paymentMethod,
+            // 🟢 Added this line
             paidAmount: Number(paidAmount),
             dueAmount: Number(dueAmount),
+            // Use the dueAmount from data
             status: "Pending",
             paymentStatus: statusOfPayment
           }], {
@@ -500,72 +503,95 @@ function syncVIPStatus(userId) {
 }
 
 function getDashboardStats() {
-  var revenueData, totalRevenue, activeOrders, totalUsers;
+  var period,
+      startDate,
+      now,
+      financialData,
+      financials,
+      netProductRevenue,
+      _args4 = arguments;
   return regeneratorRuntime.async(function getDashboardStats$(_context4) {
     while (1) {
       switch (_context4.prev = _context4.next) {
         case 0:
-          _context4.prev = 0;
-          _context4.next = 3;
+          period = _args4.length > 0 && _args4[0] !== undefined ? _args4[0] : "all";
+          _context4.prev = 1;
+          _context4.next = 4;
           return regeneratorRuntime.awrap((0, _mongodb["default"])());
 
-        case 3:
-          _context4.next = 5;
+        case 4:
+          // Calculate Date Filter
+          startDate = new Date(0); // Default to beginning of time
+
+          now = new Date();
+          if (period === "7days") startDate = new Date(now.setDate(now.getDate() - 7));else if (period === "30days") startDate = new Date(now.setDate(now.getDate() - 30));else if (period === "year") startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+          _context4.next = 9;
           return regeneratorRuntime.awrap(_Order["default"].aggregate([{
             $match: {
               status: {
                 $ne: "Cancelled"
-              }
+              },
+              createdAt: {
+                $gte: startDate
+              } // 🟢 Date Filtering added
+
             }
           }, {
             $group: {
               _id: null,
-              total: {
+              grossRevenue: {
                 $sum: "$totalAmount"
+              },
+              totalMfsFees: {
+                $sum: {
+                  $ifNull: ["$mobileBankingFee", 0]
+                }
+              },
+              totalDeliveryCharges: {
+                $sum: {
+                  $ifNull: ["$deliveryCharge", 0]
+                }
+              },
+              orderCount: {
+                $sum: 1
               }
             }
           }]));
 
-        case 5:
-          revenueData = _context4.sent;
-          totalRevenue = revenueData.length > 0 ? revenueData[0].total : 0;
-          _context4.next = 9;
-          return regeneratorRuntime.awrap(_Order["default"].countDocuments({
-            status: {
-              $in: ["Pending", "Processing", "Shipped"]
-            }
-          }));
-
         case 9:
-          activeOrders = _context4.sent;
-          _context4.next = 12;
-          return regeneratorRuntime.awrap(_User["default"].countDocuments());
+          financialData = _context4.sent;
+          financials = financialData[0] || {
+            grossRevenue: 0,
+            totalMfsFees: 0,
+            totalDeliveryCharges: 0,
+            orderCount: 0
+          }; // Net Product Revenue calculation
 
-        case 12:
-          totalUsers = _context4.sent;
+          netProductRevenue = financials.grossRevenue - financials.totalMfsFees - financials.totalDeliveryCharges;
           return _context4.abrupt("return", {
             success: true,
             stats: {
-              totalRevenue: totalRevenue,
-              activeOrders: activeOrders,
-              totalUsers: totalUsers,
-              conversionRate: 3.2
+              totalRevenue: financials.grossRevenue,
+              netRevenue: netProductRevenue,
+              gatewayCosts: financials.totalMfsFees,
+              deliveryCosts: financials.totalDeliveryCharges,
+              orderCount: financials.orderCount
             }
           });
 
-        case 16:
-          _context4.prev = 16;
-          _context4.t0 = _context4["catch"](0);
+        case 15:
+          _context4.prev = 15;
+          _context4.t0 = _context4["catch"](1);
           return _context4.abrupt("return", {
             success: false
           });
 
-        case 19:
+        case 18:
         case "end":
           return _context4.stop();
       }
     }
-  }, null, null, [[0, 16]]);
+  }, null, null, [[1, 15]]);
 }
 /**
  * 4. FETCHING FUNCTIONS

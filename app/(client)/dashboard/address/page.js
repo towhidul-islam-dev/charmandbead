@@ -24,7 +24,7 @@ const initialData = {
   };
 
   return (
-      <div className="min-h-screen bg-gray-50/30">
+      <div className="min-h-screen bg-gray-50/30 rounded-3xl">
           {/* Pass the flattened data to your existing AddressPageClient */}
           <AddressPageClient initialData={initialData} />
       </div>

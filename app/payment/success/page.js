@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { getOrderById } from "@/actions/order";
-import { processOrderStock } from "@/actions/inventoryWatcher"; // ⬅️ New Import
+import { processOrderStock } from "@/actions/inventoryWatcher";
 import { useCart } from "@/Context/CartContext";
 import Link from "next/link";
 import {
@@ -14,6 +14,7 @@ import {
   Loader2,
   Truck,
   AlertCircle,
+  CreditCard,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -53,14 +54,10 @@ function SuccessContent() {
           const data = await getOrderById(orderId);
           setOrder(data);
 
-          // 🟢 INTEGRATED STOCK LOGIC
-          // Check if stock has already been deducted for this order to prevent double-deduction on refresh
           if (data && !data.stockProcessed) {
-            console.log("Processing inventory levels...");
             await processOrderStock(data);
           }
 
-          // 💡 Sync local storage key with CheckoutPage
           const saved = localStorage.getItem("checkoutItems");
           if (saved) {
             const purchasedItems = JSON.parse(saved);
@@ -86,11 +83,13 @@ function SuccessContent() {
     try {
       const doc = new jsPDF();
       const brandColor = [234, 99, 140]; // #EA638C
-      const darkColor = [31, 41, 55];    // Gray-800
-      const lightGray = [156, 163, 175]; // Gray-400
+      const darkGreen = [62, 68, 43];   // #3E442B
+      const darkColor = [31, 41, 55]; 
+      const lightGray = [156, 163, 175];
 
       const itemsSubtotal = orderData.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
       const delivery = orderData.deliveryCharge || 0;
+      const mbFee = orderData.mobileBankingFee || 0; // 🟢 Fee from DB
 
       const images = await Promise.all(
         orderData.items.map(async (item) => {
@@ -101,48 +100,39 @@ function SuccessContent() {
         })
       );
 
-      doc.setFillColor(brandColor[0], brandColor[1], brandColor[2]);
+      doc.setFillColor(darkGreen[0], darkGreen[1], darkGreen[2]);
       doc.rect(0, 0, 210, 40, "F"); 
 
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(24);
-      doc.setFont("helvetica", "bold");
+      doc.setFontSize(24); doc.setFont("helvetica", "bold");
       doc.text("CHARM STORE", 14, 25);
       
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9); doc.setFont("helvetica", "normal");
       doc.text("PREMIUM WHOLESALE COMMERCE", 14, 32);
 
       const isPaid = (orderData.dueAmount ?? 0) <= 0;
       doc.setDrawColor(255, 255, 255);
       doc.setLineWidth(0.5);
       doc.roundedRect(150, 15, 45, 12, 2, 2, "D");
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10); doc.setFont("helvetica", "bold");
       doc.text(isPaid ? "FULLY PAID" : "PARTIAL COD", 172.5, 23, { align: "center" });
 
       doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
-      doc.setFontSize(12);
-      doc.text("INVOICE DETAILS", 14, 55);
+      doc.setFontSize(12); doc.text("INVOICE DETAILS", 14, 55);
       doc.setDrawColor(brandColor[0], brandColor[1], brandColor[2]);
-      doc.setLineWidth(1);
-      doc.line(14, 57, 30, 57);
+      doc.setLineWidth(1); doc.line(14, 57, 30, 57);
 
-      doc.setFontSize(9);
-      doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
-      doc.text("INVOICE NO:", 14, 65);
-      doc.text("DATE:", 14, 70);
-      doc.text("BILL TO:", 120, 65);
+      doc.setFontSize(9); doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
+      doc.text("INVOICE NO:", 14, 65); doc.text("DATE:", 14, 70); doc.text("BILL TO:", 120, 65);
 
       doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
       doc.setFont("helvetica", "bold");
       doc.text(`#INV-${orderData._id.slice(-6).toUpperCase()}`, 40, 65);
       doc.text(new Date(orderData.createdAt).toLocaleDateString('en-GB'), 40, 70);
-      
       doc.text(orderData.shippingAddress?.name || "Customer", 120, 70);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
-      doc.text(`${orderData.shippingAddress?.address || ""}`, 120, 75, { maxWidth: 70 });
+      
+      doc.setFont("helvetica", "normal"); doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
+      doc.text(`${orderData.shippingAddress?.street || ""}, ${orderData.shippingAddress?.city || ""}`, 120, 75, { maxWidth: 70 });
 
       const tableRows = orderData.items.map((item) => [
         "", 
@@ -163,9 +153,7 @@ function SuccessContent() {
         didDrawCell: (data) => {
           if (data.section === "body" && data.column.index === 0) {
             const base64Img = images[data.row.index];
-            if (base64Img) {
-                doc.addImage(base64Img, "PNG", data.cell.x + 2, data.cell.y + 2, 20, 20);
-            }
+            if (base64Img) doc.addImage(base64Img, "PNG", data.cell.x + 2, data.cell.y + 2, 20, 20);
           }
         },
       });
@@ -183,18 +171,23 @@ function SuccessContent() {
 
       drawSummaryRow("Subtotal", `TK ${itemsSubtotal.toLocaleString()}`, finalY);
       drawSummaryRow("Shipping", `+ TK ${delivery.toLocaleString()}`, finalY + 7);
-      doc.line(summaryX, finalY + 10, valueX, finalY + 10);
-      drawSummaryRow("Total Amount", `TK ${(orderData?.totalAmount ?? 0).toLocaleString()}`, finalY + 17, true);
-      drawSummaryRow("Paid Online", `- TK ${(orderData?.paidAmount ?? 0).toLocaleString()}`, finalY + 24, false, brandColor);
+      
+      // 🟢 Added Mobile Banking Fee to Summary
+      if (mbFee > 0) {
+        drawSummaryRow("Gateway Fee (1.5%)", `+ TK ${mbFee.toLocaleString()}`, finalY + 14, false, brandColor);
+      }
+
+      doc.line(summaryX, finalY + 17, valueX, finalY + 17);
+      drawSummaryRow("Grand Total", `TK ${(orderData?.totalAmount ?? 0).toLocaleString()}`, finalY + 24, true);
+      drawSummaryRow("Paid Online", `- TK ${(orderData?.paidAmount ?? 0).toLocaleString()}`, finalY + 31, false, brandColor);
       
       if (orderData.dueAmount > 0) {
           doc.setFillColor(254, 242, 242);
-          doc.rect(summaryX - 5, finalY + 28, 60, 10, "F");
-          drawSummaryRow("Balance Due (COD)", `TK ${(orderData?.dueAmount ?? 0).toLocaleString()}`, finalY + 34, true, [220, 38, 38]);
+          doc.rect(summaryX - 5, finalY + 35, 60, 10, "F");
+          drawSummaryRow("Balance Due (COD)", `TK ${(orderData?.dueAmount ?? 0).toLocaleString()}`, finalY + 41, true, [220, 38, 38]);
       }
 
-      doc.setFontSize(8);
-      doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
+      doc.setFontSize(8); doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
       doc.text("Thank you for shopping with Charm Store.", 105, 285, { align: "center" });
 
       doc.save(`Invoice_${orderData._id.slice(-6).toUpperCase()}.pdf`);
@@ -228,17 +221,17 @@ function SuccessContent() {
           <CheckCircle size={40} className="text-green-500" />
         </div>
 
-        <h1 className="mb-2 text-3xl italic font-black tracking-tighter text-gray-900 uppercase">Success!</h1>
+        <h1 className="mb-2 text-3xl italic font-black tracking-tighter text-[#3E442B] uppercase">Success!</h1>
         <p className="mb-8 font-bold text-gray-500">Order #INV-{order._id.slice(-6).toUpperCase()} is confirmed.</p>
 
         {isPartial && (
-          <div className="mb-8 p-6 bg-orange-50 border-2 border-orange-100 rounded-[2rem] flex items-center gap-4 text-left">
-            <div className="p-2 text-white bg-orange-500 rounded-full">
+          <div className="mb-8 p-6 bg-pink-50 border-2 border-[#FBB6E6] rounded-[2rem] flex items-center gap-4 text-left">
+            <div className="p-2 text-white bg-[#EA638C] rounded-full shadow-lg shadow-pink-200">
               <AlertCircle size={20} />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase text-orange-600 tracking-widest">Payment Notice</p>
-              <p className="text-sm font-bold text-orange-900">Please pay ৳{order.dueAmount.toLocaleString()} to the rider upon delivery.</p>
+              <p className="text-[10px] font-black uppercase text-[#EA638C] tracking-widest leading-none mb-1">Payment Notice</p>
+              <p className="text-sm font-bold text-gray-800">Please pay ৳{order.dueAmount.toLocaleString()} to the rider upon delivery.</p>
             </div>
           </div>
         )}
@@ -246,7 +239,7 @@ function SuccessContent() {
         <button
           onClick={() => generateInvoice(order)}
           disabled={isGenerating}
-          className="mb-8 flex items-center gap-2 mx-auto text-[10px] font-black uppercase tracking-widest text-[#EA638C] bg-pink-50 px-8 py-4 rounded-full hover:bg-[#EA638C] hover:text-white transition-all disabled:opacity-50"
+          className="mb-8 flex items-center gap-2 mx-auto text-[10px] font-black uppercase tracking-widest text-[#EA638C] bg-white border-2 border-pink-100 px-8 py-4 rounded-full hover:bg-[#EA638C] hover:text-white transition-all disabled:opacity-50 shadow-sm"
         >
           {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
           Download Detailed Invoice
@@ -266,7 +259,15 @@ function SuccessContent() {
               <span>+ ৳{(order.deliveryCharge ?? 0).toLocaleString()}</span>
             </div>
 
-            <div className="flex justify-between pt-2 text-base font-black text-gray-900">
+            {/* 🟢 Mobile Banking Fee UI */}
+            {order.mobileBankingFee > 0 && (
+              <div className="flex justify-between text-sm font-bold text-[#EA638C]">
+                <span className="flex items-center gap-1"><CreditCard size={14} /> Mobile Fee (1.5%):</span>
+                <span>+ ৳{order.mobileBankingFee.toLocaleString()}</span>
+              </div>
+            )}
+
+            <div className="flex justify-between pt-2 text-base font-black text-[#3E442B]">
               <span>Grand Total:</span>
               <span>৳{(order.totalAmount ?? 0).toLocaleString()}</span>
             </div>
@@ -278,7 +279,7 @@ function SuccessContent() {
               <span>- ৳{(order.paidAmount ?? 0).toLocaleString()}</span>
             </div>
             
-            <div className={`flex justify-between text-sm font-black p-4 rounded-2xl transition-all ${isPartial ? "bg-pink-50 text-[#EA638C]" : "bg-gray-100 text-gray-400"}`}>
+            <div className={`flex justify-between text-sm font-black p-4 rounded-2xl transition-all ${isPartial ? "bg-[#3E442B] text-white shadow-xl" : "bg-gray-100 text-gray-400"}`}>
               <span className="flex items-center gap-1.5">
                 <Banknote size={16} /> {isPartial ? "Cash to Pay (COD):" : "Balance Due:"}
               </span>
@@ -288,10 +289,10 @@ function SuccessContent() {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <Link href="/dashboard/orders" className="py-4 text-[10px] font-black tracking-widest text-white uppercase bg-black rounded-2xl hover:opacity-90">
+          <Link href="/dashboard/orders" className="py-4 text-[10px] font-black tracking-widest text-white uppercase bg-[#3E442B] rounded-2xl hover:opacity-90 shadow-lg shadow-gray-200 transition-all">
             My Orders
           </Link>
-          <Link href="/" className="py-4 text-[10px] font-black tracking-widest text-gray-700 uppercase bg-gray-100 rounded-2xl hover:bg-gray-200">
+          <Link href="/" className="py-4 text-[10px] font-black tracking-widest text-gray-700 uppercase bg-gray-100 rounded-2xl hover:bg-gray-200 transition-all">
             Shop More
           </Link>
         </div>

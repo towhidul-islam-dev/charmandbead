@@ -209,3 +209,52 @@ export async function deleteAccount() {
     return { success: false, error: error.message };
   }
 }
+
+
+//it's delete the user account.
+export async function deleteUser(userId) {
+  try {
+    const session = await auth();
+    
+    // 1. Security Check: Must be an admin to delete users
+    if (!session || session.user.role !== "admin") {
+      return { success: false, error: "Unauthorized: Admin access required" };
+    }
+
+    await dbConnect();
+
+    // 2. Security Check: Prevent self-deletion
+    if (userId === session.user.id) {
+      return { success: false, error: "You cannot delete your own account from the admin panel." };
+    }
+
+    const targetUser = await User.findById(userId);
+    if (!targetUser) return { success: false, error: "User not found" };
+
+    // 3. Security Check: Prevent deleting protected Super Admins
+    if (SUPER_ADMIN_EMAILS.includes(targetUser.email)) {
+      return { success: false, error: "Permission Denied: Cannot delete a protected Super Admin." };
+    }
+
+    // 4. Cleanup: Delete profile image from Cloudinary if it exists
+    if (targetUser.imagePublicId) {
+      try {
+        await deleteImage(targetUser.imagePublicId);
+      } catch (cloudinaryErr) {
+        console.error("Cloudinary Delete Error:", cloudinaryErr);
+        // We continue deleting the user even if image deletion fails
+      }
+    }
+
+    // 5. Delete the User record
+    await User.findByIdAndDelete(userId);
+
+    // 6. Refresh the UI
+    revalidatePath("/admin/users");
+    
+    return { success: true, message: "User and associated data removed successfully." };
+  } catch (err) {
+    console.error("DELETE_USER_ERROR:", err);
+    return { success: false, error: err.message };
+  }
+}

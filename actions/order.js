@@ -12,7 +12,6 @@ import { sendShippingUpdateEmail } from "@/lib/mail";
  * 1. CREATE ORDER (Atomic Transaction Logic)
  */
 export async function createOrder(orderData) {
-  // Start a MongoDB Session for Transactional Integrity
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -28,6 +27,7 @@ export async function createOrder(orderData) {
       dueAmount,
       deliveryCharge,
       paymentMethod,
+      mobileBankingFee, // 🟢 Destructured from the frontend call
       phone 
     } = orderData;
 
@@ -35,8 +35,6 @@ export async function createOrder(orderData) {
     for (const item of items) {
       const quantityToDeduct = Number(item.quantity);
       const productId = item.productId || item._id;
-
-      // Logic for Variant vs Simple Product
       const isVariant = item.color || item.size;
 
       const filter = isVariant 
@@ -44,7 +42,7 @@ export async function createOrder(orderData) {
             _id: productId, 
             "variants.color": item.color, 
             "variants.size": item.size,
-            "variants.stock": { $gte: quantityToDeduct } // Atomic Check
+            "variants.stock": { $gte: quantityToDeduct } 
           }
         : { 
             _id: productId, 
@@ -58,12 +56,11 @@ export async function createOrder(orderData) {
       const productUpdate = await Product.updateOne(filter, update, { session });
 
       if (productUpdate.modifiedCount === 0) {
-        // This triggers if stock is insufficient OR product/variant doesn't exist
-        throw new Error(`Stock error: ${item.name} (${item.color || ''}) is no longer available in the requested quantity.`);
+        throw new Error(`Stock error: ${item.name} (${item.color || ''}) is no longer available.`);
       }
     }
 
-    // B. Map items to match your Schema
+    // B. Map items
     const formattedItems = items.map(item => ({
       product: item.productId || item._id,
       productName: item.name,
@@ -91,13 +88,14 @@ export async function createOrder(orderData) {
       shippingAddress: { ...shippingAddress, phone },
       totalAmount: Number(totalAmount),
       deliveryCharge: Number(deliveryCharge),
+      mobileBankingFee: Number(mobileBankingFee || 0), // 🟢 Added this line
+      paymentMethod: paymentMethod,                   // 🟢 Added this line
       paidAmount: Number(paidAmount),
-      dueAmount: Number(dueAmount),
+      dueAmount: Number(dueAmount), // Use the dueAmount from data
       status: "Pending",
       paymentStatus: statusOfPayment,
     }], { session });
 
-    // If we reach here, commit all changes to the database
     await session.commitTransaction();
 
     revalidatePath("/admin/orders");
@@ -110,13 +108,9 @@ export async function createOrder(orderData) {
       orderId: newOrder._id.toString() 
     };
   } catch (error) {
-    // If ANY part fails, undo all stock deductions
     await session.abortTransaction();
     console.error("❌ Checkout Error:", error);
-    return { 
-      success: false, 
-      message: error.message 
-    };
+    return { success: false, message: error.message };
   } finally {
     session.endSession();
   }
@@ -202,24 +196,50 @@ export async function syncVIPStatus(userId) {
   }
 }
 
-export async function getDashboardStats() {
+export async function getDashboardStats(period = "all") {
   try {
     await dbConnect();
-    const revenueData = await Order.aggregate([
-      { $match: { status: { $ne: "Cancelled" } } },
-      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
+
+    // Calculate Date Filter
+    let startDate = new Date(0); // Default to beginning of time
+    const now = new Date();
+
+    if (period === "7days") startDate = new Date(now.setDate(now.getDate() - 7));
+    else if (period === "30days") startDate = new Date(now.setDate(now.getDate() - 30));
+    else if (period === "year") startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+
+    const financialData = await Order.aggregate([
+      { 
+        $match: { 
+          status: { $ne: "Cancelled" },
+          createdAt: { $gte: startDate } // 🟢 Date Filtering added
+        } 
+      },
+      { 
+        $group: { 
+          _id: null, 
+          grossRevenue: { $sum: "$totalAmount" },
+          totalMfsFees: { $sum: { $ifNull: ["$mobileBankingFee", 0] } },
+          totalDeliveryCharges: { $sum: { $ifNull: ["$deliveryCharge", 0] } },
+          orderCount: { $sum: 1 }
+        } 
+      }
     ]);
-    const totalRevenue = revenueData.length > 0 ? revenueData[0].total : 0;
 
-    const activeOrders = await Order.countDocuments({
-      status: { $in: ["Pending", "Processing", "Shipped"] }
-    });
-
-    const totalUsers = await User.countDocuments();
+    const financials = financialData[0] || { grossRevenue: 0, totalMfsFees: 0, totalDeliveryCharges: 0, orderCount: 0 };
+    
+    // Net Product Revenue calculation
+    const netProductRevenue = financials.grossRevenue - financials.totalMfsFees - financials.totalDeliveryCharges;
 
     return {
       success: true,
-      stats: { totalRevenue, activeOrders, totalUsers, conversionRate: 3.2 }
+      stats: { 
+        totalRevenue: financials.grossRevenue,
+        netRevenue: netProductRevenue,
+        gatewayCosts: financials.totalMfsFees,
+        deliveryCosts: financials.totalDeliveryCharges,
+        orderCount: financials.orderCount,
+      }
     };
   } catch (error) {
     return { success: false };

@@ -3,6 +3,7 @@ import RoleSelect from "@/components/admin/RoleSelect";
 import UserDetailsModal from "@/components/admin/UserDetailsModal";
 import SearchUsers from "@/components/admin/SearchUsers";
 import ExportUsers from "@/components/admin/ExportUsers";
+import DeleteUserButton from "@/components/admin/DeleteUserButton"; // 🟢 Added this
 import { ShieldCheck, Users, Zap, Phone, SearchX, CircleDot } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -29,7 +30,6 @@ export default async function AdminUsersPage({ searchParams }) {
     );
   }
 
-  // 1. CLEAN DATA: Converts MongoDB ObjectIds and Buffers to plain strings
   const users = JSON.parse(JSON.stringify(rawUsers));
 
   const filteredUsers = users.filter((user) => {
@@ -44,7 +44,7 @@ export default async function AdminUsersPage({ searchParams }) {
   });
 
   return (
-    <div className="p-4 mx-auto md:p-8 max-w-7xl">
+    <div className="p-4 mx-auto md:p-8 max-w-7xl animate-in fade-in duration-500">
       {/* Header Section */}
       <div className="flex flex-col justify-between gap-6 mb-10 lg:flex-row lg:items-end">
         <div>
@@ -65,8 +65,8 @@ export default async function AdminUsersPage({ searchParams }) {
           <div className="flex items-center gap-3">
             <ExportUsers data={filteredUsers} fileName={`members-${activeFilter}`} />
             <div className="flex items-center gap-2 bg-[#F3F4F6] p-1.5 rounded-2xl border border-gray-200">
-              <Link href="/admin/users?filter=all" className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeFilter === 'all' ? 'bg-[#3E442B] text-white' : 'text-gray-400'}`}>All</Link>
-              <Link href="/admin/users?filter=vip" className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeFilter === 'vip' ? 'bg-yellow-400 text-black' : 'text-gray-400'}`}><Zap size={10} /> VIP</Link>
+              <Link href="/admin/users?filter=all" className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeFilter === 'all' ? 'bg-[#3E442B] text-white' : 'text-gray-400 hover:text-[#3E442B]'}`}>All</Link>
+              <Link href="/admin/users?filter=vip" className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeFilter === 'vip' ? 'bg-yellow-400 text-black' : 'text-gray-400 hover:text-yellow-600'}`}><Zap size={10} /> VIP</Link>
             </div>
           </div>
         </div>
@@ -76,11 +76,11 @@ export default async function AdminUsersPage({ searchParams }) {
       <div className="bg-white rounded-[3rem] shadow-2xl shadow-gray-200/50 border border-gray-100 overflow-hidden">
         {filteredUsers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="p-6 mb-4 bg-gray-50 rounded-full">
+            <div className="p-6 mb-4 rounded-full bg-gray-50">
               <SearchX className="w-12 h-12 text-gray-300" />
             </div>
             <h3 className="text-lg font-black text-[#3E442B] uppercase italic">No Users Found</h3>
-            <p className="text-sm text-gray-400 max-w-xs mt-1">We couldn't find anyone matching "{query}".</p>
+            <p className="max-w-xs mt-1 text-sm text-gray-400">We couldn't find anyone matching "{query}".</p>
             <Link href="/admin/users" className="mt-4 text-[10px] font-black uppercase text-[#EA638C] border-b border-[#EA638C]">View all users</Link>
           </div>
         ) : (
@@ -92,7 +92,7 @@ export default async function AdminUsersPage({ searchParams }) {
                   <th className="px-6 py-6 text-[10px] font-black uppercase text-gray-400 text-left tracking-widest">Status</th>
                   <th className="px-6 py-6 text-[10px] font-black uppercase text-gray-400 text-left tracking-widest">Access Level</th>
                   <th className="px-6 py-6 text-[10px] font-black uppercase text-gray-400 text-left tracking-widest">Investment (৳)</th>
-                  <th className="px-8 py-6"></th>
+                  <th className="px-8 py-6 text-right text-[10px] font-black uppercase text-gray-400 tracking-widest">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-50">
@@ -100,7 +100,6 @@ export default async function AdminUsersPage({ searchParams }) {
                   const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(user.email);
                   const isVIP = user.isVIP || (user.totalSpent >= VIP_THRESHOLD);
                   
-                  // 2. IMAGE URL: Uses the NEXT_PUBLIC prefixed env variable
                   const imageUrl = user.image?.startsWith('http') 
                     ? user.image 
                     : user.image 
@@ -163,7 +162,16 @@ export default async function AdminUsersPage({ searchParams }) {
                       </td>
 
                       <td className="px-8 py-6 text-right">
-                        <UserDetailsModal user={user} />
+                        <div className="flex items-center justify-end gap-2">
+                          <UserDetailsModal user={user} />
+                          
+                          {/* 🟢 Delete Button with Super Admin protection */}
+                          <DeleteUserButton 
+                            userId={user._id.toString()} 
+                            userName={user.name} 
+                            isSuperAdmin={isSuperAdmin}
+                          />
+                        </div>
                       </td>
                     </tr>
                   );

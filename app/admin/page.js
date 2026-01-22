@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ShoppingBag, Users, DollarSign, Activity, Loader2 } from "lucide-react";
-import { getDashboardStats } from "@/actions/order"; // adjust path as needed
+import { 
+  ShoppingBag, Users, DollarSign, Activity, 
+  Loader2, Wallet, Truck, Percent 
+} from "lucide-react";
+import { getDashboardStats } from "@/actions/order";
+import AnalyticsBreakdown from "@/components/admin/AnalyticsBreakdown"; // 🟢 Added this
 
 export default function AdminDashboardPage() {
   const [data, setData] = useState(null);
@@ -10,7 +14,8 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     async function loadStats() {
-      const res = await getDashboardStats();
+      // Note: This fetches 'all' by default, the chart handles its own filtering
+      const res = await getDashboardStats(); 
       if (res.success) {
         setData(res.stats);
       }
@@ -19,109 +24,138 @@ export default function AdminDashboardPage() {
     loadStats();
   }, []);
 
+  // Updated Stats to reflect Net Profit and Operational Costs
   const stats = [
     { 
-      label: "Total Revenue", 
-      value: `৳${data?.totalRevenue?.toLocaleString() || 0}`, 
-      icon: DollarSign, 
+      label: "Net Revenue", 
+      value: `৳${data?.netRevenue?.toLocaleString() || 0}`, 
+      icon: Wallet, 
       color: "text-[#3E442B]", 
-      bg: "bg-[#3E442B]/10" 
+      bg: "bg-[#3E442B]/10",
+      description: "After Fees & Delivery"
     },
     { 
-      label: "Active Orders", 
-      value: data?.activeOrders || 0, 
-      icon: ShoppingBag, 
+      label: "Gateway & Delivery", 
+      value: `৳${((data?.gatewayCosts || 0) + (data?.deliveryCosts || 0)).toLocaleString()}`, 
+      icon: Truck, 
       color: "text-[#EA638C]", 
-      bg: "bg-[#EA638C]/10" 
+      bg: "bg-[#EA638C]/10",
+      description: "Operational Expenses"
+    },
+    { 
+      label: "Total Orders", 
+      value: data?.orderCount || 0, 
+      icon: ShoppingBag, 
+      color: "text-[#3E442B]", 
+      bg: "bg-gray-100",
+      description: "Successful Sales"
     },
     { 
       label: "Total Users", 
       value: data?.totalUsers || 0, 
       icon: Users, 
-      color: "text-[#3E442B]", 
-      bg: "bg-gray-100" 
-    },
-    { 
-      label: "Conversion", 
-      value: `${data?.conversionRate || 0}%`, 
-      icon: Activity, 
       color: "text-[#EA638C]", 
-      bg: "bg-[#EA638C]/5" 
+      bg: "bg-[#EA638C]/5",
+      description: "Registered Customers" 
     },
   ];
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="animate-spin text-[#EA638C]" size={40} />
+      <div className="flex items-center justify-center h-screen bg-[#FAFAFA]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin text-[#EA638C]" size={40} />
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#3E442B]">Initializing Analytics...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-10 duration-700 animate-in fade-in">
-      {/* Header */}
-      <div>
-        <h2 className="text-3xl font-black uppercase italic tracking-tighter text-[#3E442B]">
-          Dashboard <span className="text-[#EA638C]">Overview</span>
-        </h2>
-        <p className="mt-2 text-xs font-black tracking-widest text-gray-400 uppercase">
-          Real-time System Performance
-        </p>
+    <div className="space-y-10 duration-700 animate-in fade-in p-2 md:p-0">
+      
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-4xl font-black uppercase italic tracking-tighter text-[#3E442B]">
+            Dashboard <span className="text-[#EA638C]">Analytics</span>
+          </h2>
+          <div className="flex items-center gap-3 mt-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <p className="text-[10px] font-black tracking-widest text-gray-400 uppercase">
+              Financial Status: Healthy
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2 bg-white px-5 py-3 rounded-2xl shadow-sm border border-gray-100">
+           <Percent size={14} className="text-[#EA638C]" />
+           <p className="text-[10px] font-black uppercase text-[#3E442B]">
+             Conversion Rate: <span className="text-[#EA638C]">{data?.conversionRate || 3.2}%</span>
+           </p>
+        </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* PRIMARY STATS GRID */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat, i) => (
-          <div key={i} className="p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl hover:border-[#EA638C]/20 transition-all duration-300">
-            <div className={`w-14 h-14 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center mb-6`}>
-              <stat.icon size={28} />
+          <div key={i} className="group p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-2xl hover:border-[#EA638C]/20 transition-all duration-500">
+            <div className={`w-14 h-14 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500`}>
+              <stat.icon size={26} />
             </div>
-            <p className="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em]">{stat.label}</p>
-            <p className="text-3xl font-black mt-1 text-[#3E442B] tracking-tight">{stat.value}</p>
+            <p className="text-[9px] font-black uppercase text-gray-400 tracking-[0.2em]">{stat.label}</p>
+            <p className="text-2xl font-black mt-1 text-[#3E442B] tracking-tighter">{stat.value}</p>
+            <p className="text-[8px] font-bold text-gray-300 uppercase mt-2">{stat.description}</p>
           </div>
         ))}
       </div>
 
-      {/* Activity Section */}
+      {/* MAIN ANALYSIS SECTION */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-2 p-8 bg-white rounded-[2.5rem] border border-gray-100 min-h-[400px]">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-sm font-black uppercase tracking-widest text-[#3E442B]">Recent Sales Trend</h3>
-            <span className="text-[10px] font-bold px-3 py-1 bg-green-50 text-green-600 rounded-full uppercase">Live Updates</span>
-          </div>
-          <div className="flex flex-col items-center justify-center text-gray-300 h-72">
-            <Activity size={48} className="mb-4 opacity-10 text-[#3E442B]" />
-            <p className="text-[10px] font-black uppercase tracking-widest opacity-40">Graph visualization connecting...</p>
-          </div>
+        
+        {/* ROUND GRAPH BREAKDOWN (Left 2 Columns) */}
+        <div className="lg:col-span-2">
+          <AnalyticsBreakdown />
         </div>
         
-        {/* Brand Dark Card */}
-        <div className="p-8 bg-[#3E442B] rounded-[3rem] text-white shadow-2xl shadow-[#3E442B]/30 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#EA638C]/10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+        {/* SYSTEM HEALTH CARD (Right 1 Column) */}
+        <div className="p-8 bg-[#3E442B] rounded-[3rem] text-white shadow-2xl shadow-[#3E442B]/30 relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-[#EA638C]/10 rounded-full -mr-24 -mt-24 blur-3xl"></div>
           
-          <h3 className="mb-8 text-sm font-black tracking-widest uppercase text-white/90">System Health</h3>
-          <div className="space-y-8">
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
-              <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Database</span>
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-[10px] font-black uppercase text-green-400">Stable</span>
+          <div>
+            <h3 className="mb-8 text-[10px] font-black tracking-[0.3em] uppercase text-white/50">Core Infrastructure</h3>
+            <div className="space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white">Database</span>
+                  <span className="text-[8px] text-white/40 font-bold uppercase mt-1">MongoDB Cluster</span>
+                </div>
+                <div className="px-3 py-1 bg-green-500/10 text-green-400 rounded-full text-[8px] font-black uppercase tracking-tighter border border-green-500/20">Stable</div>
               </div>
-            </div>
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
-              <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Media Server</span>
-              <span className="text-[10px] font-black uppercase text-[#EA638C]">Active</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Inventory Sync</span>
-              <span className="text-[10px] font-black uppercase text-green-400">Live</span>
+              
+              <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white">Gateway</span>
+                  <span className="text-[8px] text-white/40 font-bold uppercase mt-1">SSL / bKash API</span>
+                </div>
+                <span className="text-[8px] font-black uppercase text-[#EA638C]">Secured</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white">Sync Status</span>
+                  <span className="text-[8px] text-white/40 font-bold uppercase mt-1">Inventory & Orders</span>
+                </div>
+                <span className="text-[8px] font-black uppercase text-green-400">Live</span>
+              </div>
             </div>
           </div>
 
-          <div className="p-6 mt-12 border bg-white/5 rounded-2xl border-white/5">
-            <p className="text-[9px] font-black uppercase text-white/30 tracking-widest mb-2">Admin Note</p>
-            <p className="text-xs italic leading-relaxed text-white/70">System performing at peak efficiency. No pending updates required.</p>
+          <div className="p-6 mt-8 border bg-white/5 rounded-3xl border-white/5 backdrop-blur-sm">
+            <p className="text-[8px] font-black uppercase text-[#EA638C] tracking-widest mb-2">Internal Note</p>
+            <p className="text-[11px] italic leading-relaxed text-white/70">
+              The Net Revenue reflects totals after 1.5% MFS fees and all delivery costs have been deducted.
+            </p>
           </div>
         </div>
       </div>
