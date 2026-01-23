@@ -3,10 +3,16 @@ import { useState } from "react";
 import { 
   X, Mail, Phone, Calendar, MapPin, User as UserIcon, 
   ShoppingBag, CheckCircle2, Clock, MessageSquare, Copy, Package,
-  Zap, TrendingUp, ShieldCheck, ExternalLink
+  Zap, TrendingUp, ShieldCheck, ExternalLink, Gift // 🟢 Added Gift
 } from "lucide-react";
 
-export default function UserDetailsModal({ user, orders = [], totalSpent = 0 }) {
+export default function UserDetailsModal({ 
+  user, 
+  orders = [], 
+  totalSpent = 0, 
+  lastGiftAt, // 🟢 New Prop
+  lastGiftTitle // 🟢 New Prop
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
 
@@ -14,7 +20,6 @@ export default function UserDetailsModal({ user, orders = [], totalSpent = 0 }) 
   const isVIP = user.isVIP || totalSpent >= VIP_THRESHOLD;
   const progressPercentage = Math.min((totalSpent / VIP_THRESHOLD) * 100, 100);
 
-  // Generate initials for the fallback
   const initials = user.name
     ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "??";
@@ -78,7 +83,6 @@ export default function UserDetailsModal({ user, orders = [], totalSpent = 0 }) 
                         <div className={`absolute inset-0 transition-transform rounded-[2.5rem] rotate-6 group-hover:rotate-12 duration-300 ${isVIP ? 'bg-yellow-100' : 'bg-[#EA638C]/10'}`}></div>
                         <div className="relative w-full h-full rounded-[2.5rem] border-4 border-white overflow-hidden bg-white flex items-center justify-center shadow-md">
                           
-                          {/* 🟢 FIXED IMAGE LOGIC WITH CACHE BUSTER */}
                           {user.image ? (
                             <img 
                               src={`${user.image}${user.image.includes('?') ? '&' : '?'}v=${new Date().getTime()}`} 
@@ -160,17 +164,31 @@ export default function UserDetailsModal({ user, orders = [], totalSpent = 0 }) 
                     </div>
                   </div>
 
+                  {/* 🟢 NEW SECTION: Reward Info Grid Insertion */}
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-4">
                       <div className="p-5 transition-colors border border-transparent bg-gray-50 rounded-3xl hover:border-[#3E442B]/10">
                         <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Email Registry</p>
                         <p className="text-sm font-bold text-[#3E442B] truncate">{user.email}</p>
                       </div>
-                      <div className="p-5 transition-colors border border-transparent bg-gray-50 rounded-3xl hover:border-[#3E442B]/10">
-                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Direct Contact</p>
-                        <p className="text-sm font-bold text-[#3E442B]">{user.phone || "No Phone Set"}</p>
+                      
+                      {/* Reward History Card using #FBB6E6 & #EA638C */}
+                      <div className="p-5 transition-colors border border-[#FBB6E6]/50 bg-[#FBB6E6]/10 rounded-3xl group/gift relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-3 text-[#EA638C]/10 -rotate-12 transition-transform group-hover/gift:rotate-0 group-hover/gift:scale-110">
+                            <Gift size={40} />
+                        </div>
+                        <p className="text-[8px] font-black text-[#EA638C] uppercase tracking-widest mb-1">Last Surprise Reward</p>
+                        <p className="text-sm font-black text-[#3E442B] uppercase italic">
+                          {lastGiftTitle || "No Reward Found"}
+                        </p>
+                        {lastGiftAt && (
+                          <p className="text-[9px] font-bold text-gray-400 uppercase mt-1">
+                            {new Date(lastGiftAt).toLocaleDateString()} • {new Date(lastGiftAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        )}
                       </div>
                     </div>
+
                     <div className="p-6 border border-gray-100 rounded-[2.5rem] bg-gray-50/30 flex flex-col justify-center">
                        <MapPin className="mb-2 text-[#EA638C]/30" size={24} />
                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-2">Primary Shipping</p>
@@ -182,6 +200,13 @@ export default function UserDetailsModal({ user, orders = [], totalSpent = 0 }) 
                        ) : <p className="text-xs italic font-bold text-gray-300">No Address Registry Found</p>}
                     </div>
                   </div>
+                  
+                  {/* Phone number card moved to a full-width bottom row to keep grid clean */}
+                  <div className="p-5 transition-colors border border-transparent bg-gray-50 rounded-3xl hover:border-[#3E442B]/10">
+                    <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Direct Contact</p>
+                    <p className="text-sm font-bold text-[#3E442B]">{user.phone || "No Phone Set"}</p>
+                  </div>
+
                 </div>
               ) : (
                 <div className="space-y-6 duration-500 animate-in slide-in-from-bottom-4">

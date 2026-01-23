@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { User, ShoppingBag, Heart, MapPin, LayoutDashboard, LogOut } from 'lucide-react';
+import { User, ShoppingBag, Heart, MapPin, LayoutDashboard, LogOut, Gift } from 'lucide-react';
 // 💡 STEP 1: Import the signOut function
 import { signOut } from 'next-auth/react';
 
@@ -13,6 +13,8 @@ export default function DashboardLayout({ children }) {
     { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'My Orders', href: '/dashboard/orders', icon: ShoppingBag },
     { name: 'Wishlist', href: '/dashboard/wishlist', icon: Heart },
+    // ✨ NEW: The Rewards Route
+    { name: 'My Rewards', href: '/dashboard/rewards', icon: Gift }, 
     { name: 'Addresses', href: '/dashboard/address', icon: MapPin },
     { name: 'Profile', href: '/dashboard/profile', icon: User },
   ];

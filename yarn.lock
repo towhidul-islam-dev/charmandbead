@@ -1080,6 +1080,11 @@ caniuse-lite@^1.0.30001464, caniuse-lite@^1.0.30001579, caniuse-lite@^1.0.300017
   resolved "https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001759.tgz"
   integrity sha512-Pzfx9fOKoKvevQf8oCXoyNRQ5QyxJj+3O0Rqx2V5oxT61KGx8+n6hV/IUyJeifUci2clnmmKVpvtiqRzgiWjSw==
 
+canvas-confetti@^1.9.4:
+  version "1.9.4"
+  resolved "https://registry.npmjs.org/canvas-confetti/-/canvas-confetti-1.9.4.tgz"
+  integrity sha512-yxQbJkAVrFXWNbTUjPqjF7G+g6pDotOUHGbkZq2NELZUMDpiJ85rIEazVb8GTaAptNW2miJAXbs1BtioA251Pw==
+
 canvg@^3.0.11:
   version "3.0.11"
   resolved "https://registry.npmjs.org/canvg/-/canvg-3.0.11.tgz"

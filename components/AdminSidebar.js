@@ -8,7 +8,8 @@ import {
     CubeIcon, 
     ShoppingCartIcon,
     SparklesIcon, 
-    ChatBubbleLeftRightIcon 
+    ChatBubbleLeftRightIcon,
+    GiftIcon // 🎁 Added for the Gifts route
 } from '@heroicons/react/24/outline';
 import AdminDesktopSidebar from './AdminDesktopSidebar';
 
@@ -18,8 +19,9 @@ const navItems = [
     { name: 'New Arrivals', href: '/admin/new-arrivals', icon: SparklesIcon }, 
     { name: 'Cart', href: '/admin/cart-review', icon: ShoppingCartIcon }, 
     { name: 'Orders', href: '/admin/orders', icon: ShoppingCartIcon },
+    { name: 'Gifts', href: '/admin/gifts', icon: GiftIcon }, // 🟢 Added this line
     { name: 'Users', href: '/admin/users', icon: UserGroupIcon },
-    { name: 'Reviews', href: '/admin/reviews', icon: ChatBubbleLeftRightIcon }, // 🟢 Fixed Icon
+    { name: 'Reviews', href: '/admin/reviews', icon: ChatBubbleLeftRightIcon },
 ];
 
 export default function AdminSidebar({ user, globalData }) {
@@ -63,25 +65,25 @@ export default function AdminSidebar({ user, globalData }) {
                                 key={item.name}
                                 href={item.href}
                                 className={`flex flex-col items-center justify-center py-1 w-full transition-all duration-200 relative ${
-                                    active ? 'text-indigo-600 scale-105' : 'text-gray-500 hover:text-indigo-400'
+                                    active ? 'text-[#EA638C] scale-105' : 'text-gray-500 hover:text-[#EA638C]/60'
                                 }`}
                                 aria-label={item.name}
                             >
                                 <div className="relative">
                                     <Icon className="w-5 h-5 md:w-6 md:h-6" />
                                     {item.name === 'Cart' && globalData?.newOrdersCount > 0 && (
-                                        <span className="absolute -top-1 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white">
+                                        <span className="absolute -top-1 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#EA638C] text-[10px] font-bold text-white ring-2 ring-white">
                                             {globalData.newOrdersCount}
                                         </span>
                                     )}
                                 </div>
                                 
-                                <span className={`text-[9px] md:text-[10px] mt-1 font-medium text-center truncate px-1 ${active ? 'opacity-100' : 'opacity-80'}`}>
+                                <span className={`text-[9px] md:text-[10px] mt-1 font-medium text-center truncate px-1 ${active ? 'opacity-100 font-bold' : 'opacity-80'}`}>
                                     {item.name}
                                 </span>
 
                                 {active && (
-                                    <div className="absolute top-0 w-8 h-1 bg-indigo-600 rounded-b-full" />
+                                    <div className="absolute top-0 w-8 h-1 bg-[#EA638C] rounded-b-full shadow-[0_1px_4px_rgba(234,99,140,0.3)]" />
                                 )}
                             </Link>
                         );

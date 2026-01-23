@@ -11,7 +11,8 @@ import {
   Squares2X2Icon,
   ArrowRightOnRectangleIcon,
   UserIcon,
-  ShieldCheckIcon, // Added for Admin branding
+  ShieldCheckIcon,
+  GiftIcon,
 } from "@heroicons/react/24/outline";
 import ShoppingCartIcon from "@heroicons/react/24/outline/ShoppingCartIcon";
 import { useSession, signOut } from "next-auth/react";
@@ -47,11 +48,13 @@ const ClientHeader = ({ pathname }) => {
   const cartCount = new Set(cart.map((item) => item.productId)).size;
   const wishlistCount = wishlist.length;
 
-  const profileImageUrl = session?.user?.image?.startsWith('http')
-    ? session.user.image
-    : session?.user?.image
-    ? `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/${session.user.image}`
-    : `https://ui-avatars.com/api/?name=${session?.user?.name || 'User'}&background=EA638C&color=fff`;
+  // ✨ IMAGE FIX: Works with full URLs from userActions.js and fallbacks
+  const userImage = session?.user?.image;
+  const profileImageUrl = userImage 
+    ? (userImage.startsWith('http') 
+        ? userImage 
+        : `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/${userImage}`)
+    : `https://ui-avatars.com/api/?name=${encodeURIComponent(session?.user?.name || 'User')}&background=EA638C&color=fff`;
 
   const getLinkClasses = (href) => {
     const isActive = pathname === href;
@@ -65,18 +68,16 @@ const ClientHeader = ({ pathname }) => {
       <header className="fixed top-0 left-0 z-50 w-full h-16 border-b border-gray-100 md:h-20 bg-white/80 backdrop-blur-md">
         <div className="flex items-center justify-between h-full px-6 mx-auto max-w-7xl">
           
-          {/* BRANDING */}
           <Link href="/" className="flex items-center gap-3 group">
             <div className="relative flex items-center justify-center w-10 h-10 md:w-12 md:h-12 overflow-hidden rounded-full bg-[#FBB6E6] shadow-sm">
               <Image src="/logo.svg" alt="Logo" width={48} height={48} priority className="object-cover w-full h-full" />
             </div>
             <div className="flex flex-col">
-              <span className="text-lg md:text-xl font-medium italic text-[#3E442B] leading-none font-serif">CHARM&BEAD</span>
+              <span className="text-lg md:text-xl font-medium italic text-[#3E442B] leading-none font-serif text-nowrap">CHARM&BEAD</span>
               <span className="text-[8px] font-bold tracking-[0.2em] text-[#EA638C] uppercase">Unlock Creativity</span>
             </div>
           </Link>
 
-          {/* DESKTOP NAV */}
           <nav className="items-center hidden space-x-1 md:flex">
             <Link href="/" className={getLinkClasses("/")}>Home</Link>
             {clientLinks.map((link) => (
@@ -84,17 +85,10 @@ const ClientHeader = ({ pathname }) => {
             ))}
           </nav>
 
-          {/* ACTIONS */}
           <div className="flex items-center space-x-2 md:space-x-4">
-            
-            {/* 👑 CONDITIONAL ADMIN PANEL BUTTON (Desktop Only) */}
             {session?.user?.role === "admin" && (
-              <Link 
-                href="/admin" 
-                className="hidden lg:flex items-center gap-2 px-4 py-2 bg-[#EA638C]/10 border border-[#EA638C]/20 rounded-xl text-[#EA638C] text-[10px] font-black uppercase tracking-widest hover:bg-[#EA638C] hover:text-white transition-all shadow-sm"
-              >
-                <ShieldCheckIcon className="w-4 h-4" />
-                Admin Panel
+              <Link href="/admin" className="hidden lg:flex items-center gap-2 px-4 py-2 bg-[#EA638C]/10 border border-[#EA638C]/20 rounded-xl text-[#EA638C] text-[10px] font-black uppercase tracking-widest hover:bg-[#EA638C] hover:text-white transition-all shadow-sm">
+                <ShieldCheckIcon className="w-4 h-4" /> Admin Panel
               </Link>
             )}
 
@@ -114,12 +108,11 @@ const ClientHeader = ({ pathname }) => {
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
                   className="flex items-center gap-2 p-1 transition-all bg-white border border-gray-100 shadow-sm rounded-2xl hover:border-[#EA638C]/30"
                 >
-                  <div className="relative w-8 h-8 overflow-hidden border-2 border-white shadow-sm rounded-xl bg-gray-50">
-                    <Image src={profileImageUrl} alt="User" fill className="object-cover" unoptimized />
+                  <div className="relative w-8 h-8 md:w-9 md:h-9 overflow-hidden border-2 border-white shadow-sm rounded-xl bg-gray-50">
+                    <Image src={profileImageUrl} alt="Profile" fill className="object-cover" unoptimized />
                   </div>
                 </button>
 
-                {/* DROPDOWN MENU */}
                 {isProfileOpen && (
                   <div className="absolute right-0 w-56 mt-3 origin-top-right bg-white border border-gray-100 shadow-2xl rounded-2xl p-2 animate-in fade-in zoom-in duration-200">
                     <div className="px-3 py-3 border-b border-gray-50 mb-1">
@@ -129,7 +122,6 @@ const ClientHeader = ({ pathname }) => {
                       <p className="text-sm font-bold text-[#3E442B] truncate">{session.user.name}</p>
                     </div>
 
-                    {/* Mobile Admin Link (Shows in dropdown when on small screens) */}
                     {session.user.role === "admin" && (
                       <Link href="/admin" onClick={() => setIsProfileOpen(false)} className="flex lg:hidden items-center gap-2 px-3 py-2 text-[11px] font-black uppercase text-[#EA638C] hover:bg-[#EA638C]/5 rounded-xl transition-all">
                         <Squares2X2Icon className="w-4 h-4" /> Admin Panel
@@ -140,10 +132,11 @@ const ClientHeader = ({ pathname }) => {
                       <UserIcon className="w-4 h-4" /> My Profile
                     </Link>
 
-                    <button 
-                      onClick={() => signOut({ callbackUrl: "/" })}
-                      className="flex items-center gap-2 w-full px-3 py-2 text-[11px] font-black uppercase text-red-500 hover:bg-red-50 rounded-xl transition-all mt-1"
-                    >
+                    <Link href="/surprise" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-2 px-3 py-2 text-[11px] font-black uppercase text-gray-600 hover:bg-gray-50 hover:text-[#EA638C] rounded-xl transition-all">
+                      <GiftIcon className="w-4 h-4" /> Claim Gift
+                    </Link>
+
+                    <button onClick={() => signOut({ callbackUrl: "/" })} className="flex items-center gap-2 w-full px-3 py-2 text-[11px] font-black uppercase text-red-500 hover:bg-red-50 rounded-xl transition-all mt-1">
                       <ArrowRightOnRectangleIcon className="w-4 h-4" /> Sign Out
                     </button>
                   </div>
@@ -162,14 +155,14 @@ const ClientHeader = ({ pathname }) => {
           </div>
         </div>
 
-        {/* MOBILE MENU (Simplified) */}
         {isMenuOpen && (
           <div className="md:hidden bg-white border-b border-gray-100 p-6 flex flex-col gap-4 animate-in slide-in-from-top duration-300">
             {clientLinks.map((link) => (
-              <Link key={link.name} href={link.href} onClick={() => setIsMenuOpen(false)} className="font-black uppercase text-sm tracking-widest text-[#3E442B]">
-                {link.name}
-              </Link>
+              <Link key={link.name} href={link.href} onClick={() => setIsMenuOpen(false)} className="font-black uppercase text-sm tracking-widest text-[#3E442B]">{link.name}</Link>
             ))}
+            {session && (
+               <Link href="/surprise" onClick={() => setIsMenuOpen(false)} className="font-black uppercase text-sm tracking-widest text-[#EA638C]">Claim Gift</Link>
+            )}
             {!session && (
               <div className="pt-4 border-t border-gray-50 flex flex-col gap-3">
                 <Link href="/login" className="text-center font-black uppercase text-xs py-3 border border-gray-200 rounded-xl">Login</Link>
@@ -202,6 +195,5 @@ export default function Navbar() {
       </>
     );
   }
-
   return <ClientHeader pathname={pathname} />;
 }
