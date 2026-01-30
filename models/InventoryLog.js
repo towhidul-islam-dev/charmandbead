@@ -1,13 +1,24 @@
 import mongoose from "mongoose";
 
+// We define the schema without the 'enum' property
 const InventoryLogSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
   productName: String,
-  variantKey: String, // e.g., "Red-XL"
-  change: Number,     // e.g., +50 or -12
-  reason: { type: String, enum: ['Restock', 'Sale', 'Adjustment', 'Return'], default: 'Restock' },
-  performedBy: String, // Admin email or "System/Sale"
+  variantKey: String, 
+  sku: String,        
+  change: Number,     
+  reason: { 
+    type: String, 
+    default: 'Restock' 
+  },
+  performedBy: String, 
   createdAt: { type: Date, default: Date.now }
 });
 
-export default mongoose.models.InventoryLog || mongoose.model("InventoryLog", InventoryLogSchema);
+// 🟢 IMPORTANT: This logic clears the old model from memory if it exists, 
+// then re-compiles it with the new, flexible schema.
+if (mongoose.models.InventoryLog) {
+  delete mongoose.models.InventoryLog;
+}
+
+export default mongoose.model("InventoryLog", InventoryLogSchema);

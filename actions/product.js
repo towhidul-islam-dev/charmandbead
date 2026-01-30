@@ -16,100 +16,132 @@ async function uploadToCloudinary(file) {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   return new Promise((resolve, reject) => {
-    cloudinary.uploader.upload_stream(
-      { folder: "ecom-products" },
-      (error, result) => {
+    cloudinary.uploader
+      .upload_stream({ folder: "ecom-products" }, (error, result) => {
         if (error) reject(error);
-        else resolve(result.secure_url); 
-      }
-    ).end(buffer);
+        else resolve(result.secure_url);
+      })
+      .end(buffer);
   });
 }
 
+export async function silentInventoryHeal() {
+  try {
+    await mongodb();
+    const products = await Product.find({ hasVariants: true });
+    
+    for (const product of products) {
+      const actualSum = product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0);
+      
+      if (product.stock !== actualSum) {
+        // Syncing the parent stock to match variant sum
+        product.stock = actualSum;
+        await product.save(); 
+        console.log(`[Auto-Heal] Fixed drift for: ${product.name}`);
+      }
+    }
+  } catch (error) {
+    console.error("Silent Heal failed:", error.message);
+  }
+}
 export async function saveProduct(prevState, formData) {
   try {
     await mongodb();
-    
-    // Ensure id is truly present and not just an empty string/null string
+
     const rawId = formData.get("id");
-    const id = (rawId && rawId !== "undefined" && rawId !== "") ? rawId : null;
-    
+    const id = rawId && rawId !== "undefined" && rawId !== "" ? rawId : null;
     const hasVariants = formData.get("hasVariants") === "true";
 
-    // 1. Handle Main Image Upload
+    // 1. Image Handling (Keep your existing logic)
     let imageUrl = formData.get("existingImage") || "";
     const mainImageFile = formData.get("imageFile");
-    
     if (mainImageFile && mainImageFile instanceof File && mainImageFile.size > 0) {
       const uploadedUrl = await uploadToCloudinary(mainImageFile);
       if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
+    // 2. Base Product Data
     let productData = {
       name: formData.get("name"),
       description: formData.get("description"),
-      // 🆕 Multilayer Category Handling
-      category: formData.get("category"),       // e.g., "Beads"
-      subCategory: formData.get("subCategory"), // e.g., "Crystal Beads"
-      
+      category: formData.get("category"),
+      subCategory: formData.get("subCategory"),
       isNewArrival: formData.get("isNewArrival") === "true",
-      isArchived: formData.get("isArchived") === "true", 
+      isArchived: formData.get("isArchived") === "true",
       hasVariants: hasVariants,
-      imageUrl: imageUrl, 
+      imageUrl: imageUrl,
     };
 
-    // 2. Handling Variants vs Standard Product
+    // 3. Variant & SKU Processing
     if (hasVariants) {
       const rawVariants = JSON.parse(formData.get("variantsJson") || "[]");
       
-      const processedVariants = await Promise.all(rawVariants.map(async (v, index) => {
-        let vImageUrl = v.imageUrl || "";
-        const variantFile = formData.get(`variantImage_${index}`);
-        
-        if (variantFile && variantFile instanceof File && variantFile.size > 0) {
-          const uploadedVUrl = await uploadToCloudinary(variantFile);
-          if (uploadedVUrl) vImageUrl = uploadedVUrl;
-        }
+      // 🟢 THE FIX: Manually track total stock for the parent product
+      let totalCalculatedStock = 0;
 
-        return {
-          ...v,
-          price: Number(v.price) || 0,
-          stock: Number(v.stock) || 0,
-          minOrderQuantity: Number(v.minOrderQuantity) || 1,
-          imageUrl: vImageUrl
-        };
-      }));
+      const processedVariants = await Promise.all(
+        rawVariants.map(async (v, index) => {
+          let vImageUrl = v.imageUrl || "";
+          const variantFile = formData.get(`variantImage_${index}`);
+
+          if (variantFile && variantFile instanceof File && variantFile.size > 0) {
+            const uploadedVUrl = await uploadToCloudinary(variantFile);
+            if (uploadedVUrl) vImageUrl = uploadedVUrl;
+          }
+
+          const vStock = Number(v.stock) || 0;
+          totalCalculatedStock += vStock; // Summing up
+
+          return {
+            ...v,
+            sku: v.sku || "",
+            price: Number(v.price) || 0,
+            stock: vStock,
+            minOrderQuantity: Number(v.minOrderQuantity) || 1,
+            imageUrl: vImageUrl,
+          };
+        }),
+      );
 
       productData.variants = processedVariants;
-      // Set base product stats based on the first variant
-      productData.price = processedVariants[0]?.price || 0;
-      productData.stock = processedVariants.reduce((acc, curr) => acc + curr.stock, 0);
+      productData.stock = totalCalculatedStock; // 🟢 Set the parent total here
+
+      const validPrices = processedVariants.map((v) => v.price).filter((p) => p > 0);
+      productData.price = validPrices.length > 0 ? Math.min(...validPrices) : 0;
       productData.minOrderQuantity = processedVariants[0]?.minOrderQuantity || 1;
+      productData.sku = processedVariants[0]?.sku || formData.get("sku") || "";
     } else {
       productData.price = Number(formData.get("price")) || 0;
       productData.stock = Number(formData.get("stock")) || 0;
       productData.minOrderQuantity = Number(formData.get("minOrderQuantity")) || 1;
+      productData.sku = formData.get("sku") || "";
       productData.variants = [];
     }
 
-    // 3. Save or Update
+    // 4. Save Logic
     if (id) {
-      await Product.findByIdAndUpdate(id, productData);
+      const product = await Product.findById(id);
+      if (!product) throw new Error("Product not found");
+
+      Object.assign(product, productData);
+      // Middleware in Product.js now only handles SKU generation, not stock math.
+      await product.save(); 
     } else {
-      // Logic for new products
       const newProduct = new Product(productData);
       await newProduct.save();
     }
 
-    // 4. Cache Clearing
     revalidatePath("/admin/products");
     revalidatePath("/products");
-    revalidatePath("/"); // Revalidate home if it shows categories
-    
+    revalidatePath("/");
+
     return { success: true, message: "Product saved successfully!" };
   } catch (error) {
     console.error("Save Error:", error);
-    return { success: false, message: error.message || "An unexpected error occurred" };
+    return {
+      success: false,
+      message: error.message || "An unexpected error occurred",
+    };
   }
 }
 
@@ -124,7 +156,7 @@ export async function toggleArchiveProduct(productId) {
     await product.save();
 
     revalidatePath("/admin/products");
-    revalidatePath("/products"); 
+    revalidatePath("/products");
     return { success: true, newState: product.isArchived };
   } catch (error) {
     console.error("Archive Error:", error);
@@ -138,9 +170,10 @@ export async function removeFromNewArrivals(productId) {
     const updatedProduct = await Product.findByIdAndUpdate(
       productId,
       { isNewArrival: false },
-      { new: true }
+      { new: true },
     );
-    if (!updatedProduct) return { success: false, message: "Product not found" };
+    if (!updatedProduct)
+      return { success: false, message: "Product not found" };
 
     revalidatePath("/admin/new-arrivals");
     revalidatePath("/admin/products");
@@ -154,18 +187,21 @@ export async function deleteProduct(productId) {
   try {
     await mongodb();
 
-    // 1. Find the product to get the image URL
+    // 1. Find the product
     const product = await Product.findById(productId);
     if (!product) return { success: false, message: "Product not found" };
 
-    // 2. Helper to extract Public ID from Cloudinary URL
-    // Format: .../folder/public_id.jpg -> folder/public_id
+    // 2. Helper to extract Public ID
     const extractPublicId = (url) => {
       if (!url || !url.includes("cloudinary")) return null;
-      const parts = url.split("/");
-      const fileName = parts.pop(); // image.jpg
-      const folder = parts.pop();   // ecom-products
-      return `${folder}/${fileName.split(".")[0]}`;
+      try {
+        const parts = url.split("/");
+        const fileName = parts.pop(); // image.jpg
+        const folder = parts.pop(); // ecom-products
+        return `${folder}/${fileName.split(".")[0]}`;
+      } catch (e) {
+        return null;
+      }
     };
 
     // 3. Delete Main Image from Cloudinary
@@ -175,13 +211,15 @@ export async function deleteProduct(productId) {
     }
 
     // 4. Delete Variant Images from Cloudinary
-    if (product.hasVariants && product.variants.length > 0) {
-      for (const variant of product.variants) {
-        const vPublicId = extractPublicId(variant.imageUrl);
-        if (vPublicId) {
-          await cloudinary.uploader.destroy(vPublicId);
-        }
-      }
+    if (product.hasVariants && product.variants?.length > 0) {
+      await Promise.all(
+        product.variants.map(async (variant) => {
+          const vPublicId = extractPublicId(variant.imageUrl);
+          if (vPublicId) {
+            return cloudinary.uploader.destroy(vPublicId);
+          }
+        }),
+      );
     }
 
     // 5. Delete from Database
@@ -195,6 +233,39 @@ export async function deleteProduct(productId) {
     return { success: true, message: "Product and images deleted permanently" };
   } catch (error) {
     console.error("Delete Error:", error);
-    return { success: false, message: "Failed to delete product" };
+    return {
+      success: false,
+      message: error.message || "Failed to delete product",
+    };
+  }
+}
+
+export async function reduceProductStock(
+  productId,
+  variantId = null,
+  quantity = 1,
+) {
+  try {
+    await mongodb();
+    if (variantId) {
+      // For Variant Products: Use positional operator $ to update the specific variant stock
+      await Product.updateOne(
+        { _id: productId, "variants._id": variantId },
+        {
+          $inc: {
+            "variants.$.stock": -quantity,
+            stock: -quantity,
+          },
+        },
+      );
+    } else {
+      // For Standard Products
+      await Product.findByIdAndUpdate(productId, {
+        $inc: { stock: -quantity },
+      });
+    }
+  } catch (error) {
+    console.error("STOCKS_UPDATE_ERROR:", error);
+    throw new Error("Failed to update stock");
   }
 }

@@ -1,25 +1,31 @@
-// components/DeleteButton.jsx (Client Component)
 "use client";
 
 import { useTransition } from 'react';
 import { deleteProduct } from '@/actions/delete'; 
+import { Trash2, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
-// 🚨 Ensure this component uses 'export default' 🚨
-export default function DeleteButton({ productId, productName }) {
+export default function DeleteButton({ productId, productName, onDelete }) {
     const [isPending, startTransition] = useTransition();
 
     const handleDelete = () => {
-        if (!window.confirm(`Are you sure you want to permanently delete "${productName}"? This action cannot be undone.`)) {
+        if (!window.confirm(`Are you sure you want to permanently delete "${productName}"?`)) {
             return;
         }
 
         startTransition(async () => {
-            const result = await deleteProduct(productId);
-            
-            if (result.success) {
-                console.log(result.message);
-            } else {
-                alert(`Deletion failed: ${result.message}`);
+            try {
+                const result = await deleteProduct(productId);
+                
+                if (result.success) {
+                    // 🟢 This is the critical fix: Update local UI state
+                    if (onDelete) onDelete(productId);
+                    toast.success(`${productName} deleted`);
+                } else {
+                    toast.error(`Deletion failed: ${result.message}`);
+                }
+            } catch (error) {
+                toast.error("An error occurred during deletion");
             }
         });
     };
@@ -28,9 +34,13 @@ export default function DeleteButton({ productId, productName }) {
         <button
             onClick={handleDelete}
             disabled={isPending}
-            className="ml-4 text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 text-gray-400 transition-all bg-gray-100 rounded-xl hover:bg-red-500 hover:text-white disabled:opacity-50"
         >
-            {isPending ? 'Deleting...' : 'Delete'}
+            {isPending ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Trash2 size={18} />
+            )}
         </button>
     );
 }

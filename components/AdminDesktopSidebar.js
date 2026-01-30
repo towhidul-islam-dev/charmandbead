@@ -4,22 +4,29 @@ import Link from 'next/link';
 import { 
     HomeIcon, UserGroupIcon, CubeIcon, 
     ShoppingCartIcon, SparklesIcon, ChatBubbleLeftRightIcon,
-    GiftIcon // 🎁 Added for the Gifts route
+    GiftIcon, WrenchIcon 
 } from '@heroicons/react/24/outline';
-
-const navItems = [
-    { name: 'Dashboard', href: '/admin', icon: HomeIcon },
-    { name: 'Products', href: '/admin/products', icon: CubeIcon },
-    { name: 'New Arrivals', href: '/admin/new-arrivals', icon: SparklesIcon },
-    { name: 'Cart Review', href: '/admin/cart-review', icon: ShoppingCartIcon }, 
-    { name: 'Orders', href: '/admin/orders', icon: ShoppingCartIcon },
-    { name: 'Gifts', href: '/admin/gifts', icon: GiftIcon }, // 🟢 Added this line
-    { name: 'Users', href: '/admin/users', icon: UserGroupIcon },
-    { name: 'Reviews', href: '/admin/reviews', icon: ChatBubbleLeftRightIcon },
-];
 
 export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
     
+    // 🟢 Defining items inside the component to use globalData dynamically
+    const navItems = [
+        { name: 'Dashboard', href: '/admin', icon: HomeIcon },
+        { name: 'Products', href: '/admin/products', icon: CubeIcon },
+        { name: 'Inventory', href: '/admin/inventory', icon: WrenchIcon },
+        { name: 'New Arrivals', href: '/admin/new-arrivals', icon: SparklesIcon },
+        { name: 'Cart Review', href: '/admin/cart-review', icon: ShoppingCartIcon }, 
+        { 
+            name: 'Orders', 
+            href: '/admin/orders', 
+            icon: ShoppingCartIcon,
+            badge: globalData?.newOrdersCount || 0 // 🟢 The counter from your server action
+        },
+        { name: 'Gifts', href: '/admin/gifts', icon: GiftIcon },
+        { name: 'Users', href: '/admin/users', icon: UserGroupIcon },
+        { name: 'Reviews', href: '/admin/reviews', icon: ChatBubbleLeftRightIcon },
+    ];
+
     const isActive = (item) => {
         if (item.name === 'New Arrivals') return currentPath === '/admin/new-arrivals';
         return currentPath === item.href;
@@ -41,16 +48,25 @@ export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
                         <Link
                             key={item.name}
                             href={item.href}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 ${
+                            className={`flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-300 ${
                                 active 
                                 ? 'bg-[#3E442B] text-white shadow-lg shadow-[#3E442B]/20' 
                                 : 'text-gray-500 hover:bg-gray-50 hover:text-[#3E442B]'
                             }`}
                         >
-                            <Icon className={`flex-shrink-0 w-5 h-5 ${active ? 'text-[#EA638C]' : ''}`} />
-                            <span className={`text-[11px] uppercase tracking-wider font-black`}>
-                                {item.name}
-                            </span>
+                            <div className="flex items-center gap-3">
+                                <Icon className={`flex-shrink-0 w-5 h-5 ${active ? 'text-[#EA638C]' : ''}`} />
+                                <span className={`text-[11px] uppercase tracking-wider font-black`}>
+                                    {item.name}
+                                </span>
+                            </div>
+
+                            {/* 🟢 NEW ORDER NOTIFICATION BADGE */}
+                            {item.name === 'Orders' && item.badge > 0 && (
+                                <span className="flex items-center justify-center min-w-[20px] h-[20px] px-1.5 bg-[#EA638C] text-white text-[10px] font-black rounded-full animate-pulse shadow-sm">
+                                    {item.badge}
+                                </span>
+                            )}
                         </Link>
                     );
                 })}

@@ -20,7 +20,6 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import toast from "react-hot-toast";
 
-// Helper for PDF images
 const getBase64ImageFromURL = (url) => {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -46,15 +45,20 @@ function SuccessContent() {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  // 🟢 The only addition: A flag to prevent the loop
+  const [isProcessed, setIsProcessed] = useState(false); 
 
   useEffect(() => {
     async function fetchAndProcessOrder() {
-      if (orderId) {
-        try {
-          const data = await getOrderById(orderId);
+      // 🟢 FIX: If already processed or no ID, do nothing.
+      if (!orderId || isProcessed) return;
+
+      try {
+        const data = await getOrderById(orderId);
+        if (data) {
           setOrder(data);
 
-          if (data && !data.stockProcessed) {
+          if (!data.stockProcessed) {
             await processOrderStock(data);
           }
 
@@ -65,14 +69,19 @@ function SuccessContent() {
             deleteSelectedItems(keysToRemove);
             localStorage.removeItem("checkoutItems");
           }
-        } catch (error) {
-          console.error("Error fetching order:", error);
+          
+          // 🟢 FIX: Mark as done so this block never runs again
+          setIsProcessed(true);
         }
+      } catch (error) {
+        console.error("Error fetching order:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     fetchAndProcessOrder();
-  }, [orderId, deleteSelectedItems]);
+    // 🟢 We exclude deleteSelectedItems to prevent the reference-change loop
+  }, [orderId, isProcessed]);
 
   const generateInvoice = async (orderData) => {
     if (!orderData || !orderData.items) return;
@@ -89,7 +98,7 @@ function SuccessContent() {
 
       const itemsSubtotal = orderData.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
       const delivery = orderData.deliveryCharge || 0;
-      const mbFee = orderData.mobileBankingFee || 0; // 🟢 Fee from DB
+      const mbFee = orderData.mobileBankingFee || 0; 
 
       const images = await Promise.all(
         orderData.items.map(async (item) => {
@@ -172,7 +181,6 @@ function SuccessContent() {
       drawSummaryRow("Subtotal", `TK ${itemsSubtotal.toLocaleString()}`, finalY);
       drawSummaryRow("Shipping", `+ TK ${delivery.toLocaleString()}`, finalY + 7);
       
-      // 🟢 Added Mobile Banking Fee to Summary
       if (mbFee > 0) {
         drawSummaryRow("Gateway Fee (1.5%)", `+ TK ${mbFee.toLocaleString()}`, finalY + 14, false, brandColor);
       }
@@ -204,7 +212,7 @@ function SuccessContent() {
     <div className="flex items-center justify-center min-h-screen bg-white">
       <div className="text-center">
         <Loader2 className="animate-spin text-[#EA638C] mx-auto mb-4" size={48} />
-        <p className="font-black uppercase tracking-widest text-gray-400 text-xs">Confirming Order...</p>
+        <p className="text-xs font-black tracking-widest text-gray-400 uppercase">Confirming Order...</p>
       </div>
     </div>
   );
@@ -259,7 +267,6 @@ function SuccessContent() {
               <span>+ ৳{(order.deliveryCharge ?? 0).toLocaleString()}</span>
             </div>
 
-            {/* 🟢 Mobile Banking Fee UI */}
             {order.mobileBankingFee > 0 && (
               <div className="flex justify-between text-sm font-bold text-[#EA638C]">
                 <span className="flex items-center gap-1"><CreditCard size={14} /> Mobile Fee (1.5%):</span>
@@ -289,10 +296,10 @@ function SuccessContent() {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <Link href="/dashboard/orders" className="py-4 text-[10px] font-black tracking-widest text-white uppercase bg-[#3E442B] rounded-2xl hover:opacity-90 shadow-lg shadow-gray-200 transition-all">
+          <Link href="/dashboard/orders" className="py-4 text-center text-[10px] font-black tracking-widest text-white uppercase bg-[#3E442B] rounded-2xl hover:opacity-90 shadow-lg shadow-gray-200 transition-all">
             My Orders
           </Link>
-          <Link href="/" className="py-4 text-[10px] font-black tracking-widest text-gray-700 uppercase bg-gray-100 rounded-2xl hover:bg-gray-200 transition-all">
+          <Link href="/" className="py-4 text-center text-[10px] font-black tracking-widest text-gray-700 uppercase bg-gray-100 rounded-2xl hover:bg-gray-200 transition-all">
             Shop More
           </Link>
         </div>

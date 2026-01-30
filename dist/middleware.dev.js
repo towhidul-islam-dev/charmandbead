@@ -11,7 +11,7 @@ var _jwt = require("next-auth/jwt");
 var _server = require("next/server");
 
 function middleware(req) {
-  var token, pathname, isAuthPage, isDashboardPage, isAdminPage, isUnauthorizedPage, url;
+  var token, pathname, isAuthPage, isDashboardPage, isAdminPage, isUnauthorizedPage, url, loginUrl;
   return regeneratorRuntime.async(function middleware$(_context) {
     while (1) {
       switch (_context.prev = _context.next) {
@@ -27,7 +27,7 @@ function middleware(req) {
           isAuthPage = pathname === "/login" || pathname === "/register";
           isDashboardPage = pathname.startsWith("/dashboard");
           isAdminPage = pathname.startsWith("/admin");
-          isUnauthorizedPage = pathname === "/admin/unauthorized"; // 1. If user is logged in and tries to access login/register
+          isUnauthorizedPage = pathname === "/admin/unauthorized"; // 1. Redirect authenticated users away from Login/Register
 
           if (!(token && isAuthPage)) {
             _context.next = 11;
@@ -39,24 +39,26 @@ function middleware(req) {
 
         case 11:
           if (!(!token && (isDashboardPage || isAdminPage))) {
-            _context.next = 13;
+            _context.next = 15;
             break;
           }
 
-          return _context.abrupt("return", _server.NextResponse.redirect(new URL("/login", req.url)));
+          loginUrl = new URL("/login", req.url);
+          loginUrl.searchParams.set("callbackUrl", pathname);
+          return _context.abrupt("return", _server.NextResponse.redirect(loginUrl));
 
-        case 13:
+        case 15:
           if (!(token && isAdminPage && token.role !== 'admin' && !isUnauthorizedPage)) {
-            _context.next = 15;
+            _context.next = 17;
             break;
           }
 
           return _context.abrupt("return", _server.NextResponse.redirect(new URL("/admin/unauthorized", req.url)));
 
-        case 15:
+        case 17:
           return _context.abrupt("return", _server.NextResponse.next());
 
-        case 16:
+        case 18:
         case "end":
           return _context.stop();
       }
@@ -65,6 +67,14 @@ function middleware(req) {
 }
 
 var config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)']
+  /*
+   * Match all request paths except for the ones starting with:
+   * - api (API routes)
+   * - _next/static (static files)
+   * - _next/image (image optimization files)
+   * - favicon.ico (favicon file)
+   * - public images/assets
+   */
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|images|assets).*)']
 };
 exports.config = config;

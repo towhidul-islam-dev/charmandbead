@@ -25,7 +25,7 @@ const DHAKA_ZONES = [
 ];
 
 export default function CheckoutPage() {
-  const { cart = [], clearCart } = useCart();
+  const { cart = [] } = useCart(); // Note: clearCart removed from here, handled on Success Page
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -77,12 +77,8 @@ export default function CheckoutPage() {
   }, 0);
 
   const finalTotal = subtotal + shippingCharge;
-
-  // 🟢 1.5% Mobile Banking Fee (Exact Fraction)
   const baseForFee = paymentMethod === "COD" ? shippingCharge : finalTotal;
   const mobileBankingFee = baseForFee * 0.015;
-  
-  // Totals
   const payableNow = baseForFee + mobileBankingFee;
   const dueOnDelivery = paymentMethod === "COD" ? subtotal : 0;
 
@@ -109,12 +105,32 @@ export default function CheckoutPage() {
     try {
       setLoading(true);
       
+      const mappedItems = checkoutItems.map(item => {
+        const productId = item.productId || item._id; 
+        const variantId = item.variantId || null;
+
+        return {
+          product: productId, 
+          name: item.name,
+          variant: { 
+            name: item.color || "Default", 
+            size: item.size || "N/A",
+            variantId: variantId 
+          },
+          variantId: variantId,
+          quantity: Number(item.quantity),
+          price: Number(item.price),
+          imageUrl: item.imageUrl,
+          sku: item.sku || "N/A"
+        };
+      });
+
       const orderData = {
         userId: session?.user?.id,
-        items: checkoutItems,
+        items: mappedItems,
         totalAmount: Number((finalTotal + mobileBankingFee).toFixed(2)), 
         paidAmount: Number(payableNow.toFixed(2)),
-        dueAmount: Number(dueOnDelivery.toFixed(2)), // 🟢 Explicitly defined for the server action
+        dueAmount: Number(dueOnDelivery.toFixed(2)), 
         deliveryCharge: Number(shippingCharge),
         paymentMethod: paymentMethod,
         mobileBankingFee: Number(mobileBankingFee.toFixed(2)), 
@@ -122,13 +138,14 @@ export default function CheckoutPage() {
         name: session?.user?.name,
         email: session?.user?.email,
         shippingAddress: userAddress,
+        stockProcessed: false, // 🟢 Inform Success Page to handle inventory
       };
 
       const result = await createOrder(orderData);
 
       if (result.success) {
-        clearCart();
-        localStorage.removeItem("checkoutItems");
+        // 🟢 Logic: We leave the cart and localStorage alone here.
+        // The Success Page will "surgically" remove the items after payment verification.
 
         const res = await fetch(`/api/payment?orderId=${result.orderId}`, {
           method: "POST",
@@ -164,7 +181,7 @@ export default function CheckoutPage() {
   };
 
   if (isInitializing) return (
-    <div className="flex items-center justify-center min-h-screen">
+    <div className="flex items-center justify-center min-h-screen bg-white">
       <Loader2 className="animate-spin text-[#EA638C]" size={40} />
     </div>
   );
@@ -173,12 +190,13 @@ export default function CheckoutPage() {
     <div className="relative grid max-w-6xl grid-cols-1 gap-10 px-4 py-10 pt-32 mx-auto lg:grid-cols-3">
       <div className="space-y-8 lg:col-span-2">
         
+        {/* Error Alert Box - Brand Pink Styling */}
         {stockError && (
-          <div className="p-6 bg-red-50 border-2 border-red-100 rounded-[2.5rem] flex items-start gap-4">
-            <div className="p-3 text-white bg-red-500 rounded-2xl"><AlertCircle size={24} /></div>
+          <div className="p-6 bg-red-50 border-2 border-[#EA638C]/20 rounded-[2.5rem] flex items-start gap-4 shadow-sm">
+            <div className="p-3 text-white bg-[#EA638C] rounded-2xl"><AlertCircle size={24} /></div>
             <div>
-              <h3 className="text-xs font-black tracking-widest text-red-900 uppercase">Inventory Issue</h3>
-              <p className="mt-1 text-sm font-bold text-red-600">{stockError}</p>
+              <h3 className="text-xs font-black tracking-widest text-[#3E442B] uppercase">Inventory Notice</h3>
+              <p className="mt-1 text-sm font-bold text-gray-600">{stockError}</p>
             </div>
           </div>
         )}
@@ -238,19 +256,20 @@ export default function CheckoutPage() {
           </div>
         </section>
 
-        {/* Item Review */}
         <section className="bg-white rounded-[2.5rem] p-8 border-2 border-gray-50">
           <h3 className="mb-6 text-sm font-black tracking-widest text-gray-400 uppercase">Order Details ({checkoutItems.length})</h3>
           <div className="space-y-4">
             {checkoutItems.map((item) => (
-              <div key={item.uniqueKey} className="flex items-center gap-4 group">
+              <div key={item.uniqueKey || item.id} className="flex items-center gap-4 group">
                 <div className="relative">
                    <img src={item.imageUrl} className="object-cover w-16 h-16 transition-transform border-2 border-gray-50 rounded-2xl group-hover:scale-105" alt="" />
                    <span className="absolute -top-2 -right-2 bg-[#3E442B] text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{item.quantity}x</span>
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-bold text-gray-800 line-clamp-1">{item.name}</p>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{item.color} • {item.size}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                    {item.color} • {item.size}
+                  </p>
                 </div>
                 <div className="text-right">
                     <p className="text-sm font-black text-[#3E442B]">৳{(item.price * item.quantity).toLocaleString()}</p>
@@ -275,7 +294,6 @@ export default function CheckoutPage() {
               <span className="text-[#3E442B]">৳{shippingCharge}</span>
             </div>
 
-            {/* 🟢 FRACTIONAL GATEWAY FEE ROW */}
             <div className="flex justify-between text-[11px] font-black text-[#EA638C] uppercase tracking-tighter bg-[#EA638C]/5 p-3 rounded-2xl border border-[#EA638C]/10">
               <span className="flex items-center gap-1.5"><Info size={14}/> Gateway Fee (1.5%)</span>
               <span>৳{mobileBankingFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>

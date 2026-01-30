@@ -25,8 +25,6 @@ var _InventoryLog = _interopRequireDefault(require("@/models/InventoryLog"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "default": obj }; }
 
-// ⬅️ ADDED THIS IMPORT
-
 /**
  * 1. THE WATCHER (Sale Trigger)
  */
@@ -41,15 +39,14 @@ function checkLowStock(product, variant) {
           threshold = moq * 2;
 
           if (!(currentStock <= threshold && currentStock > 0)) {
-            _context.next = 7;
+            _context.next = 6;
             break;
           }
 
-          console.log("\u26A0\uFE0F Low stock detected: ".concat(product.name, " (").concat(variant.color, ")"));
-          _context.next = 7;
+          _context.next = 6;
           return regeneratorRuntime.awrap((0, _mail.sendAdminLowStockAlert)(product.name, "".concat(variant.color, "-").concat(variant.size), currentStock, moq));
 
-        case 7:
+        case 6:
         case "end":
           return _context.stop();
       }
@@ -69,8 +66,8 @@ function updateInventoryStock(productId, variantId, newStockAmount) {
       stockDifference,
       variantKey,
       updatedProduct,
-      moq,
       notifiedCount,
+      moq,
       waitingUsers,
       _args3 = arguments;
   return regeneratorRuntime.async(function updateInventoryStock$(_context3) {
@@ -103,72 +100,86 @@ function updateInventoryStock(productId, variantId, newStockAmount) {
           variant = currentProduct.variants.id(variantId);
           oldStock = variant.stock;
           stockDifference = Number(newStockAmount) - oldStock;
-          variantKey = "".concat(variant.color, "-").concat(variant.size); // 2. Perform the Update
+          variantKey = "".concat(variant.color, "-").concat(variant.size);
 
-          _context3.next = 15;
-          return regeneratorRuntime.awrap(_Product["default"].findOneAndUpdate({
-            _id: productId,
-            "variants._id": variantId
-          }, {
-            $set: {
-              "variants.$.stock": Number(newStockAmount)
-            }
-          }, {
-            "new": true
-          }));
+          if (!(stockDifference === 0)) {
+            _context3.next = 15;
+            break;
+          }
+
+          return _context3.abrupt("return", {
+            success: true,
+            notifiedCount: 0
+          });
 
         case 15:
+          _context3.next = 17;
+          return regeneratorRuntime.awrap(_Product["default"].findOneAndUpdate({
+            _id: productId
+          }, {
+            $inc: {
+              "variants.$[v].stock": stockDifference,
+              stock: stockDifference
+            }
+          }, {
+            arrayFilters: [{
+              "v._id": variantId
+            }],
+            "new": true,
+            runValidators: true
+          }));
+
+        case 17:
           updatedProduct = _context3.sent;
-          _context3.next = 18;
+          _context3.next = 20;
           return regeneratorRuntime.awrap(_InventoryLog["default"].create({
             productId: productId,
             productName: updatedProduct.name,
             variantKey: variantKey,
             change: stockDifference,
-            reason: 'Restock',
-            performedBy: adminEmail // Pass the current user's email here if available
-
+            reason: stockDifference > 0 ? "Restock" : "Adjustment",
+            performedBy: adminEmail
           }));
 
-        case 18:
-          // 4. BACK-IN-STOCK NOTIFICATIONS
-          moq = variant.minOrderQuantity || updatedProduct.minOrderQuantity || 1;
+        case 20:
+          // Back-in-stock logic...
           notifiedCount = 0;
+          moq = variant.minOrderQuantity || updatedProduct.minOrderQuantity || 1;
 
-          if (!(Number(newStockAmount) >= moq)) {
-            _context3.next = 28;
+          if (!(Number(newStockAmount) >= moq && oldStock < moq)) {
+            _context3.next = 30;
             break;
           }
 
-          _context3.next = 23;
+          _context3.next = 25;
           return regeneratorRuntime.awrap(_NotifyMe["default"].find({
             productId: productId,
             variantKey: variantKey,
             status: "Pending"
           }));
 
-        case 23:
+        case 25:
           waitingUsers = _context3.sent;
 
           if (!(waitingUsers.length > 0)) {
-            _context3.next = 28;
+            _context3.next = 30;
             break;
           }
 
           notifiedCount = waitingUsers.length;
-          _context3.next = 28;
-          return regeneratorRuntime.awrap(Promise.all(waitingUsers.map(function _callee(request) {
+          _context3.next = 30;
+          return regeneratorRuntime.awrap(Promise.all(waitingUsers.map(function _callee(req) {
             return regeneratorRuntime.async(function _callee$(_context2) {
               while (1) {
                 switch (_context2.prev = _context2.next) {
                   case 0:
                     _context2.next = 2;
-                    return regeneratorRuntime.awrap((0, _mail.sendStockEmail)(request.email, updatedProduct.name, variantKey, productId));
+                    return regeneratorRuntime.awrap((0, _mail.sendStockEmail)(req.email, updatedProduct.name, variantKey, productId));
 
                   case 2:
-                    request.status = "Notified";
+                    req.status = "Notified";
                     _context2.next = 5;
-                    return regeneratorRuntime.awrap(request.save());
+                    return regeneratorRuntime.awrap(req.save());
 
                   case 5:
                   case "end":
@@ -178,22 +189,19 @@ function updateInventoryStock(productId, variantId, newStockAmount) {
             });
           })));
 
-        case 28:
-          (0, _cache.revalidatePath)("/product/".concat(productId));
+        case 30:
           (0, _cache.revalidatePath)("/admin/products");
           return _context3.abrupt("return", {
             success: true,
-            notifiedCount: notifiedCount,
-            change: stockDifference
+            notifiedCount: notifiedCount
           });
 
-        case 33:
-          _context3.prev = 33;
+        case 34:
+          _context3.prev = 34;
           _context3.t0 = _context3["catch"](1);
-          console.error("STOCK_UPDATE_ERROR:", _context3.t0);
           return _context3.abrupt("return", {
             success: false,
-            message: "Failed to update stock"
+            message: _context3.t0.message
           });
 
         case 37:
@@ -201,15 +209,16 @@ function updateInventoryStock(productId, variantId, newStockAmount) {
           return _context3.stop();
       }
     }
-  }, null, null, [[1, 33]]);
+  }, null, null, [[1, 34]]);
 }
 /**
- * 3. ORDER PROCESSOR (Checkout Trigger)
+ * 3. ORDER PROCESSOR (The Fix for Variant Sync)
+ * Using explicit async serialization to ensure each variant is deducted properly.
  */
 
 
 function processOrderStock(order) {
-  var _iteratorNormalCompletion, _didIteratorError, _iteratorError, _loop, _iterator, _step, _ret;
+  var _iteratorNormalCompletion, _didIteratorError, _iteratorError, _loop, _iterator, _step;
 
   return regeneratorRuntime.async(function processOrderStock$(_context5) {
     while (1) {
@@ -220,75 +229,100 @@ function processOrderStock(order) {
           return regeneratorRuntime.awrap((0, _mongodb["default"])());
 
         case 3:
+          // 🟢 CRITICAL: We use a standard for loop to ensure "await" 
+          // blocks until the DB fully finishes the previous variant.
           _iteratorNormalCompletion = true;
           _didIteratorError = false;
           _iteratorError = undefined;
           _context5.prev = 6;
 
           _loop = function _loop() {
-            var item, product, updatedProduct, variant;
+            var item, qtyToDeduct, isVariant, updatedProduct, variant;
             return regeneratorRuntime.async(function _loop$(_context4) {
               while (1) {
                 switch (_context4.prev = _context4.next) {
                   case 0:
                     item = _step.value;
-                    _context4.next = 3;
-                    return regeneratorRuntime.awrap(_Product["default"].findById(item.productId));
+                    qtyToDeduct = Number(item.quantity);
+                    isVariant = item.variant && item.variant.name !== "Default";
 
-                  case 3:
-                    product = _context4.sent;
-
-                    if (product) {
-                      _context4.next = 6;
+                    if (!isVariant) {
+                      _context4.next = 15;
                       break;
                     }
 
-                    return _context4.abrupt("return", "continue");
-
-                  case 6:
-                    _context4.next = 8;
+                    _context4.next = 6;
                     return regeneratorRuntime.awrap(_Product["default"].findOneAndUpdate({
-                      _id: item.productId,
-                      "variants.color": item.color,
-                      "variants.size": item.size
+                      _id: item.product,
+                      "variants": {
+                        $elemMatch: {
+                          color: item.variant.name,
+                          size: item.variant.size,
+                          stock: {
+                            $gte: qtyToDeduct
+                          } // 🛑 Prevent negative stock
+
+                        }
+                      }
                     }, {
                       $inc: {
-                        "variants.$.stock": -item.quantity
+                        "variants.$[v].stock": -qtyToDeduct,
+                        stock: -qtyToDeduct // Deducts from the main "total" stock too
+
+                      }
+                    }, {
+                      arrayFilters: [{
+                        "v.color": item.variant.name,
+                        "v.size": item.variant.size
+                      }],
+                      "new": true
+                    }));
+
+                  case 6:
+                    updatedProduct = _context4.sent;
+
+                    if (!updatedProduct) {
+                      _context4.next = 13;
+                      break;
+                    }
+
+                    variant = updatedProduct.variants.find(function (v) {
+                      return v.color === item.variant.name && v.size === item.variant.size;
+                    });
+                    _context4.next = 11;
+                    return regeneratorRuntime.awrap(_InventoryLog["default"].create({
+                      productId: item.product,
+                      productName: updatedProduct.name,
+                      variantKey: "".concat(item.variant.name, "-").concat(item.variant.size),
+                      change: -qtyToDeduct,
+                      reason: "Sale",
+                      performedBy: "Order #".concat(order._id.toString().slice(-6).toUpperCase())
+                    }));
+
+                  case 11:
+                    _context4.next = 13;
+                    return regeneratorRuntime.awrap(checkLowStock(updatedProduct, variant));
+
+                  case 13:
+                    _context4.next = 17;
+                    break;
+
+                  case 15:
+                    _context4.next = 17;
+                    return regeneratorRuntime.awrap(_Product["default"].findOneAndUpdate({
+                      _id: item.product,
+                      stock: {
+                        $gte: qtyToDeduct
+                      }
+                    }, {
+                      $inc: {
+                        stock: -qtyToDeduct
                       }
                     }, {
                       "new": true
                     }));
 
-                  case 8:
-                    updatedProduct = _context4.sent;
-
-                    if (!updatedProduct) {
-                      _context4.next = 15;
-                      break;
-                    }
-
-                    variant = updatedProduct.variants.find(function (v) {
-                      return v.color === item.color && v.size === item.size;
-                    }); // 3. 🟢 RECORD THE LOG (Sale)
-                    // This tracks the deduction in your history log
-
-                    _context4.next = 13;
-                    return regeneratorRuntime.awrap(_InventoryLog["default"].create({
-                      productId: item.productId,
-                      productName: updatedProduct.name,
-                      variantKey: "".concat(item.color, "-").concat(item.size),
-                      change: -item.quantity,
-                      // Negative number representing stock removal
-                      reason: 'Sale',
-                      performedBy: "Order #".concat(order._id.slice(-6).toUpperCase()) // Ties the log to a specific order
-
-                    }));
-
-                  case 13:
-                    _context4.next = 15;
-                    return regeneratorRuntime.awrap(checkLowStock(updatedProduct, variant));
-
-                  case 15:
+                  case 17:
                   case "end":
                     return _context4.stop();
                 }
@@ -300,7 +334,7 @@ function processOrderStock(order) {
 
         case 9:
           if (_iteratorNormalCompletion = (_step = _iterator.next()).done) {
-            _context5.next = 18;
+            _context5.next = 15;
             break;
           }
 
@@ -308,80 +342,70 @@ function processOrderStock(order) {
           return regeneratorRuntime.awrap(_loop());
 
         case 12:
-          _ret = _context5.sent;
-
-          if (!(_ret === "continue")) {
-            _context5.next = 15;
-            break;
-          }
-
-          return _context5.abrupt("continue", 15);
-
-        case 15:
           _iteratorNormalCompletion = true;
           _context5.next = 9;
           break;
 
-        case 18:
-          _context5.next = 24;
+        case 15:
+          _context5.next = 21;
           break;
 
-        case 20:
-          _context5.prev = 20;
+        case 17:
+          _context5.prev = 17;
           _context5.t0 = _context5["catch"](6);
           _didIteratorError = true;
           _iteratorError = _context5.t0;
 
-        case 24:
-          _context5.prev = 24;
-          _context5.prev = 25;
+        case 21:
+          _context5.prev = 21;
+          _context5.prev = 22;
 
           if (!_iteratorNormalCompletion && _iterator["return"] != null) {
             _iterator["return"]();
           }
 
-        case 27:
-          _context5.prev = 27;
+        case 24:
+          _context5.prev = 24;
 
           if (!_didIteratorError) {
-            _context5.next = 30;
+            _context5.next = 27;
             break;
           }
 
           throw _iteratorError;
 
-        case 30:
-          return _context5.finish(27);
-
-        case 31:
+        case 27:
           return _context5.finish(24);
 
-        case 32:
-          _context5.next = 34;
+        case 28:
+          return _context5.finish(21);
+
+        case 29:
+          _context5.next = 31;
           return regeneratorRuntime.awrap(_Order["default"].findByIdAndUpdate(order._id, {
             stockProcessed: true
           }));
 
-        case 34:
+        case 31:
           (0, _cache.revalidatePath)("/admin/products");
           return _context5.abrupt("return", {
             success: true
           });
 
-        case 38:
-          _context5.prev = 38;
+        case 35:
+          _context5.prev = 35;
           _context5.t1 = _context5["catch"](0);
           console.error("FAILED_TO_PROCESS_STOCK:", _context5.t1);
           return _context5.abrupt("return", {
             success: false
           });
 
-        case 42:
+        case 39:
         case "end":
           return _context5.stop();
       }
     }
-  }, null, null, [[0, 38], [6, 20, 24, 32], [25,, 27, 31]]);
+  }, null, null, [[0, 35], [6, 17, 21, 29], [22,, 24, 28]]);
 }
 
 function getInventoryHistory(productId) {
@@ -400,8 +424,7 @@ function getInventoryHistory(productId) {
             productId: productId
           }).sort({
             createdAt: -1
-          }) // Newest first
-          .limit(10));
+          }).limit(10));
 
         case 5:
           logs = _context6.sent;

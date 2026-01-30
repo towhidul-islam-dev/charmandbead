@@ -1,11 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Truck, ShieldCheck, RotateCcw, Zap } from "lucide-react";
+import { Truck, ShieldCheck, RotateCcw, Zap, Barcode } from "lucide-react"; 
 import ProductPurchaseSection from "@/components/ProductPurchaseSection";
 import { useRouter } from "next/navigation";
+import { useCart } from "@/Context/CartContext";
 
 export default function ProductDetailsContent({ product }) {
   const router = useRouter();
+  const { cart } = useCart(); // 🟢 Pull cart to calculate true global stock
 
   if (!product) return null;
 
@@ -16,26 +18,37 @@ export default function ProductDetailsContent({ product }) {
   ])).filter(img => img !== "/placeholder.png");
 
   const [mainImage, setMainImage] = useState(allImages[0] || "/placeholder.png");
+  const [activeSku, setActiveSku] = useState(product.sku || null);
 
-  // 2. REFINED STOCK LOGIC
-  // We only count a product as "In Stock" if there's at least one variant 
-  // whose current stock is greater than or equal to its Minimum Order Quantity (MOQ).
-  const sellableVariants = product.variants?.filter(v => 
-    (v.stock || 0) >= (v.minOrderQuantity || product.minOrderQuantity || 1)
-  ) || [];
+  // 🟢 2. DYNAMIC STOCK CALCULATION
+  // Calculate total stock minus what is currently in the cart
+  const calculateLiveStock = () => {
+    const baseStock = product.hasVariants 
+      ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
+      : (Number(product.stock) || 0);
+    
+    const inCartQty = cart.reduce((acc, item) => {
+      return item.productId === product._id ? acc + item.quantity : acc;
+    }, 0);
 
-  const stockCount = product.hasVariants 
-    ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
-    : (Number(product.stock) || 0);
+    return Math.max(0, baseStock - inCartQty);
+  };
+
+  const [currentStock, setCurrentStock] = useState(calculateLiveStock());
+
+  // Update stock whenever the cart changes
+  useEffect(() => {
+    setCurrentStock(calculateLiveStock());
+  }, [cart, product]);
 
   const displayMoq = product.hasVariants 
     ? Math.min(...product.variants.map(v => v.minOrderQuantity || 1)) 
     : (product.minOrderQuantity || 1);
 
-  const isOutOfStock = sellableVariants.length === 0;
-  const isLowStock = !isOutOfStock && stockCount <= (displayMoq * 3);
+  const isOutOfStock = currentStock <= 0;
+  const isLowStock = !isOutOfStock && currentStock <= (displayMoq * 3);
 
-  // 3. Keep data fresh (Updates badges if stock is sold out by others)
+  // 3. Keep data fresh from server
   useEffect(() => {
     const interval = setInterval(() => {
       router.refresh();
@@ -83,7 +96,6 @@ export default function ProductDetailsContent({ product }) {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             
-            {/* 🟢 DYNAMIC STOCK STATUS BADGE */}
             <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full transition-all duration-500 shadow-sm
               ${isOutOfStock ? 'bg-red-500 text-white' : 
                 isLowStock ? 'bg-orange-100 text-orange-600 border border-orange-200 animate-pulse' : 
@@ -92,15 +104,21 @@ export default function ProductDetailsContent({ product }) {
               {!isOutOfStock && <div className={`w-1.5 h-1.5 rounded-full ${isLowStock ? 'bg-orange-600' : 'bg-green-400'}`} />}
               
               <span className="text-[10px] font-black uppercase tracking-widest">
-                {isOutOfStock ? "Sold Out - Get Notified Below" : isLowStock ? `Hurry! Only ${stockCount} units left` : "In Stock"}
+                {isOutOfStock ? "Sold Out" : isLowStock ? `Hurry! Only ${currentStock} units left` : "In Stock"}
               </span>
             </div>
 
-            {/* 🟢 WHOLESALE MOQ BADGE */}
             {displayMoq > 1 && (
               <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-4 py-1.5 rounded-full border border-pink-100">
                 <Zap size={12} className="fill-current" />
                 <span>Min. Order: {displayMoq} Units</span>
+              </div>
+            )}
+
+            {activeSku && (
+              <div className="flex items-center gap-1.5 text-[#3E442B] font-black text-[10px] uppercase tracking-widest bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200">
+                <Barcode size={12} />
+                <span>SKU: {activeSku}</span>
               </div>
             )}
           </div>
@@ -116,14 +134,14 @@ export default function ProductDetailsContent({ product }) {
         </div>
 
         {/* PURCHASE SECTION */}
-        {/* We no longer lock the whole section if out of stock, 
-            so users can still use the "Notify Me" buttons inside the table. */}
         <div className="relative">
           <ProductPurchaseSection 
             product={product} 
             isOutOfStock={isOutOfStock}
-            onVariantChange={(imageUrl) => {
-              if (imageUrl) setMainImage(imageUrl);
+            // 🟢 UPDATED: Parent updates its visual state when children interact
+            onVariantChange={(variantData) => {
+              if (variantData?.imageUrl) setMainImage(variantData.imageUrl);
+              if (variantData?.sku) setActiveSku(variantData.sku);
             }} 
           />
         </div>

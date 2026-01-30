@@ -10,7 +10,7 @@ export async function middleware(req) {
   const isAdminPage = pathname.startsWith("/admin");
   const isUnauthorizedPage = pathname === "/admin/unauthorized";
 
-  // 1. If user is logged in and tries to access login/register
+  // 1. Redirect authenticated users away from Login/Register
   if (token && isAuthPage) {
     const url = token.role === 'admin' 
       ? new URL("/admin/dashboard", req.url) 
@@ -18,14 +18,14 @@ export async function middleware(req) {
     return NextResponse.redirect(url);
   }
 
-  // 2. If user is NOT logged in and tries to access protected routes
+  // 2. Protect Protected routes from Guests
   if (!token && (isDashboardPage || isAdminPage)) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
-  // 3. 💡 ADMIN PROTECTION LOGIC
-  // If user is logged in, trying to access admin pages, 
-  // is NOT an admin, and is NOT already on the unauthorized page.
+  // 3. Admin-Only Guard: Redirect non-admins trying to access admin pages
   if (token && isAdminPage && token.role !== 'admin' && !isUnauthorizedPage) {
     return NextResponse.redirect(new URL("/admin/unauthorized", req.url));
   }
@@ -34,7 +34,15 @@ export async function middleware(req) {
 }
 
 export const config = {
+  /*
+   * Match all request paths except for the ones starting with:
+   * - api (API routes)
+   * - _next/static (static files)
+   * - _next/image (image optimization files)
+   * - favicon.ico (favicon file)
+   * - public images/assets
+   */
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|images|assets).*)',
   ],
 };

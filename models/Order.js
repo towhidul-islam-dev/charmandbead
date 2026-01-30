@@ -2,12 +2,11 @@ import mongoose from "mongoose";
 
 const OrderSchema = new mongoose.Schema(
   {
-    // 1. Indexing User: Critical for 'getUserOrders' and VIP syncing
-    user: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "User", 
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       required: true,
-      index: true 
+      index: true,
     },
     items: [
       {
@@ -17,9 +16,12 @@ const OrderSchema = new mongoose.Schema(
           name: String,
           image: String,
           size: String,
+          // 🟢 Ensure variantId is stored to track stock changes accurately
+          variantId: mongoose.Schema.Types.ObjectId, 
         },
-        quantity: Number,
-        price: Number,
+        quantity: { type: Number, required: true },
+        price: { type: Number, required: true },
+        sku: String, // 🟢 Added for better logging
       },
     ],
     totalAmount: Number,
@@ -27,37 +29,39 @@ const OrderSchema = new mongoose.Schema(
     paidAmount: { type: Number, default: 0 },
     dueAmount: { type: Number, default: 0 },
     shippingAddress: Object,
-    // 2. Indexing Status: Critical for the Admin Dashboard filters
     status: {
       type: String,
       enum: ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"],
       default: "Pending",
-      index: true
+      index: true,
     },
-    paymentStatus: { 
-      type: String, 
+    paymentStatus: {
+      type: String,
       enum: ["Unpaid", "Partially Paid", "Paid"],
-      default: "Unpaid" 
+      default: "Unpaid",
     },
     tran_id: { type: String, unique: true, sparse: true },
     trackingNumber: { type: String, default: "" },
-    
+
     notifications: [
       {
         message: String,
         status: String,
         createdAt: { type: Date, default: Date.now },
-        isRead: { type: Boolean, default: false }
-      }
+        isRead: { type: Boolean, default: false },
+      },
     ],
+    // 🟢 Critical Lock: Indexed for high-performance idempotency checks
+    isStockReduced: { type: Boolean, default: false, index: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-// 3. Compound Index: Accelerates the "Sort by Newest" logic used in your getAllOrders
 OrderSchema.index({ createdAt: -1 });
 
-// 4. Text Index: If you want to make search even faster for names/phones (Optional but recommended)
-OrderSchema.index({ "shippingAddress.name": "text", "shippingAddress.phone": "text" });
+OrderSchema.index({
+  "shippingAddress.name": "text",
+  "shippingAddress.phone": "text",
+});
 
 export default mongoose.models.Order || mongoose.model("Order", OrderSchema);

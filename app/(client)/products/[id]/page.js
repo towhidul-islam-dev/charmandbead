@@ -5,13 +5,11 @@ import ProductReviews from "@/components/ProductReviews";
 
 // 🟢 DYNAMIC SEO
 export async function generateMetadata({ params }) {
-  const { id } = await params; // Awaiting params as required in Next.js 15+
+  const { id } = await params; 
   const { product, success } = await getProductById(id);
 
   if (!success || !product) {
-    return {
-      title: "Product Not Found",
-    };
+    return { title: "Product Not Found" };
   }
 
   return {
@@ -20,14 +18,7 @@ export async function generateMetadata({ params }) {
     openGraph: {
       title: product.name,
       description: product.description,
-      images: [
-        {
-          url: product.imageUrl,
-          width: 800,
-          height: 800,
-          alt: product.name,
-        },
-      ],
+      images: [{ url: product.imageUrl, width: 800, height: 800, alt: product.name }],
       type: "article",
     },
     twitter: {
@@ -40,9 +31,7 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function ProductDetails({ params }) {
-  // 1. Destructure the ID after awaiting params
   const { id } = await params;
-  
   const { product, success } = await getProductById(id);
 
   if (!success || !product)
@@ -58,18 +47,21 @@ export default async function ProductDetails({ params }) {
   );
 
   return (
+    /* 🎨 UI Update: Using your lightPink (#FBB6E6) for the background */
     <div className="bg-[#F3F4F6]/50 min-h-screen pb-20">
       <div className="px-4 py-10 mx-auto max-w-7xl lg:py-16">
+        
+        {/* Main Content */}
         <ProductDetailsContent product={product} />
 
-        <div className="mt-12 overflow-hidden bg-white shadow-sm rounded-3xl">
-          {/* 2. FIXED: Use 'id' here instead of 'params.id' */}
+        {/* 🟢 HYDRATION FIX: Strictly using div to match ProductDetailsContent client structure */}
+        <div className="mt-12 overflow-hidden bg-white border border-gray-100 shadow-sm rounded-3xl">
           <ProductReviews productId={id} />
         </div>
 
         {relatedItems?.length > 0 && (
           <div className="mt-24">
-            <h2 className="mb-10 text-2xl italic font-black tracking-tight text-gray-800 uppercase">
+            <h2 className="mb-10 text-2xl italic font-black tracking-tight text-[#3E442B] uppercase">
               You May Also Like
             </h2>
             <div className="grid grid-cols-2 gap-6 md:grid-cols-4">

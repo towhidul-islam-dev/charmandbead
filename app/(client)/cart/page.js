@@ -10,12 +10,12 @@ import {
   PlusIcon,
   ShoppingBagIcon,
   PlusIcon as PlusSmallIcon,
-  ExclamationTriangleIcon,
   FireIcon
 } from "@heroicons/react/24/outline";
 
 export default function CartPage({ initialItems = [], isAdminPreview = false, user = null }) {
   const router = useRouter();
+  const [isPending, setIsPending] = useState(false); // 🟢 Lock state
   const {
     cart: globalCart,
     addToCart,
@@ -80,29 +80,31 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
   const handleQuantityUpdate = (item, delta) => {
     const newQty = item.quantity + delta;
     const moq = item.minOrderQuantity || 1;
-
     if (newQty > item.stock) {
       toast.error(`Stock limit reached! Only ${item.stock} pieces available.`);
       return;
     }
     if (newQty < moq) return;
-
     addToCart(item, delta);
   };
 
   const handleCheckout = () => {
-    if (selectedItems.length === 0) {
-      toast.error("Please select items to checkout");
-      return;
+    if (selectedItems.length === 0 || isPending) return;
+    setIsPending(true); // 🟢 Lock the UI
+    try {
+      const itemsToPurchase = cart.filter((item) => selectedItems.includes(item.uniqueKey));
+      localStorage.setItem("checkoutItems", JSON.stringify(itemsToPurchase));
+      router.push("/dashboard/checkout");
+    } catch (err) {
+      setIsPending(false);
     }
-    router.push("/dashboard/checkout");
   };
 
   if (cart.length === 0) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center p-20">
         <ShoppingBagIcon className="w-16 h-16 mx-auto mb-4 text-gray-200" />
-        <h2 className="mb-2 text-2xl italic font-black text-gray-800 uppercase text-gray-400">Your Bag is Empty</h2>
+        <h2 className="mb-2 text-2xl italic font-black text-gray-800 uppercase">Your Bag is Empty</h2>
         <Link href="/products" className="px-8 py-3 mt-4 text-[10px] font-black tracking-widest text-white uppercase bg-black rounded-2xl">
           Explore Products
         </Link>
@@ -113,7 +115,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
   return (
     <div className={`w-full bg-gray-50/50 ${!isAdminPreview ? 'min-h-screen pt-32 pb-20 px-4' : 'p-2'}`}>
       <div className="mx-auto max-w-7xl">
-        {/* Header Section */}
         <div className="flex flex-col items-start justify-between gap-4 mb-10 md:flex-row md:items-end">
           <div className="space-y-1">
             <h1 className="text-4xl italic font-black tracking-tighter text-gray-900 uppercase">My Bag</h1>
@@ -128,8 +129,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
           <div className="space-y-8 lg:col-span-2">
             {groupedCart.map((product) => (
               <div key={product.productId} className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
-                
-                {/* Parent Card Header */}
                 <div className="bg-gray-50/80 px-8 py-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <input 
@@ -149,7 +148,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                   </Link>
                 </div>
 
-                {/* Variant Rows */}
                 <div className="divide-y divide-gray-50">
                   {product.variants.map((variant) => {
                     const isSelected = selectedItems.includes(variant.uniqueKey);
@@ -161,7 +159,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                     return (
                       <div key={variant.uniqueKey} className={`p-6 px-8 transition-all duration-500 ${isSelected ? 'bg-[#EA638C]/5' : ''}`}>
                         <div className="grid grid-cols-1 md:grid-cols-12 items-center gap-4">
-                          
                           <div className="md:col-span-5 flex items-center gap-4">
                             <input type="checkbox" className="w-4 h-4 accent-[#EA638C] cursor-pointer" checked={isSelected} onChange={() => toggleSelect(variant.uniqueKey)} />
                             <div className="w-16 h-16 rounded-2xl overflow-hidden border border-gray-100 shrink-0 bg-white shadow-sm">
@@ -173,46 +170,30 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                                 <span className="text-[10px] font-black text-gray-300">/</span>
                                 <span className="text-[10px] font-black uppercase text-gray-800 leading-none">{variant.size}</span>
                               </div>
-                              
-                              {/* 🟢 EYE-CATCHY DYNAMIC STOCK BADGE */}
                               <div className={`mt-3 flex items-center gap-2 px-3 py-1.5 rounded-full w-fit transition-all duration-300 shadow-sm
                                 ${isMaxed ? 'bg-red-600 text-white animate-pulse' : 
                                   isLowStock ? 'bg-orange-100 text-orange-600 border border-orange-200' : 
                                   'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-                                
                                 {isMaxed ? <FireIcon className="w-3 h-3" /> : <div className={`w-1.5 h-1.5 rounded-full ${isLowStock ? 'bg-orange-600 animate-ping' : 'bg-emerald-600'}`} />}
-                                
                                 <span className="text-[9px] font-black uppercase tracking-widest whitespace-nowrap">
                                   {isMaxed ? 'No more pieces left' : `${remainingStock} pieces remaining`}
                                 </span>
                               </div>
                             </div>
                           </div>
-
                           <div className="md:col-span-7 flex items-center justify-between md:justify-end gap-10">
-                            {/* Quantity Control */}
                             <div className="flex flex-col items-center gap-1">
                                 <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-1.5 px-4 shadow-sm">
                                 <button onClick={() => handleQuantityUpdate(variant, -moq)} disabled={variant.quantity <= moq} className="p-1 hover:text-[#EA638C] disabled:opacity-20 transition-all"><MinusIcon className="w-4 h-4 stroke-[3px]" /></button>
-                                <span className="text-sm font-black w-6 text-center text-gray-900 transition-all duration-300">{variant.quantity}</span>
-                                <button 
-                                    onClick={() => handleQuantityUpdate(variant, moq)} 
-                                    disabled={variant.quantity >= variant.stock}
-                                    className="p-1 hover:text-[#EA638C] disabled:opacity-10 transition-all"
-                                >
-                                    <PlusIcon className="w-4 h-4 stroke-[3px]" />
-                                </button>
+                                <span className="text-sm font-black w-6 text-center text-gray-900">{variant.quantity}</span>
+                                <button onClick={() => handleQuantityUpdate(variant, moq)} disabled={variant.quantity >= variant.stock} className="p-1 hover:text-[#EA638C] disabled:opacity-10 transition-all"><PlusIcon className="w-4 h-4 stroke-[3px]" /></button>
                                 </div>
                             </div>
-                            
                             <div className="text-right min-w-[100px]">
                               <p className="text-base italic font-black text-gray-900 tracking-tighter">৳{(variant.price * variant.quantity).toLocaleString()}</p>
                               <p className="text-[8px] text-gray-400 font-bold uppercase">Line Total</p>
                             </div>
-
-                            <button onClick={() => deleteSelectedItems([variant.uniqueKey])} className="text-gray-300 hover:text-red-500 transition-colors p-1">
-                              <TrashIcon className="w-5 h-5" />
-                            </button>
+                            <button onClick={() => deleteSelectedItems([variant.uniqueKey])} className="text-gray-300 hover:text-red-500 transition-colors p-1"><TrashIcon className="w-5 h-5" /></button>
                           </div>
                         </div>
                       </div>
@@ -223,7 +204,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
             ))}
           </div>
 
-          {/* Checkout Summary */}
           <div className="lg:col-span-1">
             <div className="bg-white p-8 rounded-[3rem] shadow-2xl border border-gray-50 sticky top-32">
               <h2 className="mb-8 text-xl italic font-black tracking-tighter text-gray-900 uppercase">Order Summary</h2>
@@ -237,8 +217,15 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                   <span className="text-4xl italic font-black tracking-tighter">৳{finalTotal.toLocaleString()}</span>
                 </div>
               </div>
-              <button onClick={handleCheckout} disabled={selectedItems.length === 0} className="w-full bg-black text-white py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-xl hover:bg-[#EA638C] transition-all disabled:opacity-30 active:scale-95">
-                {selectedItems.length === 0 ? "Select Items First" : "Proceed to Checkout"}
+              <button 
+                onClick={handleCheckout} 
+                disabled={selectedItems.length === 0 || isPending} 
+                className={`w-full py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2
+                  ${isPending ? 'bg-gray-400' : 'bg-black hover:bg-[#EA638C] text-white'} 
+                  ${selectedItems.length === 0 ? 'opacity-30' : 'opacity-100'}`}
+              >
+                {isPending && <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" />}
+                {isPending ? "Processing..." : selectedItems.length === 0 ? "Select Items First" : "Proceed to Checkout"}
               </button>
             </div>
           </div>

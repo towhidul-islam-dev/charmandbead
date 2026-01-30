@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useState, useEffect, useMemo } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 
 const CartContext = createContext();
 
@@ -30,32 +30,41 @@ export const CartProvider = ({ children }) => {
       let isNewAddition = false;
 
       // --- 🟢 STEP 1: NORMALIZE INPUTS ---
-      // Detection logic: If the first argument has a uniqueKey AND the second is a number, it's a Cart Page update.
+      // Distinguish between updating quantity (Cart Page) and adding new (Product Page)
       if (product.uniqueKey && typeof variantOrDelta === "number") {
         targetUniqueKey = product.uniqueKey;
         qChange = variantOrDelta;
       } else {
-        // It's a Product Page addition (Single or Bulk)
-        // Ensure we use the uniqueKey generated in the Purchase Section
-        targetUniqueKey = product.uniqueKey || `${product._id}-${variantOrDelta?._id || 'std'}`;
+        const pId = (product._id?.$oid || product._id || product.productId).toString();
+        const vId = (variantOrDelta?._id?.$oid || variantOrDelta?._id || product.variantId)?.toString();
+        
+        targetUniqueKey = product.uniqueKey || `${pId}-${vId || "std"}`;
         qChange = Number(quantity);
         isNewAddition = true;
       }
 
-      const existingIndex = prev.findIndex((item) => item.uniqueKey === targetUniqueKey);
+      const existingIndex = prev.findIndex(
+        (item) => item.uniqueKey === targetUniqueKey,
+      );
 
       // --- 🟢 STEP 2: UPDATE EXISTING ---
       if (existingIndex !== -1) {
         const updatedCart = [...prev];
         const item = updatedCart[existingIndex];
         const itemMoq = Number(item.minOrderQuantity) || 1;
-        
+        const availableStock = Number(item.stock) || 0;
+
         let newQty = item.quantity + qChange;
 
-        // If updating from Cart Page, don't let it drop below MOQ
+        // 🛡️ Stock Boundary Protection
+        if (newQty > availableStock) {
+          newQty = availableStock; 
+        }
+        
+        // 🛡️ MOQ Protection
         if (!isNewAddition && newQty < itemMoq) newQty = itemMoq;
 
-        // Strict mode prevention
+        // If no actual change in quantity, don't trigger a re-render
         if (item.quantity === newQty && !isNewAddition) return prev;
 
         updatedCart[existingIndex] = { ...item, quantity: newQty };
@@ -63,21 +72,29 @@ export const CartProvider = ({ children }) => {
       }
 
       // --- 🟢 STEP 3: ADD NEW ---
-      // If we are here, it's a variant that isn't in the cart yet
-      const itemMoq = Number(product.minOrderQuantity || variantOrDelta?.minOrderQuantity || 1);
+      const itemMoq = Number(
+        product.minOrderQuantity || variantOrDelta?.minOrderQuantity || 1,
+      );
+      const availableStock = Number(variantOrDelta?.stock ?? product.stock ?? 0);
       
+      // Normalize IDs to plain strings for the Backend
+      const finalProductId = (product._id?.$oid || product._id || product.productId).toString();
+      const finalVariantId = (variantOrDelta?._id?.$oid || variantOrDelta?._id || product.variantId)?.toString() || null;
+
       const newItem = {
-        productId: product.productId || product._id,
-        variantId: variantOrDelta?._id || product.variantId || `std-${product._id}`,
+        productId: finalProductId, 
+        variantId: finalVariantId,
         uniqueKey: targetUniqueKey,
         name: product.name,
-        price: Number(product.price || variantOrDelta?.price || 0),
-        imageUrl: product.imageUrl || variantOrDelta?.imageUrl || "/placeholder.png",
-        size: product.size || variantOrDelta?.size || "Standard",
-        color: product.color || variantOrDelta?.color || "Default",
+        price: Number(variantOrDelta?.price || product.price || 0),
+        imageUrl: variantOrDelta?.image || variantOrDelta?.imageUrl || product.imageUrl || "/placeholder.png",
+        size: variantOrDelta?.size || product.size || "N/A",
+        color: variantOrDelta?.color || product.color || "Default",
         minOrderQuantity: itemMoq,
-        stock: product.stock || variantOrDelta?.stock || 0,
-        quantity: Math.max(itemMoq, qChange),
+        stock: availableStock,
+        // Ensure initial quantity doesn't exceed stock or fall below MOQ
+        quantity: Math.min(availableStock, Math.max(itemMoq, qChange)),
+        sku: variantOrDelta?.sku || product.sku || "N/A",
       };
 
       return [...prev, newItem];
@@ -88,31 +105,35 @@ export const CartProvider = ({ children }) => {
     setCart((prev) => prev.filter((item) => item.uniqueKey !== uniqueKey));
   };
 
-  const deleteSelectedItems = (selectedKeys) => {
+  const deleteSelectedItems = useCallback((selectedKeys) => {
     if (!selectedKeys || selectedKeys.length === 0) return;
-    setCart((prev) => prev.filter((item) => !selectedKeys.includes(item.uniqueKey)));
-  };
+    setCart((prev) =>
+      prev.filter((item) => !selectedKeys.includes(item.uniqueKey)),
+    );
+  }, []);
 
   const clearCart = () => setCart([]);
 
   const cartTotal = useMemo(() => {
-    return cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    return cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
   }, [cart]);
 
   const cartCount = useMemo(() => {
-    return cart.reduce((acc, item) => acc + item.quantity, 0); // Count total units
+    return cart.reduce((acc, item) => acc + item.quantity, 0);
   }, [cart]);
 
   return (
-    <CartContext.Provider value={{ 
-      cart, 
-      addToCart, 
-      removeFromCart, 
-      deleteSelectedItems, 
-      clearCart, 
-      cartTotal, 
-      cartCount 
-    }}>
+    <CartContext.Provider
+      value={{
+        cart,
+        addToCart,
+        removeFromCart,
+        deleteSelectedItems,
+        clearCart,
+        cartTotal,
+        cartCount,
+      }}
+    >
       {children}
     </CartContext.Provider>
   );

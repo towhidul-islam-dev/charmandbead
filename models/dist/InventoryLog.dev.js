@@ -9,6 +9,7 @@ var _mongoose = _interopRequireDefault(require("mongoose"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "default": obj }; }
 
+// We define the schema without the 'enum' property
 var InventoryLogSchema = new _mongoose["default"].Schema({
   productId: {
     type: _mongoose["default"].Schema.Types.ObjectId,
@@ -17,22 +18,24 @@ var InventoryLogSchema = new _mongoose["default"].Schema({
   },
   productName: String,
   variantKey: String,
-  // e.g., "Red-XL"
+  sku: String,
   change: Number,
-  // e.g., +50 or -12
   reason: {
     type: String,
-    "enum": ['Restock', 'Sale', 'Adjustment', 'Return'],
     "default": 'Restock'
   },
   performedBy: String,
-  // Admin email or "System/Sale"
   createdAt: {
     type: Date,
     "default": Date.now
   }
-});
+}); // 🟢 IMPORTANT: This logic clears the old model from memory if it exists, 
+// then re-compiles it with the new, flexible schema.
 
-var _default = _mongoose["default"].models.InventoryLog || _mongoose["default"].model("InventoryLog", InventoryLogSchema);
+if (_mongoose["default"].models.InventoryLog) {
+  delete _mongoose["default"].models.InventoryLog;
+}
+
+var _default = _mongoose["default"].model("InventoryLog", InventoryLogSchema);
 
 exports["default"] = _default;

@@ -1,17 +1,21 @@
 // app/admin/products/page.js
-export const dynamic = 'force-dynamic'; // 🟢 Prevents static caching
-export const revalidate = 0;           // 🟢 Ensures fresh data on every request
+export const dynamic = 'force-dynamic'; 
+export const revalidate = 0; 
 
 import { getProducts } from "@/lib/data";
 import AdminProductsClient from "./AdminProductsClient";
+import { silentInventoryHeal } from "@/actions/product"; // 🟢 Import the healer
 
 export default async function AdminProductsPage() {
-  // We pass 'true' to get all products (including archived)
+  
+  await silentInventoryHeal();
+
+  // 2. Fetch the "clean" products
   const { products, success, error } = await getProducts(true);
 
   if (!success) {
     return (
-      <div className="p-4 text-red-500 md:p-8">
+      <div className="p-4 md:p-8 font-bold text-[#EA638C]">
         Error loading products: {error}
       </div>
     );
