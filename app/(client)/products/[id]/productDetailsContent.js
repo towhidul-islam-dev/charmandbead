@@ -7,11 +7,11 @@ import { useCart } from "@/Context/CartContext";
 
 export default function ProductDetailsContent({ product }) {
   const router = useRouter();
-  const { cart } = useCart(); // 🟢 Pull cart to calculate true global stock
+  const { cart } = useCart(); 
 
   if (!product) return null;
 
-  // 1. Image logic
+  // 1. Image logic (Preserved)
   const allImages = Array.from(new Set([
     ...(Array.isArray(product?.imageUrl) ? product.imageUrl : [product?.imageUrl]),
     ...(product?.variants?.map(v => v.imageUrl || v.image).filter(Boolean) || [])
@@ -20,26 +20,16 @@ export default function ProductDetailsContent({ product }) {
   const [mainImage, setMainImage] = useState(allImages[0] || "/placeholder.png");
   const [activeSku, setActiveSku] = useState(product.sku || null);
 
-  // 🟢 2. DYNAMIC STOCK CALCULATION
-  // Calculate total stock minus what is currently in the cart
-  const calculateLiveStock = () => {
-    const baseStock = product.hasVariants 
-      ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
-      : (Number(product.stock) || 0);
-    
-    const inCartQty = cart.reduce((acc, item) => {
-      return item.productId === product._id ? acc + item.quantity : acc;
-    }, 0);
+  // 2. UPDATED LOGIC: Calculate live stock (Preserved logic)
+  const baseStockTotal = product.hasVariants 
+    ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
+    : (Number(product.stock) || 0);
+  
+  const inCartQtyTotal = cart.reduce((acc, item) => {
+    return item.productId === product._id ? acc + item.quantity : acc;
+  }, 0);
 
-    return Math.max(0, baseStock - inCartQty);
-  };
-
-  const [currentStock, setCurrentStock] = useState(calculateLiveStock());
-
-  // Update stock whenever the cart changes
-  useEffect(() => {
-    setCurrentStock(calculateLiveStock());
-  }, [cart, product]);
+  const currentStock = Math.max(0, baseStockTotal - inCartQtyTotal);
 
   const displayMoq = product.hasVariants 
     ? Math.min(...product.variants.map(v => v.minOrderQuantity || 1)) 
@@ -48,7 +38,7 @@ export default function ProductDetailsContent({ product }) {
   const isOutOfStock = currentStock <= 0;
   const isLowStock = !isOutOfStock && currentStock <= (displayMoq * 3);
 
-  // 3. Keep data fresh from server
+  // 3. Keep data fresh from server (Preserved)
   useEffect(() => {
     const interval = setInterval(() => {
       router.refresh();
@@ -58,7 +48,31 @@ export default function ProductDetailsContent({ product }) {
 
   return (
     <div className="grid items-start grid-cols-1 gap-10 p-4 lg:grid-cols-12 xl:gap-16 md:p-8">
-      {/* LEFT COLUMN: IMAGES */}
+      
+      {/* 🟢 NEW: SEO STRUCTURED DATA - (Hidden from UI, purely for Google) */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org/",
+            "@type": "Product",
+            "name": product.name,
+            "image": allImages,
+            "description": product.description,
+            "sku": activeSku || product._id,
+            "offers": {
+              "@type": "Offer",
+              "url": typeof window !== 'undefined' ? window.location.href : "",
+              "priceCurrency": "BDT",
+              "price": product.price,
+              "availability": isOutOfStock ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
+              "priceValidUntil": "2026-12-31"
+            }
+          })
+        }}
+      />
+
+      {/* LEFT COLUMN: IMAGES - No UI changes */}
       <div className="space-y-6 lg:col-span-5">
         <div className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-xl aspect-square">
           <img 
@@ -91,7 +105,7 @@ export default function ProductDetailsContent({ product }) {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: DETAILS */}
+      {/* RIGHT COLUMN: DETAILS - UI classes preserved exactly */}
       <div className="space-y-8 lg:col-span-7">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -138,7 +152,6 @@ export default function ProductDetailsContent({ product }) {
           <ProductPurchaseSection 
             product={product} 
             isOutOfStock={isOutOfStock}
-            // 🟢 UPDATED: Parent updates its visual state when children interact
             onVariantChange={(variantData) => {
               if (variantData?.imageUrl) setMainImage(variantData.imageUrl);
               if (variantData?.sku) setActiveSku(variantData.sku);

@@ -14,23 +14,23 @@ const playfair = Playfair_Display({
   variable: '--font-playfair',
 });
 
-// 🟢 ENHANCED GLOBAL SEO
 export const metadata = {
   title: {
     default: 'Charm & Bead | Unlock Creativity',
-    template: '%s | Charm & Bead' // This automatically adds your brand name to every page title
+    template: '%s | Charm & Bead' 
   },
-  
   description: 'Source the finest materials for your jewelry workshop. Curated collection of premium beads, crystals, and design components.',
   keywords: ['jewelry making', 'beads', 'crystals', 'design materials', 'DIY jewelry'],
   authors: [{ name: 'Charm & Bead' }],
   creator: 'Charm & Bead',
-  // metadataBase: new URL('https://your-domain.com'), // 🟢 IMPORTANT: Replace with your actual live URL
-  metadataBase: new URL(process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:3000' 
-  : 'https://your-future-domain.com'),
   
-  // 🟢 SOCIAL MEDIA PREVIEWS (OpenGraph)
+  metadataBase: new URL(process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3000' 
+    : 'https://your-future-domain.com'), // 🟢 Remember to update this later
+  
+  // 🟢 BRANDING: Theme color for mobile browser bars
+  themeColor: "#EA638C", 
+
   openGraph: {
     type: 'website',
     locale: 'en_US',
@@ -40,7 +40,7 @@ export const metadata = {
     description: 'Source the finest materials for your jewelry workshop.',
     images: [
       {
-        url: '/og-image.jpg', // Create a 1200x630 image in your /public folder for shared links
+        url: '/og-image.jpg', 
         width: 1200,
         height: 630,
         alt: 'Charm & Bead Premium Materials',
@@ -48,7 +48,6 @@ export const metadata = {
     ],
   },
   
-  // 🟢 TWITTER / X CARDS
   twitter: {
     card: 'summary_large_image',
     title: 'Charm & Bead | Unlock Creativity',
@@ -59,22 +58,7 @@ export const metadata = {
   viewport: {
     width: 'device-width',
     initialScale: 1,
-    maximumScale: 5, // Important for Accessibility!
-  },
-  other: {
-    'preconnect': ['https://fonts.googleapis.com', 'https://fonts.gstatic.com'],
-  },
-  robots: {
-    index: true,
-    follow: true,
-    nocache: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
+    maximumScale: 5, 
   },
 };
 
@@ -82,27 +66,30 @@ export default function ClientLayout({ children }) {
   return (
     <CartProvider>
       <WishlistProvider>
-        {/* 🟢 LoginNotifier handles the "Welcome Back VIP" logic silently */}
         <LoginNotifier />
 
-        {/* 🟢 Sonner Toaster allows for the rich colors and dark themes we want for VIPs */}
         <Toaster 
           position="top-right" 
           richColors 
           closeButton
           theme="light"
           toastOptions={{
-            style: { borderRadius: '1rem' },
+            style: { 
+              borderRadius: '1rem',
+              // 🟢 Using your brand colors for the toast borders/text
+              border: '1px solid #EA638C',
+              color: '#3E442B'
+            },
           }}
         />
 
         <ConnectivityListener />
 
-        <div className={`${playfair.variable} flex flex-col min-h-screen font-serif gap-0 overflow-x-hidden`}>
+        {/* 🟢 Applied font-variable and smooth scrolling container */}
+        <div className={`${playfair.variable} flex flex-col min-h-screen font-serif selection:bg-[#FBB6E6] selection:text-[#3E442B]`}>
           <Navbar /> 
 
-          {/* Added flex-1 to push footer down and ensure layout stability */}
-          <main className="flex-1 flex flex-col pt-0 mt-0"> 
+          <main className="flex flex-col flex-1"> 
             {children}
           </main>
 

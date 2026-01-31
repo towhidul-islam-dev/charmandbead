@@ -8,131 +8,6 @@ import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 import InventoryLog from "@/models/InventoryLog";
 
-// export async function createOrder(orderData) {
-//   const session = await mongoose.startSession();
-//   session.startTransaction();
-
-//   try {
-//     await dbConnect();
-    
-//     // 1. Destructure for clarity
-//     const { items, phone, totalAmount, userId, shippingAddress, paidAmount, dueAmount, paymentMethod } = orderData;
-
-//     // 🛡️ User Validation Check
-//     if (!userId) {
-//       throw new Error("User ID is required. Please log in to complete your order.");
-//     }
-
-//     // 2. Double-Order Protection (Idempotency)
-//     const existingOrder = await Order.findOne({
-//       "shippingAddress.phone": phone,
-//       totalAmount: totalAmount,
-//       // Check for orders in the last 60 seconds to prevent double-clicks
-//       createdAt: { $gte: new Date(Date.now() - 60 * 1000) } 
-//     }).session(session);
-
-//     if (existingOrder) {
-//       await session.abortTransaction();
-//       return { success: true, orderId: existingOrder._id };
-//     }
-
-//     // 3. Create Order Doc 
-//     // 🟢 FIXED: Explicitly mapping 'userId' to the 'user' field required by your Schema
-//     const [newOrder] = await Order.create([{
-//        user: userId, 
-//        items: items.map(i => ({
-//          product: i.productId || i.product || i._id,
-//          productName: i.name,
-//          variant: {
-//             name: i.color || "Default",
-//             size: i.size || "N/A",
-//             variantId: i.variantId
-//          },
-//          quantity: Number(i.quantity),
-//          price: Number(i.price),
-//          sku: i.sku || "N/A"
-//        })),
-//        shippingAddress,
-//        totalAmount,
-//        paidAmount,
-//        dueAmount,
-//        paymentMethod,
-//        status: "Pending",
-//        isStockReduced: false
-//     }], { session });
-
-//     // 4. Group deductions by Product ID 
-//     const productDeductions = items.reduce((acc, item) => {
-//       const pId = (item.productId || item.product || item._id).toString();
-//       if (!acc[pId]) acc[pId] = { totalQty: 0, variants: [], name: item.name };
-      
-//       const qty = Number(item.quantity);
-//       acc[pId].totalQty += qty;
-      
-//       if (item.variantId) {
-//         acc[pId].variants.push({ vId: item.variantId.toString(), qty });
-//       }
-//       return acc;
-//     }, {});
-
-//     // 5. Atomic Inventory Update
-//     const orderRef = `Order #${newOrder._id.toString().slice(-6).toUpperCase()}`;
-
-//     for (const [productId, data] of Object.entries(productDeductions)) {
-//       const updateDoc = { $inc: { stock: -data.totalQty } };
-//       const arrayFilters = [];
-
-//       data.variants.forEach((v, idx) => {
-//         const fName = `var${idx}`;
-//         updateDoc.$inc[`variants.$[${fName}].stock`] = -v.qty;
-//         arrayFilters.push({ [`${fName}._id`]: new mongoose.Types.ObjectId(v.vId) });
-//       });
-
-//       const productUpdate = await Product.findOneAndUpdate(
-//         { _id: productId, stock: { $gte: data.totalQty } },
-//         updateDoc,
-//         { 
-//           session, 
-//           arrayFilters: arrayFilters.length > 0 ? arrayFilters : undefined, 
-//           new: true 
-//         }
-//       );
-
-//       if (!productUpdate) {
-//         throw new Error(`Insufficient stock for ${data.name}.`);
-//       }
-
-//       // Log the inventory change
-//       await InventoryLog.create([{
-//         productId,
-//         productName: data.name,
-//         change: -data.totalQty,
-//         reason: "Order Placement",
-//         performedBy: orderRef
-//       }], { session });
-//     }
-
-//     // 6. Finalize Order Status
-//     await Order.updateOne({ _id: newOrder._id }, { isStockReduced: true }, { session });
-    
-//     await session.commitTransaction();
-
-//     revalidatePath("/admin/products");
-//     revalidatePath("/admin/orders");
-//     revalidatePath("/products");
-
-//     return { success: true, orderId: newOrder._id };
-
-//   } catch (error) {
-//     if (session.transaction.state !== 'TRANSACTION_ABORTED') {
-//       await session.abortTransaction();
-//     }
-//     console.error("ORDER_ERROR:", error.message);
-//     return { success: false, message: error.message };
-//   } finally {
-//     session.endSession();
-//   }
-// }
 
 export async function createOrder(orderData) {
   const session = await mongoose.startSession();
@@ -256,32 +131,82 @@ export async function createOrder(orderData) {
 
 // --- STATS & HELPER FUNCTIONS ---
 export async function updateOrderStatus(orderId, newStatus) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     await dbConnect();
 
-    const updatedOrder = await Order.findByIdAndUpdate(
-      orderId,
-      { status: newStatus },
-      { new: true }
-    );
-
-    if (!updatedOrder) {
+    // 1. Fetch the order first to check its current status and items
+    const order = await Order.findById(orderId).session(session);
+    if (!order) {
+      await session.abortTransaction();
       return { success: false, message: "Order not found" };
     }
 
-    // Trigger Next.js to refresh the data on these pages
-    revalidatePath("/admin/orders");
-    revalidatePath("/dashboard/orders");
-    
-    // If the order is marked as delivered, update the user's VIP status
-    if (newStatus === "Delivered" && updatedOrder.user) {
-      await syncVIPStatus(updatedOrder.user);
+    const oldStatus = order.status;
+
+    // 🟢 2. STOCK RESTORATION LOGIC
+    // If moving to Cancelled and stock was previously reduced, give it back
+    if (newStatus === "Cancelled" && oldStatus !== "Cancelled" && order.isStockReduced) {
+      const orderRef = `Cancel #${order._id.toString().slice(-6).toUpperCase()}`;
+
+      for (const item of order.items) {
+        const product = await Product.findById(item.product).session(session);
+        if (!product) continue;
+
+        if (product.hasVariants && item.variant?.variantId) {
+          const target = product.variants.id(item.variant.variantId);
+          if (target) {
+            target.stock += item.quantity; // Increment variant stock
+            // Recalculate parent stock total
+            product.stock = product.variants.reduce((sum, v) => sum + (v.stock || 0), 0);
+          }
+        } else {
+          // Standard product increment
+          product.stock += item.quantity;
+        }
+
+        await product.save({ session });
+
+        // Log the restoration
+        await InventoryLog.create([{
+          productId: product._id,
+          productName: product.name,
+          change: item.quantity,
+          reason: "Order Cancellation",
+          performedBy: orderRef
+        }], { session });
+      }
+
+      // Mark that stock has been returned
+      order.isStockReduced = false;
     }
 
-    return { success: true, order: JSON.parse(JSON.stringify(updatedOrder)) };
+    // 3. Update the order status
+    order.status = newStatus;
+    await order.save({ session });
+
+    await session.commitTransaction();
+
+    // 4. Post-update triggers
+    revalidatePath("/admin/orders");
+    revalidatePath("/dashboard/orders");
+    revalidatePath("/admin/products"); // Refresh stock numbers in admin view
+    
+    if (newStatus === "Delivered" && order.user) {
+      await syncVIPStatus(order.user);
+    }
+
+    return { success: true, order: JSON.parse(JSON.stringify(order)) };
   } catch (error) {
+    if (session.inAtomicallyExecutableOperation()) {
+      await session.abortTransaction();
+    }
     console.error("UPDATE_STATUS_FAILED:", error.message);
-    return { success: false, message: "Failed to update status" };
+    return { success: false, message: "Failed to update status: " + error.message };
+  } finally {
+    session.endSession();
   }
 }
 
