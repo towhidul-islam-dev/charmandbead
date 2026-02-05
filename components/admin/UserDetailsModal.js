@@ -1,274 +1,162 @@
 "use client";
 import { useState } from "react";
 import { 
-  X, Mail, Phone, Calendar, MapPin, User as UserIcon, 
-  ShoppingBag, CheckCircle2, Clock, MessageSquare, Copy, Package,
-  Zap, TrendingUp, ShieldCheck, ExternalLink, Gift // 🟢 Added Gift
+  X, Mail, Phone, MapPin, ShoppingBag, Clock, MessageSquare, Copy, Package,
+  Zap, TrendingUp, ShieldCheck, Gift, Check
 } from "lucide-react";
 
 export default function UserDetailsModal({ 
-  user, 
-  orders = [], 
-  totalSpent = 0, 
-  lastGiftAt, // 🟢 New Prop
-  lastGiftTitle // 🟢 New Prop
+  user, orders = [], totalSpent = 0, lastGiftAt, lastGiftTitle, lastGiftValue 
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
-
+  const [copiedPhone, setCopiedPhone] = useState(false);
+  
   const VIP_THRESHOLD = 10000;
   const isVIP = user.isVIP || totalSpent >= VIP_THRESHOLD;
   const progressPercentage = Math.min((totalSpent / VIP_THRESHOLD) * 100, 100);
 
-  const initials = user.name
-    ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-    : "??";
+  // 🟢 CORRECT PHONE FETCHING LOGIC
+  // Checks user.phone first, then looks into the addresses array as a fallback
+  const userPhoneNumber = user.phone || user.addresses?.[0]?.phone || "No Phone Found";
 
-  const toggleModal = () => {
-    setIsOpen(!isOpen);
-    setActiveTab("profile");
+  const displayImg = user.image 
+    ? (user.image.startsWith('http') ? user.image : `https://res.cloudinary.com/diabqgzyo/image/upload/${user.image}`)
+    : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=EA638C&color=fff&bold=true`;
+
+  const toggleModal = () => { setIsOpen(!isOpen); setActiveTab("profile"); };
+
+  const handleCopyPhone = () => {
+    if (userPhoneNumber === "No Phone Found") return;
+    navigator.clipboard.writeText(userPhoneNumber);
+    setCopiedPhone(true);
+    setTimeout(() => setCopiedPhone(false), 2000);
   };
 
   const handleWhatsAppClick = () => {
-    const phoneNumber = user.phone || user.addresses?.[0]?.phone;
-    if (!phoneNumber) return alert("No phone number found.");
-    const cleanNumber = phoneNumber.replace(/\D/g, "");
-    const message = encodeURIComponent(`Hello ${user.name}, this is the Admin from the Wholesale Store regarding your account.`);
-    window.open(`https://wa.me/${cleanNumber}?text=${message}`, "_blank");
-  };
-
-  const handleCopy = (text) => {
-    if(!text) return;
-    navigator.clipboard.writeText(text);
-    alert("Copied to clipboard!");
+    if (userPhoneNumber === "No Phone Found") return alert("No phone number found.");
+    const cleanNumber = userPhoneNumber.replace(/\D/g, "");
+    window.open(`https://wa.me/${cleanNumber}?text=${encodeURIComponent(`Hello ${user.name}, this is the Admin.`)}`, "_blank");
   };
 
   return (
     <>
-      <button 
-        onClick={toggleModal} 
-        className="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#3E442B] border border-[#3E442B]/10 hover:bg-[#3E442B] hover:text-white transition-all shadow-sm"
-      >
+      <button onClick={toggleModal} className="px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest text-[#3E442B] border border-[#3E442B]/10 hover:bg-[#3E442B] hover:text-white transition-all shadow-sm">
         View Profile
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#3E442B]/20 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-2xl rounded-[3.5rem] overflow-hidden shadow-2xl animate-in zoom-in duration-300 border border-white/20">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#3E442B]/20 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in duration-200 border border-white/20">
             
-            {/* Header */}
-            <div className="relative h-44 bg-[#3E442B] flex flex-col justify-end p-10 overflow-hidden">
+            {/* 🟢 Compact Header */}
+            <div className="relative h-28 bg-[#3E442B] flex flex-col justify-end p-5 overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-full opacity-30 pointer-events-none bg-[radial-gradient(circle_at_50%_120%,#EA638C,transparent)]"></div>
-              
-              <div className="relative z-10 flex gap-8">
-                <button onClick={() => setActiveTab("profile")} className={`text-[10px] font-black uppercase tracking-[0.2em] pb-3 transition-all ${activeTab === 'profile' ? 'text-[#EA638C] border-b-2 border-[#EA638C]' : 'text-white/40 border-b-2 border-transparent hover:text-white'}`}>
-                  Registry Detail
-                </button>
-                <button onClick={() => setActiveTab("orders")} className={`text-[10px] font-black uppercase tracking-[0.2em] pb-3 transition-all ${activeTab === 'orders' ? 'text-[#EA638C] border-b-2 border-[#EA638C]' : 'text-white/40 border-b-2 border-transparent hover:text-white'}`}>
-                  Transactions ({orders.length})
-                </button>
+              <div className="relative z-10 flex gap-5">
+                <button onClick={() => setActiveTab("profile")} className={`text-[8px] font-black uppercase tracking-widest pb-2 transition-all ${activeTab === 'profile' ? 'text-[#EA638C] border-b-2 border-[#EA638C]' : 'text-white/40 border-b-2 border-transparent'}`}>Profile</button>
+                <button onClick={() => setActiveTab("orders")} className={`text-[8px] font-black uppercase tracking-widest pb-2 transition-all ${activeTab === 'orders' ? 'text-[#EA638C] border-b-2 border-[#EA638C]' : 'text-white/40 border-b-2 border-transparent'}`}>History ({orders.length})</button>
               </div>
-              <button onClick={toggleModal} className="absolute p-3 text-white transition-all rounded-full bg-white/10 hover:bg-[#EA638C] top-6 right-6 hover:rotate-90">
-                <X size={20} />
-              </button>
+              <button onClick={toggleModal} className="absolute p-2 text-white transition-all rounded-full bg-white/10 hover:bg-[#EA638C] top-4 right-4"><X size={14} /></button>
             </div>
 
-            <div className="p-10 max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <div className="p-5 max-h-[55vh] overflow-y-auto no-scrollbar">
               {activeTab === "profile" ? (
-                <div className="space-y-8 duration-500 animate-in slide-in-from-bottom-4">
-                  
+                <div className="space-y-4 animate-in slide-in-from-bottom-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-6">
-                      <div className="relative w-24 h-24 group">
-                        <div className={`absolute inset-0 transition-transform rounded-[2.5rem] rotate-6 group-hover:rotate-12 duration-300 ${isVIP ? 'bg-yellow-100' : 'bg-[#EA638C]/10'}`}></div>
-                        <div className="relative w-full h-full rounded-[2.5rem] border-4 border-white overflow-hidden bg-white flex items-center justify-center shadow-md">
-                          
-                          {user.image ? (
-                            <img 
-                              src={`${user.image}${user.image.includes('?') ? '&' : '?'}v=${new Date().getTime()}`} 
-                              className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-110" 
-                              alt={user.name} 
-                              onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=EA638C&color=fff`;
-                              }}
-                            />
-                          ) : (
-                            <div className="flex flex-col items-center gap-1">
-                                <span className="text-2xl font-black text-[#EA638C] uppercase">{initials}</span>
-                            </div>
-                          )}
-                        </div>
-                        {isVIP && (
-                          <div className="absolute -top-2 -right-2 bg-yellow-400 p-1.5 rounded-full border-4 border-white shadow-sm z-20">
-                            <Zap size={14} fill="black" />
-                          </div>
-                        )}
+                    <div className="flex items-center gap-3">
+                      <div className="relative w-14 h-14">
+                        <div className={`absolute inset-0 rounded-xl rotate-6 ${isVIP ? 'bg-yellow-100' : 'bg-[#EA638C]/10'}`}></div>
+                        <img src={displayImg} className="relative object-cover w-full h-full bg-white border-2 border-white shadow-sm rounded-xl" alt={user.name} />
+                        {isVIP && <div className="absolute -top-1 -right-1 bg-yellow-400 p-0.5 rounded-full border border-white z-20"><Zap size={8} fill="black" /></div>}
                       </div>
                       <div>
-                        <h3 className="mb-2 text-3xl italic font-black leading-none tracking-tighter text-[#3E442B] uppercase">{user.name}</h3>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black bg-[#3E442B]/5 text-[#3E442B] px-2 py-1 rounded-lg uppercase tracking-tighter">{user.role || 'Member'}</span>
-                          {isVIP ? (
-                            <span className="text-[10px] font-black bg-yellow-400 text-black px-2 py-1 rounded-lg uppercase tracking-tighter flex items-center gap-1">
-                              <ShieldCheck size={10} /> PRO VIP
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-black bg-[#EA638C]/10 text-[#EA638C] px-2 py-1 rounded-lg uppercase tracking-tighter">REGULAR MEMBER</span>
-                          )}
-                        </div>
+                        <h3 className="text-lg italic font-black text-[#3E442B] uppercase leading-none">{user.name}</h3>
+                        <p className="text-[7px] font-black text-[#EA638C] uppercase tracking-widest mt-1">{isVIP ? 'Pro VIP Member' : 'Regular Member'}</p>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-4">
-                      <button onClick={() => handleCopy(user.email)} className="flex flex-col items-center gap-2 group/copy">
-                        <div className="p-4 text-gray-400 transition-all bg-gray-50 rounded-2xl group-hover/copy:bg-[#3E442B] group-hover/copy:text-white group-hover/copy:shadow-lg group-hover/copy:-translate-y-1">
-                          <Copy size={20} />
-                        </div>
-                        <span className="text-[8px] font-black uppercase text-gray-400 tracking-widest">Copy</span>
-                      </button>
-
-                      <button onClick={handleWhatsAppClick} className="relative flex flex-col items-center gap-2 group/wa">
-                        <div className="absolute inset-0 transition-opacity bg-green-500 opacity-0 rounded-2xl blur-md group-hover/wa:opacity-40 group-hover/wa:animate-pulse"></div>
-                        <div className="relative p-4 text-green-600 transition-all bg-green-50 rounded-2xl group-hover/wa:bg-green-600 group-hover/wa:text-white group-hover/wa:shadow-lg group-hover/wa:-translate-y-1">
-                          <MessageSquare size={24} />
-                        </div>
-                        <span className="text-[8px] font-black uppercase text-green-600 tracking-widest">WhatsApp</span>
-                      </button>
+                    <div className="flex gap-1.5">
+                      <button onClick={() => {navigator.clipboard.writeText(user.email); alert("Email Copied!");}} className="p-2.5 text-gray-400 bg-gray-50 rounded-lg hover:bg-[#3E442B] hover:text-white transition-all" title="Copy Email"><Mail size={14} /></button>
+                      <button onClick={handleWhatsAppClick} className="p-2.5 text-green-600 bg-green-50 rounded-lg hover:bg-green-600 hover:text-white transition-all" title="WhatsApp Support"><MessageSquare size={14} /></button>
                     </div>
                   </div>
 
-                  {/* VIP Status Bar */}
-                  <div className={`p-6 border rounded-[2rem] ${isVIP ? 'bg-yellow-50/50 border-yellow-100' : 'bg-[#EA638C]/5 border-[#EA638C]/10'}`}>
-                    <div className="flex items-end justify-between mb-3">
-                      <div>
-                        <p className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${isVIP ? 'text-yellow-600' : 'text-[#EA638C]'}`}>
-                          {isVIP ? <Zap size={14} fill="currentColor" /> : <TrendingUp size={14} />} 
-                          {isVIP ? "VIP Status Active" : "Investment Progress"}
-                        </p>
-                        <p className="mt-1 text-xs font-bold text-gray-500">
-                          {isVIP 
-                            ? "Enjoying lifetime wholesale benefits & 5% priority discount." 
-                            : `Invest ৳${(VIP_THRESHOLD - totalSpent).toLocaleString()} more to unlock VIP Tier.`}
-                        </p>
-                      </div>
-                      <p className="text-xs font-black text-[#3E442B]">{isVIP ? "MAXED" : `${Math.round(progressPercentage)}%`}</p>
+                  {/* 🟢 VIP Progress Bar */}
+                  <div className={`p-3 border rounded-2xl ${isVIP ? 'bg-yellow-50/50 border-yellow-100' : 'bg-[#EA638C]/5 border-[#EA638C]/10'}`}>
+                    <div className="flex items-end justify-between mb-1.5 text-[8px] font-black uppercase">
+                      <p className={isVIP ? 'text-yellow-600' : 'text-[#EA638C]'}>{isVIP ? "VIP Active" : "VIP Progress"}</p>
+                      <p className="text-[#3E442B]">{isVIP ? "MAX" : `${Math.round(progressPercentage)}%`}</p>
                     </div>
-                    <div className="w-full h-3 overflow-hidden bg-gray-100 rounded-full shadow-inner">
-                      <div 
-                        className={`h-full transition-all duration-1000 ease-out relative ${isVIP ? 'bg-yellow-400' : 'bg-[#EA638C]'}`}
-                        style={{ width: `${progressPercentage}%` }}
-                      >
-                         <div className="absolute top-0 left-0 w-full h-full bg-white opacity-20 animate-pulse"></div>
-                      </div>
+                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                      <div className={`h-full transition-all duration-1000 ${isVIP ? 'bg-yellow-400' : 'bg-[#EA638C]'}`} style={{ width: `${progressPercentage}%` }}></div>
                     </div>
                   </div>
 
-                  {/* 🟢 NEW SECTION: Reward Info Grid Insertion */}
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div className="p-5 transition-colors border border-transparent bg-gray-50 rounded-3xl hover:border-[#3E442B]/10">
-                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Email Registry</p>
-                        <p className="text-sm font-bold text-[#3E442B] truncate">{user.email}</p>
-                      </div>
-                      
-                      {/* Reward History Card using #FBB6E6 & #EA638C */}
-                      <div className="p-5 transition-colors border border-[#FBB6E6]/50 bg-[#FBB6E6]/10 rounded-3xl group/gift relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-3 text-[#EA638C]/10 -rotate-12 transition-transform group-hover/gift:rotate-0 group-hover/gift:scale-110">
-                            <Gift size={40} />
-                        </div>
-                        <p className="text-[8px] font-black text-[#EA638C] uppercase tracking-widest mb-1">Last Surprise Reward</p>
-                        <p className="text-sm font-black text-[#3E442B] uppercase italic">
-                          {lastGiftTitle || "No Reward Found"}
-                        </p>
-                        {lastGiftAt && (
-                          <p className="text-[9px] font-bold text-gray-400 uppercase mt-1">
-                            {new Date(lastGiftAt).toLocaleDateString()} • {new Date(lastGiftAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="p-6 border border-gray-100 rounded-[2.5rem] bg-gray-50/30 flex flex-col justify-center">
-                       <MapPin className="mb-2 text-[#EA638C]/30" size={24} />
-                       <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-2">Primary Shipping</p>
-                       {user.addresses?.[0] ? (
-                         <p className="text-sm font-black leading-tight tracking-tighter text-[#3E442B] uppercase">
-                            {user.addresses[0].street}<br/>
-                            <span className="text-gray-400">{user.addresses[0].city}</span>
-                         </p>
-                       ) : <p className="text-xs italic font-bold text-gray-300">No Address Registry Found</p>}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                        onClick={handleCopyPhone}
+                        className="p-3 bg-gray-50 rounded-xl text-left hover:bg-gray-100 transition-all group relative overflow-hidden"
+                    >
+                      <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5 flex items-center justify-between">
+                        Contact {copiedPhone ? <Check size={8} className="text-green-500" /> : <Copy size={8} className="opacity-0 group-hover:opacity-100" />}
+                      </p>
+                      <p className={`text-[10px] font-bold truncate ${userPhoneNumber === "No Phone Found" ? "text-gray-300 italic" : "text-[#3E442B]"}`}>
+                        {userPhoneNumber}
+                      </p>
+                    </button>
+                    <div className="p-3 border border-[#FBB6E6]/50 bg-[#FBB6E6]/10 rounded-xl relative overflow-hidden">
+                      <Gift className="absolute -right-1 -top-1 text-[#EA638C]/10 rotate-12" size={32} />
+                      <p className="text-[7px] font-black text-[#EA638C] uppercase tracking-widest mb-0.5">Reward</p>
+                      <p className="text-[10px] font-black text-[#3E442B] uppercase italic truncate">{lastGiftTitle || "None"}</p>
+                      {lastGiftValue && <p className="text-[8px] font-bold text-[#EA638C] leading-none">{lastGiftValue}</p>}
                     </div>
                   </div>
-                  
-                  {/* Phone number card moved to a full-width bottom row to keep grid clean */}
-                  <div className="p-5 transition-colors border border-transparent bg-gray-50 rounded-3xl hover:border-[#3E442B]/10">
-                    <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Direct Contact</p>
-                    <p className="text-sm font-bold text-[#3E442B]">{user.phone || "No Phone Set"}</p>
-                  </div>
 
+                  <div className="p-3 border border-gray-100 rounded-xl bg-gray-50/30">
+                    <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1"><MapPin size={8}/> Shipping Address</p>
+                    <p className="text-[10px] font-black text-[#3E442B] uppercase">
+                        {user.addresses?.[0] 
+                            ? `${user.addresses[0].street}, ${user.addresses[0].city}` 
+                            : user.shippingAddress 
+                                ? `${user.shippingAddress.street}, ${user.shippingAddress.city}` 
+                                : "No address found"}
+                    </p>
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-6 duration-500 animate-in slide-in-from-bottom-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-8 bg-gray-50 rounded-[2.5rem] text-center border border-gray-100 shadow-inner group hover:bg-white hover:border-[#EA638C]/20 transition-all">
-                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Lifetime Volume</p>
-                      <p className="text-4xl italic font-black tracking-tighter text-[#3E442B]">৳{totalSpent.toLocaleString()}</p>
+                <div className="space-y-3 animate-in slide-in-from-bottom-2">
+                  <div className="grid grid-cols-2 gap-2 text-center">
+                    <div className="p-3 border border-gray-100 bg-gray-50 rounded-xl">
+                      <p className="text-[7px] font-black text-gray-400 uppercase mb-0.5">Total Spent</p>
+                      <p className="text-sm font-black text-[#3E442B]">৳{totalSpent.toLocaleString()}</p>
                     </div>
-                    <div className="p-8 bg-[#3E442B] rounded-[2.5rem] text-center shadow-2xl relative overflow-hidden group">
-                      <div className="absolute top-0 right-0 p-2 transition-transform duration-500 opacity-10 group-hover:rotate-12 group-hover:scale-150">
-                        <Zap size={60} fill="white" />
-                      </div>
-                      <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] mb-2">Member Tier</p>
-                      <p className={`text-2xl italic font-black tracking-tighter ${isVIP ? 'text-yellow-400' : 'text-white'}`}>
-                        {isVIP ? "PRO VIP STATUS" : "REGULAR MEMBER"}
-                      </p>
+                    <div className="p-3 bg-[#3E442B] rounded-xl text-white">
+                      <p className="text-[7px] font-black text-white/40 uppercase mb-0.5">Orders</p>
+                      <p className="text-sm font-black">{orders.length}</p>
                     </div>
                   </div>
-
-                  <div className="space-y-3">
-                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.3em] pl-2 flex items-center gap-2">
-                      <Clock size={12} /> Recent Transactions
-                    </p>
-                    {orders.length > 0 ? orders.map((order) => (
-                      <div key={order._id} className="flex items-center justify-between p-6 border border-gray-100 rounded-[2rem] hover:border-[#EA638C] bg-white transition-all group hover:shadow-lg hover:shadow-gray-100">
-                        <div className="flex items-center gap-4">
-                          <div className="p-3 bg-gray-50 rounded-2xl text-gray-400 group-hover:bg-[#EA638C]/10 group-hover:text-[#EA638C] transition-all">
-                            {order.isVIPOrder ? <Zap size={20} className="text-yellow-500" fill="currentColor" /> : <ShoppingBag size={20} />}
-                          </div>
-                          <div>
-                            <p className="text-xs font-black text-[#3E442B] uppercase">#{order._id.slice(-8).toUpperCase()}</p>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{new Date(order.createdAt).toLocaleDateString()}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-black text-[#3E442B]">৳{order.totalAmount?.toLocaleString()}</p>
-                          <div className={`flex items-center justify-end gap-1 text-[8px] font-black uppercase tracking-widest ${order.status === 'Delivered' ? 'text-green-500' : 'text-[#EA638C]'}`}>
-                            {order.status}
-                          </div>
-                        </div>
-                      </div>
-                    )) : (
-                      <div className="py-16 text-center border-2 border-dashed border-gray-100 rounded-[3rem] bg-gray-50/50">
-                        <Package size={40} className="mx-auto mb-4 text-gray-200" />
-                        <p className="text-xs font-black tracking-widest text-gray-300 uppercase">No Transactions Registered</p>
-                      </div>
+                  <div className="space-y-1.5">
+                    {orders.length === 0 ? (
+                        <p className="text-[9px] text-center text-gray-400 uppercase py-10 font-black">No orders yet</p>
+                    ) : (
+                        orders.slice(0, 10).map((order) => (
+                            <div key={order._id} className="flex items-center justify-between p-3 border border-gray-50 rounded-xl bg-white hover:border-[#EA638C] transition-colors">
+                              <div className="flex items-center gap-2">
+                                <ShoppingBag size={12} className="text-gray-300" />
+                                <p className="text-[9px] font-black text-[#3E442B]">#{order._id.slice(-6).toUpperCase()}</p>
+                              </div>
+                              <p className="text-[9px] font-black text-[#3E442B]">৳{order.totalAmount?.toLocaleString()}</p>
+                            </div>
+                        ))
                     )}
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center justify-between px-10 py-8 border-t border-gray-100 bg-[#3E442B]/[0.02]">
-              <div className="flex flex-col">
-                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Session Identity</span>
-                <span className="text-[11px] font-black text-[#3E442B] uppercase tracking-tighter flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 bg-[#EA638C] rounded-full animate-ping"></div> Admin Dashboard Profile
-                </span>
-              </div>
-              <button onClick={toggleModal} className="px-12 py-4 bg-[#3E442B] text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[#EA638C] transition-all shadow-xl shadow-[#3E442B]/20">
-                Close Profile
-              </button>
+            {/* 🟢 Compact Footer */}
+            <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100">
+              <span className="text-[8px] font-black text-[#3E442B] uppercase flex items-center gap-1"><div className="w-1.5 h-1.5 bg-[#EA638C] rounded-full animate-pulse"></div> Session Profile</span>
+              <button onClick={toggleModal} className="px-5 py-2.5 bg-[#3E442B] text-white rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-[#EA638C] transition-all">Close</button>
             </div>
           </div>
         </div>

@@ -173,14 +173,15 @@ export async function updateProfile(formData) {
       }
     }
 
-    const updatedUser = await User.findOneAndUpdate(
+   const updatedUser = await User.findOneAndUpdate(
       { email: session.user.email },
       { $set: updateData },
       { new: true }
-    );
+    ).lean();
 
-    revalidatePath("/profile");
-    revalidatePath("/admin/users");
+    revalidatePath("/", "layout"); // Refresh Global Navbar
+    revalidatePath("/profile");    // Refresh Profile Page
+    revalidatePath("/admin/users"); // Refresh Admin User Table
     
     return { 
       success: true, 

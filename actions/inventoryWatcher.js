@@ -127,26 +127,34 @@ export async function updateInventoryStock(
   }
 }
 
-/**
- * 3. ORDER PROCESSOR (The Fix for Variant Sync)
- * Using explicit async serialization to ensure each variant is deducted properly.
- */
 export async function processOrderStock(order) {
   try {
     await dbConnect();
-    const existingOrder = await Order.findById(order._id);
-    if (existingOrder?.stockProcessed) {
-      console.log("Order already processed, skipping stock deduction.");
-      return { success: true };
+
+    // 1. THE SECURITY GUARD: This prevents double-processing.
+    // We try to find the order and mark it 'true' ONLY if it is currently NOT true.
+    const lockResult = await Order.findOneAndUpdate(
+      { 
+        _id: order._id, 
+        stockProcessed: { $ne: true } 
+      },
+      { $set: { stockProcessed: true } }, 
+      { new: true }
+    );
+
+    // If lockResult is null, it means the order was ALREADY processed 
+    // by a previous click, a page refresh, or the payment callback.
+    if (!lockResult) {
+      console.log("Order already processed or lock acquired by another process. Skipping.");
+      return { success: true }; 
     }
-    // 🟢 CRITICAL: We use a standard for loop to ensure "await"
-    // blocks until the DB fully finishes the previous variant.
+
+    // 2. THE DEDUCTION LOGIC: (Your original logic stays here)
     for (const item of order.items) {
       const qtyToDeduct = Number(item.quantity);
       const isVariant = item.variant && item.variant.name !== "Default";
 
       if (isVariant) {
-        // TARGETED ATOMIC UPDATE
         const updatedProduct = await Product.findOneAndUpdate(
           {
             _id: item.product,
@@ -154,14 +162,14 @@ export async function processOrderStock(order) {
               $elemMatch: {
                 color: item.variant.name,
                 size: item.variant.size,
-                stock: { $gte: qtyToDeduct }, // 🛑 Prevent negative stock
+                stock: { $gte: qtyToDeduct }, 
               },
             },
           },
           {
             $inc: {
               "variants.$[v].stock": -qtyToDeduct,
-              stock: -qtyToDeduct, // Deducts from the main "total" stock too
+              stock: -qtyToDeduct,
             },
           },
           {
@@ -174,8 +182,7 @@ export async function processOrderStock(order) {
 
         if (updatedProduct) {
           const variant = updatedProduct.variants.find(
-            (v) =>
-              v.color === item.variant.name && v.size === item.variant.size,
+            (v) => v.color === item.variant.name && v.size === item.variant.size,
           );
 
           await InventoryLog.create({
@@ -199,13 +206,14 @@ export async function processOrderStock(order) {
       }
     }
 
-    // Mark as processed to prevent double-deduction on page refresh
-    await Order.findByIdAndUpdate(order._id, { stockProcessed: true });
-
+    // No need for the final 'findByIdAndUpdate' anymore because we did it at the top!
     revalidatePath("/admin/products");
     return { success: true };
+
   } catch (error) {
+    // RECOVERY: If a crash happens mid-process, we unlock the order so it can be retried.
     console.error("FAILED_TO_PROCESS_STOCK:", error);
+    await Order.findByIdAndUpdate(order._id, { stockProcessed: false });
     return { success: false };
   }
 }

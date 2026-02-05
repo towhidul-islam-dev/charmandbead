@@ -2,130 +2,154 @@
 import Link from "next/link";
 import Image from "next/image"; 
 import { useWishlist } from "@/Context/WishlistContext";
-import { Heart, Sparkles, AlertTriangle } from "lucide-react";
+import { Heart, Sparkles, Share2, Package } from "lucide-react"; 
 import toast from "react-hot-toast";
 
 const ProductCard = ({ product, index = 0 }) => {
   const { wishlist, toggleWishlist } = useWishlist();
   
-  const isFavorite = wishlist.some((item) => item._id === product._id);
-  const isOutOfStock = product.stock <= 0;
-  const isLowStock = product.stock > 0 && product.stock <= 5;
+  const isFavorite = wishlist?.some((item) => item._id === product?._id);
+  const isOutOfStock = product?.stock <= 0;
+  const isLowStock = product?.stock > 0 && product?.stock <= 5;
+
+  // Mapping to your variants structure
+  const moqValue = product?.variants?.[0]?.minOrderQuantity || 0;
+
+  const isRecentlyCreated = product?.createdAt 
+    ? (new Date() - new Date(product.createdAt)) < (48 * 60 * 60 * 1000) 
+    : false;
+  
+  const showNewBadge = (product?.isNewArrival || isRecentlyCreated) && !isOutOfStock;
+
+  const handleShare = (e) => {
+    e.preventDefault();
+    const shareUrl = `${window.location.origin}/products/${product?._id}`;
+    navigator.clipboard.writeText(shareUrl);
+    toast.success("Link copied!", {
+      style: { borderRadius: '10px', background: '#3E442B', color: '#fff', fontSize: '10px' },
+    });
+  };
 
   const handleWishlistClick = (e) => {
     e.preventDefault();
     if (isFavorite) {
-      toast.error(`${product.name} is already in your wishlist!`, {
+      toast.error(`Already in wishlist!`, {
         icon: '💖',
-        // Using Green #3E442B for the background of the error toast for a premium feel
-        style: { borderRadius: '10px', background: '#3E442B', color: '#fff', fontSize: '12px' },
+        style: { borderRadius: '10px', background: '#3E442B', color: '#fff', fontSize: '10px' },
       });
     } else {
       toggleWishlist(product);
       toast.success("Added to wishlist", {
-        // Using Pink #EA638C for the success toast
-        style: { borderRadius: '10px', background: '#EA638C', color: '#fff', fontSize: '12px' },
+        style: { borderRadius: '10px', background: '#EA638C', color: '#fff', fontSize: '10px' },
       });
     }
   };
 
+  if (!product) return null;
+
   return (
-    <div className={`relative overflow-hidden transition-all duration-300 bg-white rounded-[2rem] shadow-lg hover:shadow-2xl group border border-gray-100 ${isOutOfStock ? "opacity-75" : ""}`}>
+    <div className="group relative flex flex-col bg-white rounded-[2rem] shadow-sm hover:shadow-xl transition-all duration-500 border border-gray-100 overflow-hidden">
       
-      {/* BADGES - Updated to Brand Colors */}
-      <div className="absolute z-10 flex flex-col gap-2 top-3 left-3">
-        {product.isNewArrival && !isOutOfStock && (
-          // Brand Pink: #EA638C
-          <div className="flex items-center gap-1 px-3 py-1 text-[10px] font-black text-white uppercase bg-[#EA638C] rounded-full shadow-md animate-pulse">
-            <Sparkles size={10} /> New Arrival
-          </div>
-        )}
-        {isOutOfStock ? (
-          <div className="flex items-center gap-1 px-3 py-1 text-[10px] font-black text-white uppercase bg-gray-500 rounded-full shadow-md">
-            Out of Stock
-          </div>
-        ) : isLowStock ? (
-          // Light Pink: #FBB6E6 with Green Text for contrast
-          <div className="flex items-center gap-1 px-3 py-1 text-[10px] font-black text-[#3E442B] uppercase bg-[#FBB6E6] rounded-full shadow-md">
-            <AlertTriangle size={10} /> Only {product.stock} Left
-          </div>
-        ) : null}
-      </div>
-
-      {/* WISHLIST BUTTON - Updated to Brand Pink */}
-      <button
-        onClick={handleWishlistClick}
-        className="absolute top-3 right-3 z-10 p-2.5 rounded-full bg-white/90 backdrop-blur-md shadow-sm transition-all hover:scale-110 active:scale-90 border border-gray-100"
-      >
-        <Heart 
-          size={18} 
-          className={isFavorite ? "fill-[#EA638C] text-[#EA638C]" : "text-gray-400"} 
-        />
-      </button>
-
-      {/* OPTIMIZED IMAGE CONTAINER */}
-      <Link href={`/product/${product._id}`}>
-        <div className={`relative w-full h-72 overflow-hidden bg-gray-50 ${isOutOfStock ? "grayscale" : ""}`}>
+      {/* IMAGE CONTAINER */}
+      <div className="relative aspect-square w-full bg-gray-50 overflow-hidden">
+        <Link href={`/products/${product._id}`} className="block w-full h-full relative z-0">
           <Image
             src={product.imageUrl || "/placeholder.png"}
             alt={product.name}
             fill 
             sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
-            className="object-cover transition-transform duration-700 group-hover:scale-110"
+            className={`object-cover transition-transform duration-700 group-hover:scale-105 ${isOutOfStock ? "grayscale" : ""}`}
             priority={index < 4} 
-            loading={index < 4 ? "eager" : "lazy"}
           />
-          {isOutOfStock && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/10 backdrop-blur-[2px]">
-               <span className="bg-white/90 text-black font-black text-[10px] px-4 py-2 rounded-full uppercase tracking-tighter shadow-xl">
-                 Currently Unavailable
-               </span>
+
+          {/* 🟢 HIGH CONTRAST COMPACT CORNER MOQ BADGE */}
+          {moqValue > 0 && !isOutOfStock && (
+            <div className="absolute bottom-3 left-3 z-20 transition-all duration-500 transform translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100">
+              <div className="bg-[#3E442B] border-2 border-[#FBB6E6]/40 px-3 py-1.5 rounded-xl shadow-2xl flex items-center gap-2">
+                <span className="text-[10px] font-black text-[#FBB6E6] uppercase tracking-wider">
+                  MOQ :
+                </span>
+                <span className="text-sm font-black text-white">
+                  {moqValue}
+                </span>
+                <span className="text-[9px] font-black text-[#FBB6E6] uppercase">
+                  Pcs
+                </span>
+              </div>
             </div>
           )}
+        </Link>
+
+        {/* TOP BADGES */}
+        <div className="absolute z-10 top-3 left-3 flex flex-col gap-1">
+          {showNewBadge && (
+            <div className="flex items-center gap-1 px-3 py-1 text-[9px] font-black text-white bg-[#EA638C] rounded-lg shadow-md uppercase">
+              <Sparkles size={10} /> NEW
+            </div>
+          )}
+          {isOutOfStock && (
+            <div className="px-3 py-1 text-[9px] font-black text-white bg-gray-500 rounded-lg uppercase">SOLD</div>
+          )}
         </div>
-      </Link>
+
+        {/* FLOATING ACTIONS */}
+        <div className="absolute z-30 flex flex-col gap-2 transition-all duration-300 translate-x-12 opacity-0 top-3 right-3 group-hover:translate-x-0 group-hover:opacity-100">
+          <button onClick={handleWishlistClick} className="p-2.5 rounded-full bg-white shadow-md hover:bg-[#EA638C] group/heart transition-colors">
+            <Heart size={16} className={isFavorite ? "fill-[#EA638C] text-[#EA638C]" : "text-gray-400 group-hover/heart:text-white"} />
+          </button>
+          <button onClick={handleShare} className="p-2.5 rounded-full bg-white shadow-md hover:bg-[#3E442B] group/share transition-colors">
+            <Share2 size={16} className="text-gray-400 group-hover/share:text-white" />
+          </button>
+        </div>
+      </div>
 
       {/* INFO SECTION */}
-      <div className="p-5">
-        <div className="mb-1">
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{product.category}</p>
-          <h3 className="font-black leading-tight text-[#3E442B] truncate text-md">{product.name}</h3>
+      <div className="flex flex-col flex-grow p-4">
+        <div className="mb-3">
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col">
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate">{product.category}</p>
+              
+              {/* Mobile MOQ Indicator (Static High Contrast) */}
+              {moqValue > 0 && (
+                <div className="flex items-center gap-1 mt-1 md:hidden">
+                   <Package size={10} className="text-[#3E442B]" />
+                   <span className="text-[10px] font-black text-[#3E442B] uppercase tracking-tighter">MOQ : {moqValue}</span>
+                </div>
+              )}
+            </div>
+            <span className="text-lg font-black text-[#3E442B]">৳{product.price}</span>
+          </div>
+          <h3 className="font-bold text-base text-[#3E442B] mt-1 truncate group-hover:text-[#EA638C] transition-colors leading-tight">
+            {product.name}
+          </h3>
         </div>
 
+        {/* STOCK BAR */}
         {!isOutOfStock && (
-          <div className="mt-3">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[9px] font-black uppercase text-gray-400 tracking-tighter">Availability</span>
-              <span className={`text-[9px] font-black uppercase ${isLowStock ? 'text-[#EA638C]' : 'text-[#3E442B]'}`}>
-                {product.stock} Units Left
-              </span>
-            </div>
-            <div className="w-full h-1 overflow-hidden bg-gray-100 rounded-full">
-              {/* Progress bar uses Brand Green #3E442B or Pink #EA638C */}
+          <div className="mb-4">
+            <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
               <div 
                 className={`h-full transition-all duration-1000 ${isLowStock ? 'bg-[#EA638C]' : 'bg-[#3E442B]'}`}
                 style={{ width: `${Math.min((product.stock / 20) * 100, 100)}%` }} 
               />
             </div>
+            <p className={`text-[8px] font-black uppercase mt-1 ${isLowStock ? 'text-[#EA638C]' : 'text-gray-400'}`}>
+              {isLowStock ? `Only ${product.stock} Left` : `${product.stock} in stock`}
+            </p>
           </div>
         )}
-        
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-xl font-black text-[#3E442B]">
-            ৳{Number(product.price || 0).toLocaleString()}
-          </span>
 
-          <Link
-            href={`/products/${product._id}`}
-            className={`px-5 py-3 text-[10px] font-black uppercase tracking-widest transition-all rounded-2xl ${
-              isOutOfStock 
-              ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
-              : "bg-[#EA638C] text-white hover:bg-[#3E442B] shadow-lg"
-            }`}
-          >
-            {isOutOfStock ? "Sold Out" : "Details"}
-          </Link>
-        </div>
+        <Link
+          href={`/products/${product._id}`}
+          className={`mt-auto w-full py-3 text-[10px] font-black uppercase tracking-[0.2em] text-center transition-all rounded-2xl ${
+            isOutOfStock 
+            ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
+            : "bg-[#EA638C] text-white hover:bg-[#3E442B] shadow-sm hover:shadow-lg"
+          }`}
+        >
+          {isOutOfStock ? "Out of Stock" : "Details"}
+        </Link>
       </div>
     </div>
   );

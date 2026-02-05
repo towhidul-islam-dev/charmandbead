@@ -18,6 +18,7 @@ import ShoppingCartIcon from "@heroicons/react/24/outline/ShoppingCartIcon";
 import { useSession, signOut } from "next-auth/react";
 import { useWishlist } from "@/Context/WishlistContext";
 import { useCart } from "@/Context/CartContext";
+import NotificationBell from "./NotificationBell";
 
 const clientLinks = [
   { name: "Products", href: "/products", icon: Squares2X2Icon },
@@ -35,6 +36,19 @@ const ClientHeader = ({ pathname }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef(null);
 
+  const [displayImage, setDisplayImage] = useState("");
+
+  useEffect(() => {
+    if (session?.user?.image) {
+      const url = session.user.image.startsWith('http') 
+        ? session.user.image 
+        : `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/${session.user.image}`;
+      setDisplayImage(url);
+    } else if (session?.user?.name) {
+       setDisplayImage(`https://ui-avatars.com/api/?name=${encodeURIComponent(session.user.name)}&background=EA638C&color=fff`);
+    }
+  }, [session]);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -48,20 +62,14 @@ const ClientHeader = ({ pathname }) => {
   const cartCount = new Set(cart.map((item) => item.productId)).size;
   const wishlistCount = wishlist.length;
 
-  // ✨ IMAGE FIX: Works with full URLs from userActions.js and fallbacks
-  const userImage = session?.user?.image;
-  const profileImageUrl = userImage 
-    ? (userImage.startsWith('http') 
-        ? userImage 
-        : `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/${userImage}`)
-    : `https://ui-avatars.com/api/?name=${encodeURIComponent(session?.user?.name || 'User')}&background=EA638C&color=fff`;
-
   const getLinkClasses = (href) => {
     const isActive = pathname === href;
     return `font-black uppercase text-[11px] tracking-widest py-2 px-3 rounded-lg transition-all ${
       isActive ? "text-[#EA638C] bg-[#EA638C]/10" : "text-[#3E442B] hover:text-[#EA638C]"
     }`;
   };
+
+  const badgeStyle = "absolute top-1 right-1 h-4 w-4 rounded-full bg-[#3E442B] ring-2 ring-white text-[9px] font-black text-white flex items-center justify-center animate-in zoom-in";
 
   return (
     <>
@@ -94,12 +102,17 @@ const ClientHeader = ({ pathname }) => {
 
             <Link href="/dashboard/wishlist" className="relative p-2 group">
               <HeartIcon className="text-[#3E442B] h-6 w-6 group-hover:text-red-500 transition-colors" />
-              {wishlistCount > 0 && <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-[#EA638C] text-[9px] font-black text-white flex items-center justify-center animate-in zoom-in">{wishlistCount}</span>}
+              {wishlistCount > 0 && <span className={badgeStyle}>{wishlistCount}</span>}
             </Link>
+
+            {/* 🟢 Ensure NotificationBell is inside this flex container */}
+            <div className="relative">
+               <NotificationBell />
+            </div>
 
             <Link href="/cart" className="relative p-2 group">
               <ShoppingCartIcon className="text-[#3E442B] h-6 w-6 group-hover:text-[#EA638C] transition-colors" />
-              {cartCount > 0 && <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-[#3E442B] text-[9px] font-black text-white flex items-center justify-center animate-in zoom-in">{cartCount}</span>}
+              {cartCount > 0 && <span className={badgeStyle}>{cartCount}</span>}
             </Link>
 
             {session ? (
@@ -108,14 +121,16 @@ const ClientHeader = ({ pathname }) => {
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
                   className="flex items-center gap-2 p-1 transition-all bg-white border border-gray-100 shadow-sm rounded-2xl hover:border-[#EA638C]/30"
                 >
-                  <div className="relative w-8 h-8 md:w-9 md:h-9 overflow-hidden border-2 border-white shadow-sm rounded-xl bg-gray-50">
-                    <Image src={profileImageUrl} alt="Profile" fill className="object-cover" unoptimized />
+                  <div className="relative w-8 h-8 overflow-hidden border-2 border-white shadow-sm md:w-9 md:h-9 rounded-xl bg-gray-50">
+                    {displayImage && (
+                      <Image src={displayImage} alt="Profile" fill className="object-cover" unoptimized />
+                    )}
                   </div>
                 </button>
 
                 {isProfileOpen && (
-                  <div className="absolute right-0 w-56 mt-3 origin-top-right bg-white border border-gray-100 shadow-2xl rounded-2xl p-2 animate-in fade-in zoom-in duration-200">
-                    <div className="px-3 py-3 border-b border-gray-50 mb-1">
+                  <div className="absolute right-0 w-56 p-2 mt-3 duration-200 origin-top-right bg-white border border-gray-100 shadow-2xl rounded-2xl animate-in fade-in zoom-in">
+                    <div className="px-3 py-3 mb-1 border-b border-gray-50">
                       <p className="text-[9px] font-black text-[#EA638C] uppercase tracking-[0.2em]">
                         {session.user.role === 'admin' ? 'Authorized Admin' : 'Customer Account'}
                       </p>
@@ -143,7 +158,7 @@ const ClientHeader = ({ pathname }) => {
                 )}
               </div>
             ) : (
-              <div className="hidden md:flex items-center gap-2">
+              <div className="items-center hidden gap-2 md:flex">
                 <Link href="/login" className="text-[11px] font-black uppercase text-[#3E442B] px-4 py-2 hover:text-[#EA638C]">Login</Link>
                 <Link href="/register" className="text-[11px] font-black uppercase bg-[#3E442B] text-white px-5 py-2.5 rounded-xl hover:bg-[#EA638C] transition-all">Register</Link>
               </div>
@@ -156,7 +171,7 @@ const ClientHeader = ({ pathname }) => {
         </div>
 
         {isMenuOpen && (
-          <div className="md:hidden bg-white border-b border-gray-100 p-6 flex flex-col gap-4 animate-in slide-in-from-top duration-300">
+          <div className="flex flex-col gap-4 p-6 duration-300 bg-white border-b border-gray-100 md:hidden animate-in slide-in-from-top">
             {clientLinks.map((link) => (
               <Link key={link.name} href={link.href} onClick={() => setIsMenuOpen(false)} className="font-black uppercase text-sm tracking-widest text-[#3E442B]">{link.name}</Link>
             ))}
@@ -164,8 +179,8 @@ const ClientHeader = ({ pathname }) => {
                <Link href="/surprise" onClick={() => setIsMenuOpen(false)} className="font-black uppercase text-sm tracking-widest text-[#EA638C]">Claim Gift</Link>
             )}
             {!session && (
-              <div className="pt-4 border-t border-gray-50 flex flex-col gap-3">
-                <Link href="/login" className="text-center font-black uppercase text-xs py-3 border border-gray-200 rounded-xl">Login</Link>
+              <div className="flex flex-col gap-3 pt-4 border-t border-gray-50">
+                <Link href="/login" className="py-3 text-xs font-black text-center uppercase border border-gray-200 rounded-xl">Login</Link>
                 <Link href="/register" className="text-center font-black uppercase text-xs py-3 bg-[#3E442B] text-white rounded-xl">Register</Link>
               </div>
             )}
@@ -179,9 +194,14 @@ const ClientHeader = ({ pathname }) => {
 
 export default function Navbar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
   const isAdminRoute = pathname.startsWith("/admin");
 
   if (isAdminRoute) {
+    const adminImg = session?.user?.image 
+      ? (session.user.image.startsWith('http') ? session.user.image : `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/${session.user.image}`)
+      : `https://ui-avatars.com/api/?name=Admin&background=EA638C&color=fff`;
+
     return (
       <>
         <header className="fixed top-0 left-0 z-50 flex items-center w-full h-16 px-8 text-white shadow-lg bg-[#3E442B]">
@@ -189,7 +209,12 @@ export default function Navbar() {
             <Image src="/logo.svg" alt="Admin Logo" width={32} height={32} className="invert" />
             <span className="text-xl font-bold tracking-tight text-[#EA638C]">Admin Console</span>
           </Link>
-          <button onClick={() => signOut({ callbackUrl: "/login" })} className="ml-auto text-sm font-bold tracking-widest text-red-300 uppercase hover:text-white transition-colors">Logout</button>
+          <div className="flex items-center gap-4 ml-auto">
+             <div className="relative w-8 h-8 overflow-hidden border rounded-full border-white/20 bg-white/10">
+                {adminImg && <Image src={adminImg} alt="admin" fill className="object-cover" unoptimized />}
+             </div>
+             <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-sm font-bold tracking-widest text-red-300 uppercase transition-colors hover:text-white">Logout</button>
+          </div>
         </header>
         <div className="h-16" />
       </>

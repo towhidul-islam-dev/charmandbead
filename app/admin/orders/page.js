@@ -6,18 +6,17 @@ import { getAllOrders, updateOrderStatus, deleteOrder } from "@/actions/order";
 import {
   Search, Eye, CheckSquare, Square, 
   ChevronLeft, ChevronRight, Trash2, 
-  Package, Banknote, CreditCard, Info
+  Package, Banknote, CreditCard, Info, Trash
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrderDetailsModal from "@/components/admin/OrderDetailsModal";
 
-// Brand Colors: Green: #3E442B | Pink: #EA638C | lightPink: #FBB6E6
-
+// 🟢 Brand Colors applied to Status
 const statusColors = {
   Pending: "bg-amber-50 text-amber-600 border-amber-100",
-  Processing: "bg-purple-50 text-purple-600 border-purple-100",
+  Processing: "bg-[#FBB6E6]/30 text-[#EA638C] border-[#FBB6E6]",
   Shipped: "bg-blue-50 text-blue-600 border-blue-100",
-  Delivered: "bg-green-50 text-green-600 border-green-100",
+  Delivered: "bg-[#3E442B] text-white border-[#3E442B]", // Brand Green High Contrast
   Cancelled: "bg-red-50 text-red-500 border-red-100",
 };
 
@@ -27,10 +26,22 @@ export default function AdminOrdersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [selectedOrders, setSelectedOrders] = useState([]);
-  const [viewingOrder, setViewingOrder] = useState(null); // 🟢 State for Modal
+  const [viewingOrder, setViewingOrder] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
+
+  // 🟢 IMAGE RESOLVER: Matching your Product Page logic
+  const getProductImage = (item) => {
+  // 1. Check if the populated product has an imageUrl
+  if (item.product?.imageUrl) return item.product.imageUrl;
+
+  // 2. Check if a variant image exists (if you eventually add that to the schema)
+  if (item.variant?.image) return item.variant.image;
+
+  // 3. Fallback
+  return "/placeholder.png";
+};
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -55,6 +66,20 @@ export default function AdminOrdersPage() {
     return () => clearTimeout(delayDebounceFn);
   }, [fetchOrders]);
 
+  // 🟢 BULK DELETE LOGIC
+  const handleBulkDelete = async () => {
+    if (!confirm(`Permanently delete ${selectedOrders.length} orders?`)) return;
+    try {
+      // Logic assumes multiple calls; replace with a bulk action if your backend supports it
+      await Promise.all(selectedOrders.map(id => deleteOrder(id)));
+      toast.success(`${selectedOrders.length} Orders Deleted Successfully`);
+      setSelectedOrders([]);
+      fetchOrders();
+    } catch (error) {
+      toast.error("Bulk deletion failed");
+    }
+  };
+
   const handleStatusChange = async (orderId, newStatus) => {
     const res = await updateOrderStatus(orderId, newStatus);
     if (res.success) {
@@ -75,7 +100,7 @@ export default function AdminOrdersPage() {
   const gridLayout = "md:grid-cols-[50px_110px_1.4fr_110px_160px_170px_120px]";
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] pt-8 pb-20 px-4 md:px-12">
+    <div className="min-h-screen bg-[#FAFAFA] pt-8 pb-32 px-4 md:px-12">
       <div className="mx-auto max-w-7xl">
         
         {/* --- HEADER --- */}
@@ -114,7 +139,6 @@ export default function AdminOrdersPage() {
 
         {/* --- DATA TABLE --- */}
         <div className="bg-white rounded-[2.5rem] shadow-xl shadow-[#3E442B]/5 border border-gray-100 overflow-visible">
-          {/* Table Header */}
           <div className={`hidden px-10 py-5 border-b border-gray-50 md:grid ${gridLayout} items-center bg-[#3E442B]/[0.02] text-[9px] font-black uppercase text-[#3E442B]/40 tracking-[0.2em]`}>
               <span>Sel.</span>
               <span>Identity</span>
@@ -156,7 +180,14 @@ export default function AdminOrdersPage() {
                     <div className="flex -space-x-2">
                       {order.items.slice(0, 3).map((item, i) => (
                         <div key={i} className="relative w-8 h-8 overflow-hidden bg-white border-2 border-white rounded-lg shadow-sm">
-                          <Image src={item.variant?.image || item.image || '/placeholder.png'} fill alt="p" className="object-cover" unoptimized />
+                          {/* 🟢 Using your exact Image pattern from Product Page */}
+                          <Image 
+                            src={getProductImage(item)} 
+                            fill 
+                            alt="order item" 
+                            className="object-cover" 
+                            unoptimized 
+                          />
                         </div>
                       ))}
                     </div>
@@ -184,10 +215,7 @@ export default function AdminOrdersPage() {
 
                     <div className="flex w-full gap-2 md:justify-end">
                       <button 
-                        onClick={() => {
-                          console.log("Opening order:", order._id); // 🟢 Debug Line
-                          setViewingOrder(order);
-                        }} 
+                        onClick={() => setViewingOrder(order)} 
                         className="p-2.5 bg-gray-50 text-[#3E442B] rounded-xl hover:bg-[#EA638C] hover:text-white transition-all shadow-sm"
                       >
                         <Eye size={16}/>
@@ -221,11 +249,25 @@ export default function AdminOrdersPage() {
           </button>
         </div>
 
-        {/* --- MODAL PLACEMENT --- */}
-        {/* We place it here at the end of the JSX tree to ensure it sits on top of everything */}
+        {/* 🟢 FLOATING ACTION BAR FOR BULK DELETE */}
+        {selectedOrders.length > 0 && (
+          <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-[#3E442B] text-white p-4 rounded-3xl shadow-2xl flex items-center justify-between animate-in slide-in-from-bottom-10 z-[100]">
+            <div className="flex flex-col ml-4">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#FBB6E6]">Selected</span>
+              <span className="text-sm font-black">{selectedOrders.length} Order Records</span>
+            </div>
+            <button 
+              onClick={handleBulkDelete}
+              className="flex items-center gap-2 px-6 py-3 bg-[#EA638C] hover:bg-red-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg"
+            >
+              <Trash size={14} /> Delete Records
+            </button>
+          </div>
+        )}
+
         {viewingOrder && (
           <OrderDetailsModal 
-            key={viewingOrder._id} // 🟢 Forces fresh mount
+            key={viewingOrder._id}
             order={viewingOrder} 
             onClose={() => setViewingOrder(null)} 
           />

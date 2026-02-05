@@ -1,69 +1,122 @@
-export default function PaymentFailedPage() {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center">
-      <h1 className="text-2xl font-black">Payment Failed</h1>
-      <p className="text-gray-500">Please try again or contact support.</p>
-      <a href="/checkout" className="mt-4 text-blue-600 font-bold underline">Back to Checkout</a>
-    </div>
-  );
-}import Link from "next/link";
+"use client";
+
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { XCircle, RefreshCcw, MessageCircle, AlertCircle } from "lucide-react";
+import SupportDrawer from "@/components/PaymentFailedPage";
 
-export default function PaymentFailedPage() {
+function FailedContent() {
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(60); 
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
+  const orderId = searchParams.get("orderId");
+
+  useEffect(() => {
+    if (isSupportOpen) return; 
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          router.push("/dashboard/checkout");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isSupportOpen, router]);
+
+  const progressPercentage = (timeLeft / 60) * 100;
+
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
-      <div className="max-w-md w-full bg-white rounded-[3rem] shadow-xl shadow-gray-200/50 p-8 md:p-12 text-center border border-gray-100">
+    <div className="min-h-screen bg-white flex items-center justify-center px-4 py-8 relative overflow-hidden">
+      {/* Background Decorative Blur */}
+      <div className="absolute top-[-5%] right-[-5%] w-48 h-48 bg-[#FBB6E6]/15 blur-[80px] rounded-full" />
+      <div className="absolute bottom-[-5%] left-[-5%] w-48 h-48 bg-[#3E442B]/5 blur-[80px] rounded-full" />
+
+      {/* Main Container - Shrinked width to 340px */}
+      <div className="relative w-full max-w-[340px] p-[2px] rounded-[2.5rem] overflow-hidden">
         
-        {/* Error Icon */}
-        <div className="flex justify-center mb-8">
-          <div className="bg-red-50 p-6 rounded-full">
-            <XCircle size={64} className="text-red-500" strokeWidth={1.5} />
-          </div>
-        </div>
+        {/* The Border Progress */}
+        <div 
+          className="absolute inset-0 transition-all duration-1000 ease-linear"
+          style={{
+            background: `conic-gradient(#EA638C ${progressPercentage}%, #F3F4F6 ${progressPercentage}%)`
+          }}
+        />
 
-        {/* Text Content */}
-        <h1 className="text-3xl font-black text-gray-900 mb-4 tracking-tight">
-          Payment Failed
-        </h1>
-        <p className="text-gray-500 font-medium mb-8 leading-relaxed">
-          Something went wrong with your transaction. Don't worry, no money was deducted from your account.
-        </p>
-
-        {/* Troubleshooting Card */}
-        <div className="bg-red-50/50 rounded-[2rem] p-6 mb-8 border border-red-100 text-left">
-          <div className="flex gap-3 items-start">
-            <AlertCircle size={18} className="text-red-500 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-[10px] font-black text-red-800 uppercase tracking-widest mb-1">Common Issues</p>
-              <ul className="text-[11px] font-bold text-red-600/80 space-y-1 list-disc pl-3">
-                <li>Insufficient account balance</li>
-                <li>Incorrect OTP or PIN entered</li>
-                <li>Payment gateway timeout</li>
-              </ul>
+        {/* The Card Content - Reduced Padding */}
+        <div className="relative bg-white rounded-[2.4rem] p-6 md:p-8 text-center z-10">
+          
+          <div className="flex justify-center mb-6">
+            <div className="bg-pink-50 p-4 rounded-full shadow-inner relative">
+              <XCircle size={48} className="text-[#EA638C]" strokeWidth={1.5} />
+              <div className="absolute top-0 right-0 w-3 h-3 bg-[#EA638C] rounded-full border-2 border-white animate-pulse" />
             </div>
           </div>
-        </div>
 
-        {/* Action Buttons */}
-        <div className="space-y-4">
-          <Link
-            href="/dashboard/checkout"
-            className="w-full bg-[#EA638C] text-white flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-[#d54d76] transition-all shadow-lg shadow-pink-100"
-          >
-            <RefreshCcw size={18} />
-            Try Paying Again
-          </Link>
-          
-          <Link
-            href="https://wa.me/8801XXXXXXXXX" 
-            target="_blank"
-            className="w-full bg-white text-gray-400 flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] border border-gray-200 hover:bg-gray-50 transition-all"
-          >
-            <MessageCircle size={18} />
-            Contact Support
-          </Link>
+          <h1 className="text-xl italic font-black text-[#3E442B] mb-2 tracking-tighter uppercase">
+            Payment <span className="text-[#EA638C]">Failed</span>
+          </h1>
+          <p className="text-gray-400 font-bold text-[11px] mb-6 leading-tight uppercase tracking-tight px-4">
+            Something went wrong. No money was deducted from your account.
+          </p>
+
+          {/* Compact Info Box */}
+          <div className="bg-[#3E442B]/5 rounded-2xl p-4 mb-6 border border-[#3E442B]/10 text-left">
+            <div className="flex gap-2.5 items-center">
+              <AlertCircle size={14} className="text-[#EA638C] shrink-0" />
+              <div>
+                <p className="text-[9px] font-black text-[#3E442B]/60 leading-none">
+                  Redirecting in <span className="text-[#EA638C]">{timeLeft}s</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons - Shorter height */}
+          <div className="space-y-3">
+            <Link
+              href="/dashboard/checkout"
+              className="w-full bg-[#3E442B] text-white flex items-center justify-center gap-2 py-4 rounded-xl font-black text-[9px] uppercase tracking-[0.2em] hover:bg-black transition-all shadow-lg shadow-[#3E442B]/10 active:scale-[0.98]"
+            >
+              <RefreshCcw size={14} />
+              Try Paying Again
+            </Link>
+            
+            <button
+              onClick={() => setIsSupportOpen(true)}
+              className="w-full bg-white text-gray-400 flex items-center justify-center gap-2 py-4 rounded-xl font-black text-[9px] uppercase tracking-[0.2em] border border-gray-100 hover:bg-gray-50 transition-all active:scale-[0.98]"
+            >
+              <MessageCircle size={14} />
+              Contact Support
+            </button>
+          </div>
+
+          <p className="mt-6 text-[7px] font-black text-gray-300 uppercase tracking-[0.4em]">
+            Registry ID: {orderId?.slice(-6).toUpperCase() || "WHLS-M"}
+          </p>
         </div>
       </div>
+
+      <SupportDrawer 
+        isOpen={isSupportOpen} 
+        onClose={() => setIsSupportOpen(false)} 
+        orderId={orderId} 
+      />
     </div>
+  );
+}
+
+export default function PaymentFailedPage() {
+  return (
+    <Suspense fallback={null}>
+      <FailedContent />
+    </Suspense>
   );
 }

@@ -8,7 +8,7 @@ import UserGiftActions from "@/components/admin/UserGiftActions";
 import Surprise from "@/models/Surprise";
 import RewardHistory from "@/models/RewardHistory";
 import dbConnect from "@/lib/mongodb";
-import { ShieldCheck, Users, Zap, Phone, SearchX, Gift } from "lucide-react";
+import { ShieldCheck, Users, Zap, SearchX } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -19,15 +19,16 @@ export default async function AdminUsersPage({ searchParams }) {
   const resolvedSearchParams = await searchParams;
   const activeFilter = resolvedSearchParams?.filter || "all";
   const query = resolvedSearchParams?.query?.toLowerCase() || "";
+  
+  // 🟢 Clean search query: "017-123" becomes "017123"
+  const cleanQuery = query.replace(/\D/g, "");
 
   await dbConnect();
   const { users: rawUsers, success, error } = await getUsers();
   
-  // 1. Fetch Active Gifts for the "Send Gift" dropdown
   const rawGifts = await Surprise.find({ isActive: true }).lean();
   const availableGifts = JSON.parse(JSON.stringify(rawGifts));
 
-  // 2. 🟢 AGGREGATION: Get the latest reward for every user
   const latestRewards = await RewardHistory.aggregate([
     { $sort: { createdAt: -1 } },
     {
@@ -35,7 +36,7 @@ export default async function AdminUsersPage({ searchParams }) {
         _id: "$userId",
         lastGiftAt: { $first: "$createdAt" },
         lastGiftTitle: { $first: "$title" },
-        lastGiftCode: { $first: "$code" }, // We get the code to extract % later
+        lastGiftCode: { $first: "$code" },
       },
     },
   ]);
@@ -52,11 +53,8 @@ export default async function AdminUsersPage({ searchParams }) {
     );
   }
 
-  // 3. Merge Reward Data and Apply Filtering
   const users = JSON.parse(JSON.stringify(rawUsers)).map(user => {
     const reward = latestRewards.find(r => r._id.toString() === user._id.toString());
-    
-    // 🟢 Logic to extract percentage from the stored reward code
     let extractedPercent = null;
     if (reward?.lastGiftCode) {
         const match = reward.lastGiftCode.match(/\d+/);
@@ -67,17 +65,32 @@ export default async function AdminUsersPage({ searchParams }) {
       ...user,
       lastGiftAt: reward ? reward.lastGiftAt : null,
       lastGiftTitle: reward ? reward.lastGiftTitle : null,
-      lastGiftValue: extractedPercent // Pass this to the Modal
+      lastGiftValue: extractedPercent 
     };
   });
 
   const filteredUsers = users.filter((user) => {
     const isVIP = user.isVIP || (user.totalSpent >= VIP_THRESHOLD);
     const matchesTier = activeFilter === "all" || (activeFilter === "vip" && isVIP) || (activeFilter === "regular" && !isVIP);
+    
+    // 🟢 ENHANCED SEARCH LOGIC
+    const userName = user.name?.toLowerCase() || "";
+    const userEmail = user.email?.toLowerCase() || "";
+    
+    // Check top-level phone AND address-level phone
+    const primaryPhone = user.phone || "";
+    const addressPhone = user.addresses?.[0]?.phone || "";
+    
+    // Create clean versions (digits only) for fuzzy matching
+    const cleanPrimary = primaryPhone.replace(/\D/g, "");
+    const cleanAddress = addressPhone.replace(/\D/g, "");
+
     const matchesSearch = 
-      user.name?.toLowerCase().includes(query) || 
-      user.email?.toLowerCase().includes(query) || 
-      user.phone?.includes(query);
+      userName.includes(query) || 
+      userEmail.includes(query) || 
+      primaryPhone.includes(query) || 
+      addressPhone.includes(query) ||
+      (cleanQuery !== "" && (cleanPrimary.includes(cleanQuery) || cleanAddress.includes(cleanQuery)));
     
     return matchesTier && matchesSearch;
   });
@@ -111,7 +124,6 @@ export default async function AdminUsersPage({ searchParams }) {
         </div>
       </div>
 
-      {/* Main Table */}
       <div className="bg-white rounded-[3.5rem] shadow-2xl shadow-gray-200/50 border border-gray-100 overflow-hidden">
         {filteredUsers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-32 text-center">
@@ -135,25 +147,38 @@ export default async function AdminUsersPage({ searchParams }) {
                 {filteredUsers.map((user) => {
                   const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(user.email);
                   const isVIP = user.isVIP || (user.totalSpent >= VIP_THRESHOLD);
+                  const userPhoneDisplay = user.phone || user.addresses?.[0]?.phone || "";
                   
+                  const displayImg = user.image 
+                    ? (user.image.startsWith('http') 
+                        ? user.image 
+                        : `https://res.cloudinary.com/diabqgzyo/image/upload/${user.image}`)
+                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=EA638C&color=fff&bold=true`;
+
                   return (
                     <tr key={user._id} className="transition-all duration-300 group hover:bg-[#FBB6E6]/5">
                       <td className="px-8 py-5 whitespace-nowrap">
                         <div className="flex items-center gap-4">
                           <div className={`relative w-12 h-12 rounded-2xl overflow-hidden border-2 bg-white flex items-center justify-center ${isVIP ? 'border-yellow-400 shadow-lg shadow-yellow-100' : 'border-gray-100'}`}>
-                            {user.image ? (
-                              <Image src={user.image} alt={user.name} width={48} height={48} className="object-cover" unoptimized />
-                            ) : (
-                              <span className="text-sm font-black text-gray-300">{user.name?.charAt(0)}</span>
-                            )}
+                            <Image 
+                              src={displayImg} 
+                              alt={user.name || "User"} 
+                              width={48} 
+                              height={48} 
+                              className="object-cover w-full h-full" 
+                              unoptimized 
+                            />
                           </div>
                           <div>
                             <p className="text-sm italic font-black text-[#3E442B] uppercase leading-tight">{user.name}</p>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{user.email}</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                {userPhoneDisplay && <span className="text-[#EA638C] mr-2">{userPhoneDisplay}</span>}
+                                {user.email}
+                            </p>
                           </div>
                         </div>
                       </td>
-
+                      {/* ... rest of your table cells (Actions, Access, etc) ... */}
                       <td className="px-6 py-5">
                         {!isSuperAdmin ? (
                           <UserGiftActions 
@@ -162,10 +187,10 @@ export default async function AdminUsersPage({ searchParams }) {
                             availableGifts={availableGifts} 
                           />
                         ) : (
-                           <div className="flex items-center gap-1.5 text-purple-600 bg-purple-50 px-3 py-1 rounded-full w-fit">
+                            <div className="flex items-center gap-1.5 text-purple-600 bg-purple-50 px-3 py-1 rounded-full w-fit">
                               <ShieldCheck size={12} />
                               <span className="text-[9px] font-black uppercase">Protected Account</span>
-                           </div>
+                            </div>
                         )}
                       </td>
 
@@ -187,7 +212,7 @@ export default async function AdminUsersPage({ searchParams }) {
                             totalSpent={user.totalSpent || 0}
                             lastGiftAt={user.lastGiftAt}
                             lastGiftTitle={user.lastGiftTitle}
-                            lastGiftValue={user.lastGiftValue} // 🟢 Pass the extracted value (e.g., "25% OFF")
+                            lastGiftValue={user.lastGiftValue}
                           />
                           <DeleteUserButton 
                             userId={user._id.toString()} 

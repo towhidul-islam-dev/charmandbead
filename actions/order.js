@@ -7,7 +7,7 @@ import User from "@/models/User";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 import InventoryLog from "@/models/InventoryLog";
-
+import { createInAppNotification } from "@/actions/inAppNotifications";
 
 export async function createOrder(orderData) {
   const session = await mongoose.startSession();
@@ -19,7 +19,7 @@ export async function createOrder(orderData) {
 
     if (!userId) throw new Error("User ID is required.");
 
-    // 1. Idempotency Check (Prevents double orders if user clicks twice)
+    // 1. Idempotency Check
     const existingOrder = await Order.findOne({
       "shippingAddress.phone": phone,
       totalAmount: totalAmount,
@@ -33,29 +33,29 @@ export async function createOrder(orderData) {
 
     // 2. Create the Order
     const [newOrder] = await Order.create([{
-       user: userId, 
-       items: items.map(i => ({
-         product: i.productId || i.product || i._id,
-         productName: i.name,
-         variant: {
-            name: i.color || "Default",
-            size: i.size || "N/A",
-            variantId: i.variantId
-         },
-         quantity: Number(i.quantity),
-         price: Number(i.price),
-         sku: i.sku || "N/A"
-       })),
-       shippingAddress,
-       totalAmount,
-       paidAmount,
-       dueAmount,
-       paymentMethod,
-       status: "Pending",
-       isStockReduced: false
+        user: userId, 
+        items: items.map(i => ({
+          product: i.productId || i.product || i._id,
+          productName: i.name,
+          variant: {
+             name: i.color || "Default",
+             size: i.size || "N/A",
+             variantId: i.variantId
+          },
+          quantity: Number(i.quantity),
+          price: Number(i.price),
+          sku: i.sku || "N/A"
+        })),
+        shippingAddress,
+        totalAmount,
+        paidAmount,
+        dueAmount,
+        paymentMethod,
+        status: "Pending",
+        isStockReduced: false
     }], { session });
 
-    // 3. Group deductions by Product
+    // ... (Your inventory logic stays the same) ...
     const productDeductions = items.reduce((acc, item) => {
       const pId = (item.productId || item.product || item._id).toString();
       if (!acc[pId]) acc[pId] = { totalQty: 0, variants: [], name: item.name };
@@ -67,37 +67,25 @@ export async function createOrder(orderData) {
       return acc;
     }, {});
 
-    // 4. Atomic Inventory Sync Loop
     const orderRef = `Order #${newOrder._id.toString().slice(-6).toUpperCase()}`;
 
     for (const [productId, data] of Object.entries(productDeductions)) {
-      // Step A: Find the product first to check stock and get current variants
       const product = await Product.findById(productId).session(session);
-      
       if (!product) throw new Error(`Product ${data.name} not found.`);
       
-      // Step B: Calculate new variant stocks in memory
       if (product.hasVariants) {
         data.variants.forEach(orderedVar => {
           const target = product.variants.id(orderedVar.vId);
           if (!target) throw new Error(`Variant not found for ${data.name}`);
-          if (target.stock < orderedVar.qty) throw new Error(`Low stock for ${data.name} (${target.color})`);
-          
-          target.stock -= orderedVar.qty; // Subtract variant stock
+          if (target.stock < orderedVar.qty) throw new Error(`Low stock for ${data.name}`);
+          target.stock -= orderedVar.qty;
         });
-
-        // Step C: 🟢 THE HEALER - Set parent stock as sum of new variant stocks
         product.stock = product.variants.reduce((sum, v) => sum + (v.stock || 0), 0);
       } else {
-        // Standard product logic
         if (product.stock < data.totalQty) throw new Error(`Low stock for ${data.name}`);
         product.stock -= data.totalQty;
       }
-
-      // Step D: Save the product (This triggers your Pre-Save Hook automatically)
       await product.save({ session });
-
-      // Step E: Log the change
       await InventoryLog.create([{
         productId,
         productName: data.name,
@@ -107,11 +95,18 @@ export async function createOrder(orderData) {
       }], { session });
     }
 
-    // 5. Success - Finalize order status
     await Order.updateOne({ _id: newOrder._id }, { isStockReduced: true }, { session });
     
-    await session.commitTransaction();
+    // 🟢 3. TRIGGER INITIAL NOTIFICATION
+    await createInAppNotification({
+      title: "Order Placed! 🎉",
+      message: `Your order ${orderRef} has been received and is being processed.`,
+      type: "order",
+      recipientId: userId,
+      link: "/dashboard/orders"
+    });
 
+    await session.commitTransaction();
     revalidatePath("/admin/products");
     revalidatePath("/admin/orders");
     revalidatePath("/products");
@@ -122,14 +117,12 @@ export async function createOrder(orderData) {
     if (session.transaction.state !== 'TRANSACTION_ABORTED') {
       await session.abortTransaction();
     }
-    console.error("ORDER_ERROR:", error.message);
     return { success: false, message: error.message };
   } finally {
     session.endSession();
   }
 }
 
-// --- STATS & HELPER FUNCTIONS ---
 export async function updateOrderStatus(orderId, newStatus) {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -137,7 +130,6 @@ export async function updateOrderStatus(orderId, newStatus) {
   try {
     await dbConnect();
 
-    // 1. Fetch the order first to check its current status and items
     const order = await Order.findById(orderId).session(session);
     if (!order) {
       await session.abortTransaction();
@@ -145,11 +137,37 @@ export async function updateOrderStatus(orderId, newStatus) {
     }
 
     const oldStatus = order.status;
+    const orderTag = order._id.toString().slice(-6).toUpperCase();
 
-    // 🟢 2. STOCK RESTORATION LOGIC
-    // If moving to Cancelled and stock was previously reduced, give it back
+    // 🟢 1. NOTIFICATION LOGIC BASED ON STATUS
+    let notifyTitle = "Order Updated";
+    let notifyMessage = `The status of your Order #INV-${orderTag} is now ${newStatus}.`;
+
+    if (newStatus === "Shipped") {
+      notifyTitle = "Order Shipped! 🚚";
+      notifyMessage = `Good news! Your order #INV-${orderTag} is on the way.`;
+    } else if (newStatus === "Delivered") {
+      notifyTitle = "Package Delivered! ✨";
+      notifyMessage = `Your order #INV-${orderTag} has been successfully delivered.`;
+    } else if (newStatus === "Cancelled") {
+      notifyTitle = "Order Cancelled ❌";
+      notifyMessage = `Your order #INV-${orderTag} has been cancelled.`;
+    }
+
+    // TRIGGER THE NOTIFICATION 🟢
+    if (order.user) {
+        await createInAppNotification({
+          title: notifyTitle,
+          message: notifyMessage,
+          type: "order",
+          recipientId: order.user,
+          link: "/dashboard/orders"
+        });
+    }
+
+    // 2. STOCK RESTORATION LOGIC (Keep your existing logic)
     if (newStatus === "Cancelled" && oldStatus !== "Cancelled" && order.isStockReduced) {
-      const orderRef = `Cancel #${order._id.toString().slice(-6).toUpperCase()}`;
+      const orderRef = `Cancel #${orderTag}`;
 
       for (const item of order.items) {
         const product = await Product.findById(item.product).session(session);
@@ -158,18 +176,14 @@ export async function updateOrderStatus(orderId, newStatus) {
         if (product.hasVariants && item.variant?.variantId) {
           const target = product.variants.id(item.variant.variantId);
           if (target) {
-            target.stock += item.quantity; // Increment variant stock
-            // Recalculate parent stock total
+            target.stock += item.quantity;
             product.stock = product.variants.reduce((sum, v) => sum + (v.stock || 0), 0);
           }
         } else {
-          // Standard product increment
           product.stock += item.quantity;
         }
 
         await product.save({ session });
-
-        // Log the restoration
         await InventoryLog.create([{
           productId: product._id,
           productName: product.name,
@@ -178,21 +192,17 @@ export async function updateOrderStatus(orderId, newStatus) {
           performedBy: orderRef
         }], { session });
       }
-
-      // Mark that stock has been returned
       order.isStockReduced = false;
     }
 
-    // 3. Update the order status
     order.status = newStatus;
     await order.save({ session });
 
     await session.commitTransaction();
 
-    // 4. Post-update triggers
     revalidatePath("/admin/orders");
     revalidatePath("/dashboard/orders");
-    revalidatePath("/admin/products"); // Refresh stock numbers in admin view
+    revalidatePath("/admin/products"); 
     
     if (newStatus === "Delivered" && order.user) {
       await syncVIPStatus(order.user);
@@ -203,7 +213,6 @@ export async function updateOrderStatus(orderId, newStatus) {
     if (session.inAtomicallyExecutableOperation()) {
       await session.abortTransaction();
     }
-    console.error("UPDATE_STATUS_FAILED:", error.message);
     return { success: false, message: "Failed to update status: " + error.message };
   } finally {
     session.endSession();
@@ -263,26 +272,53 @@ export async function getAllOrders(page = 1, limit = 10, search = "", status = "
   try {
     await dbConnect();
     const query = {};
+    
     if (status !== "All") query.status = status;
+
     if (search) {
-      query.$or = [
-        { _id: { $regex: search, $options: "i" } },
-        { "shippingAddress.name": { $regex: search, $options: "i" } },
-        { "shippingAddress.phone": { $regex: search, $options: "i" } },
-      ];
+      // 🟢 Check if the search string is a valid MongoDB ObjectId (24 hex characters)
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(search);
+
+      if (isObjectId) {
+        // If it's an ID, match it exactly
+        query._id = search;
+      } else {
+        // If it's not an ID, search other string fields
+        query.$or = [
+          { "shippingAddress.name": { $regex: search, $options: "i" } },
+          { "shippingAddress.phone": { $regex: search, $options: "i" } },
+          // You can also search by the "status" text if needed
+          { status: { $regex: search, $options: "i" } },
+        ];
+      }
     }
+
     const skip = (page - 1) * limit;
+
     const [orders, total] = await Promise.all([
-      Order.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Order.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate({
+          path: 'items.product',
+          select: 'imageUrl',
+          model: Product
+        })
+        .lean(),
       Order.countDocuments(query),
     ]);
+
     return {
       success: true,
       orders: JSON.parse(JSON.stringify(orders)),
       totalPages: Math.ceil(total / limit),
       totalOrders: total,
     };
-  } catch (error) { return { success: false, orders: [], totalPages: 0 }; }
+  } catch (error) { 
+    console.error("Fetch Orders Error:", error);
+    return { success: false, orders: [], totalPages: 0 }; 
+  }
 }
 
 export async function getOrderById(orderId) {

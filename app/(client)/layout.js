@@ -6,6 +6,8 @@ import { Toaster } from "react-hot-toast";
 import { Playfair_Display } from 'next/font/google';
 import ConnectivityListener from "@/components/ConnectivityListener";
 import LoginNotifier from "@/components/LoginNotifier";
+import { getAdminGlobalData } from '@/lib/data';
+import { NotificationProvider } from "@/Context/NotificationContext";
 
 const playfair = Playfair_Display({ 
   subsets: ['latin'],
@@ -62,40 +64,44 @@ export const metadata = {
   },
 };
 
-export default function ClientLayout({ children }) {
-  return (
-    <CartProvider>
-      <WishlistProvider>
-        <LoginNotifier />
+export default async function ClientLayout({ children }) {
+  // 🟢 Fetch arrival data (and others) from the server
+  const globalData = await getAdminGlobalData();
 
-        <Toaster 
-          position="top-right" 
-          richColors 
-          closeButton
-          theme="light"
-          toastOptions={{
-            style: { 
-              borderRadius: '1rem',
-              // 🟢 Using your brand colors for the toast borders/text
-              border: '1px solid #EA638C',
-              color: '#3E442B'
-            },
-          }}
-        />
+return (
+    <NotificationProvider> {/* 🟢 Wrapper added here to fix the destructuring error */}
+      <CartProvider>
+        <WishlistProvider>
+          <LoginNotifier />
 
-        <ConnectivityListener />
+          <Toaster 
+            position="top-right" 
+            richColors 
+            closeButton
+            theme="light"
+            toastOptions={{
+              style: { 
+                borderRadius: '1rem',
+                border: '1px solid #EA638C',
+                color: '#3E442B'
+              },
+            }}
+          />
 
-        {/* 🟢 Applied font-variable and smooth scrolling container */}
-        <div className={`${playfair.variable} flex flex-col min-h-screen font-serif selection:bg-[#FBB6E6] selection:text-[#3E442B]`}>
-          <Navbar /> 
+          <ConnectivityListener />
 
-          <main className="flex flex-col flex-1"> 
-            {children}
-          </main>
+          <div className={`${playfair.variable} flex flex-col min-h-screen font-serif selection:bg-[#FBB6E6] selection:text-[#3E442B]`}>
+            {/* 🟢 Navbar is now INSIDE the NotificationProvider, so the Bell will work */}
+            <Navbar globalData={globalData} /> 
 
-          <Footer />
-        </div>
-      </WishlistProvider>
-    </CartProvider>
+            <main className="flex flex-col flex-1"> 
+              {children}
+            </main>
+
+            <Footer />
+          </div>
+        </WishlistProvider>
+      </CartProvider>
+    </NotificationProvider>
   );
 }

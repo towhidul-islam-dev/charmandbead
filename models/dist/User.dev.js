@@ -39,11 +39,27 @@ var UserSchema = new _mongoose["default"].Schema({
     "enum": ['user', 'admin'],
     "default": 'user'
   },
-  // 💡 Added wishlist field to store product references
+  // 🟢 PASSWORD RESET FIELDS
+  resetToken: {
+    type: String,
+    "default": null
+  },
+  resetTokenExpiry: {
+    type: Date,
+    "default": null
+  },
+  // 🟢 2FA / OTP FIELDS
+  otpCode: {
+    type: String,
+    "default": null
+  },
+  otpExpiry: {
+    type: Date,
+    "default": null
+  },
   wishlist: [{
     type: _mongoose["default"].Schema.Types.ObjectId,
-    ref: 'Product' // 👈 Make sure this matches your Product model name exactly
-
+    ref: 'Product'
   }],
   addresses: [{
     label: String,
@@ -74,7 +90,7 @@ var UserSchema = new _mongoose["default"].Schema({
   }
 }, {
   timestamps: true
-}); // ✅ FIXED PRE-SAVE HOOK
+}); // Pre-save hook (already correct in your code)
 
 UserSchema.pre('save', function _callee() {
   var salt;

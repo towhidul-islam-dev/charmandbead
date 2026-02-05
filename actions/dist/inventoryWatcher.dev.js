@@ -53,19 +53,15 @@ function checkLowStock(product, variant) {
     }
   });
 }
-/**
- * 2. THE REFILLER (Admin Trigger)
- */
-
 
 function updateInventoryStock(productId, variantId, newStockAmount) {
   var adminEmail,
       currentProduct,
-      variant,
-      oldStock,
       stockDifference,
       variantKey,
       updatedProduct,
+      oldStock,
+      variant,
       notifiedCount,
       moq,
       waitingUsers,
@@ -97,13 +93,34 @@ function updateInventoryStock(productId, variantId, newStockAmount) {
           });
 
         case 9:
+          stockDifference = 0;
+          variantKey = "Standard";
+          oldStock = 0; // 🟢 CASE A: The product has variants
+
+          if (!(variantId && variantId !== "undefined")) {
+            _context3.next = 26;
+            break;
+          }
+
           variant = currentProduct.variants.id(variantId);
+
+          if (variant) {
+            _context3.next = 16;
+            break;
+          }
+
+          return _context3.abrupt("return", {
+            success: false,
+            message: "Variant not found"
+          });
+
+        case 16:
           oldStock = variant.stock;
           stockDifference = Number(newStockAmount) - oldStock;
           variantKey = "".concat(variant.color, "-").concat(variant.size);
 
           if (!(stockDifference === 0)) {
-            _context3.next = 15;
+            _context3.next = 21;
             break;
           }
 
@@ -112,8 +129,8 @@ function updateInventoryStock(productId, variantId, newStockAmount) {
             notifiedCount: 0
           });
 
-        case 15:
-          _context3.next = 17;
+        case 21:
+          _context3.next = 23;
           return regeneratorRuntime.awrap(_Product["default"].findOneAndUpdate({
             _id: productId
           }, {
@@ -129,9 +146,41 @@ function updateInventoryStock(productId, variantId, newStockAmount) {
             runValidators: true
           }));
 
-        case 17:
+        case 23:
           updatedProduct = _context3.sent;
-          _context3.next = 20;
+          _context3.next = 33;
+          break;
+
+        case 26:
+          oldStock = currentProduct.stock;
+          stockDifference = Number(newStockAmount) - oldStock;
+
+          if (!(stockDifference === 0)) {
+            _context3.next = 30;
+            break;
+          }
+
+          return _context3.abrupt("return", {
+            success: true,
+            notifiedCount: 0
+          });
+
+        case 30:
+          _context3.next = 32;
+          return regeneratorRuntime.awrap(_Product["default"].findByIdAndUpdate(productId, {
+            $inc: {
+              stock: stockDifference
+            }
+          }, {
+            "new": true,
+            runValidators: true
+          }));
+
+        case 32:
+          updatedProduct = _context3.sent;
+
+        case 33:
+          _context3.next = 35;
           return regeneratorRuntime.awrap(_InventoryLog["default"].create({
             productId: productId,
             productName: updatedProduct.name,
@@ -141,33 +190,33 @@ function updateInventoryStock(productId, variantId, newStockAmount) {
             performedBy: adminEmail
           }));
 
-        case 20:
-          // Back-in-stock logic...
+        case 35:
+          // 4. Back-in-stock logic
           notifiedCount = 0;
-          moq = variant.minOrderQuantity || updatedProduct.minOrderQuantity || 1;
+          moq = updatedProduct.minOrderQuantity || 1;
 
           if (!(Number(newStockAmount) >= moq && oldStock < moq)) {
-            _context3.next = 30;
+            _context3.next = 45;
             break;
           }
 
-          _context3.next = 25;
+          _context3.next = 40;
           return regeneratorRuntime.awrap(_NotifyMe["default"].find({
             productId: productId,
             variantKey: variantKey,
             status: "Pending"
           }));
 
-        case 25:
+        case 40:
           waitingUsers = _context3.sent;
 
           if (!(waitingUsers.length > 0)) {
-            _context3.next = 30;
+            _context3.next = 45;
             break;
           }
 
           notifiedCount = waitingUsers.length;
-          _context3.next = 30;
+          _context3.next = 45;
           return regeneratorRuntime.awrap(Promise.all(waitingUsers.map(function _callee(req) {
             return regeneratorRuntime.async(function _callee$(_context2) {
               while (1) {
@@ -189,36 +238,32 @@ function updateInventoryStock(productId, variantId, newStockAmount) {
             });
           })));
 
-        case 30:
+        case 45:
           (0, _cache.revalidatePath)("/admin/products");
           return _context3.abrupt("return", {
             success: true,
             notifiedCount: notifiedCount
           });
 
-        case 34:
-          _context3.prev = 34;
+        case 49:
+          _context3.prev = 49;
           _context3.t0 = _context3["catch"](1);
+          console.error("RESTOCK_ERROR:", _context3.t0);
           return _context3.abrupt("return", {
             success: false,
             message: _context3.t0.message
           });
 
-        case 37:
+        case 53:
         case "end":
           return _context3.stop();
       }
     }
-  }, null, null, [[1, 34]]);
+  }, null, null, [[1, 49]]);
 }
-/**
- * 3. ORDER PROCESSOR (The Fix for Variant Sync)
- * Using explicit async serialization to ensure each variant is deducted properly.
- */
-
 
 function processOrderStock(order) {
-  var _iteratorNormalCompletion, _didIteratorError, _iteratorError, _loop, _iterator, _step;
+  var lockResult, _iteratorNormalCompletion, _didIteratorError, _iteratorError, _loop, _iterator, _step;
 
   return regeneratorRuntime.async(function processOrderStock$(_context5) {
     while (1) {
@@ -229,12 +274,39 @@ function processOrderStock(order) {
           return regeneratorRuntime.awrap((0, _mongodb["default"])());
 
         case 3:
-          // 🟢 CRITICAL: We use a standard for loop to ensure "await" 
-          // blocks until the DB fully finishes the previous variant.
+          _context5.next = 5;
+          return regeneratorRuntime.awrap(_Order["default"].findOneAndUpdate({
+            _id: order._id,
+            stockProcessed: {
+              $ne: true
+            }
+          }, {
+            $set: {
+              stockProcessed: true
+            }
+          }, {
+            "new": true
+          }));
+
+        case 5:
+          lockResult = _context5.sent;
+
+          if (lockResult) {
+            _context5.next = 9;
+            break;
+          }
+
+          console.log("Order already processed or lock acquired by another process. Skipping.");
+          return _context5.abrupt("return", {
+            success: true
+          });
+
+        case 9:
+          // 2. THE DEDUCTION LOGIC: (Your original logic stays here)
           _iteratorNormalCompletion = true;
           _didIteratorError = false;
           _iteratorError = undefined;
-          _context5.prev = 6;
+          _context5.prev = 12;
 
           _loop = function _loop() {
             var item, qtyToDeduct, isVariant, updatedProduct, variant;
@@ -254,21 +326,19 @@ function processOrderStock(order) {
                     _context4.next = 6;
                     return regeneratorRuntime.awrap(_Product["default"].findOneAndUpdate({
                       _id: item.product,
-                      "variants": {
+                      variants: {
                         $elemMatch: {
                           color: item.variant.name,
                           size: item.variant.size,
                           stock: {
                             $gte: qtyToDeduct
-                          } // 🛑 Prevent negative stock
-
+                          }
                         }
                       }
                     }, {
                       $inc: {
                         "variants.$[v].stock": -qtyToDeduct,
-                        stock: -qtyToDeduct // Deducts from the main "total" stock too
-
+                        stock: -qtyToDeduct
                       }
                     }, {
                       arrayFilters: [{
@@ -332,80 +402,82 @@ function processOrderStock(order) {
 
           _iterator = order.items[Symbol.iterator]();
 
-        case 9:
+        case 15:
           if (_iteratorNormalCompletion = (_step = _iterator.next()).done) {
-            _context5.next = 15;
+            _context5.next = 21;
             break;
           }
 
-          _context5.next = 12;
+          _context5.next = 18;
           return regeneratorRuntime.awrap(_loop());
 
-        case 12:
+        case 18:
           _iteratorNormalCompletion = true;
-          _context5.next = 9;
+          _context5.next = 15;
           break;
 
-        case 15:
-          _context5.next = 21;
+        case 21:
+          _context5.next = 27;
           break;
 
-        case 17:
-          _context5.prev = 17;
-          _context5.t0 = _context5["catch"](6);
+        case 23:
+          _context5.prev = 23;
+          _context5.t0 = _context5["catch"](12);
           _didIteratorError = true;
           _iteratorError = _context5.t0;
 
-        case 21:
-          _context5.prev = 21;
-          _context5.prev = 22;
+        case 27:
+          _context5.prev = 27;
+          _context5.prev = 28;
 
           if (!_iteratorNormalCompletion && _iterator["return"] != null) {
             _iterator["return"]();
           }
 
-        case 24:
-          _context5.prev = 24;
+        case 30:
+          _context5.prev = 30;
 
           if (!_didIteratorError) {
-            _context5.next = 27;
+            _context5.next = 33;
             break;
           }
 
           throw _iteratorError;
 
-        case 27:
-          return _context5.finish(24);
+        case 33:
+          return _context5.finish(30);
 
-        case 28:
-          return _context5.finish(21);
+        case 34:
+          return _context5.finish(27);
 
-        case 29:
-          _context5.next = 31;
-          return regeneratorRuntime.awrap(_Order["default"].findByIdAndUpdate(order._id, {
-            stockProcessed: true
-          }));
-
-        case 31:
+        case 35:
+          // No need for the final 'findByIdAndUpdate' anymore because we did it at the top!
           (0, _cache.revalidatePath)("/admin/products");
           return _context5.abrupt("return", {
             success: true
           });
 
-        case 35:
-          _context5.prev = 35;
+        case 39:
+          _context5.prev = 39;
           _context5.t1 = _context5["catch"](0);
+          // RECOVERY: If a crash happens mid-process, we unlock the order so it can be retried.
           console.error("FAILED_TO_PROCESS_STOCK:", _context5.t1);
+          _context5.next = 44;
+          return regeneratorRuntime.awrap(_Order["default"].findByIdAndUpdate(order._id, {
+            stockProcessed: false
+          }));
+
+        case 44:
           return _context5.abrupt("return", {
             success: false
           });
 
-        case 39:
+        case 45:
         case "end":
           return _context5.stop();
       }
     }
-  }, null, null, [[0, 35], [6, 17, 21, 29], [22,, 24, 28]]);
+  }, null, null, [[0, 39], [12, 23, 27, 35], [28,, 30, 34]]);
 }
 
 function getInventoryHistory(productId) {

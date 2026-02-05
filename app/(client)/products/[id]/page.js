@@ -2,10 +2,10 @@ import { getProductById, getRelatedProducts } from "@/lib/data";
 import ProductCard from "@/components/ProductCard";
 import ProductDetailsContent from "./productDetailsContent";
 import ProductReviews from "@/components/ProductReviews";
-
+import RecentlyViewed from "@/components/RecentlyViewed";
 // 🟢 DYNAMIC SEO
 export async function generateMetadata({ params }) {
-  const { id } = await params; 
+  const { id } = await params;
   const { product, success } = await getProductById(id);
 
   if (!success || !product) {
@@ -18,7 +18,9 @@ export async function generateMetadata({ params }) {
     openGraph: {
       title: product.name,
       description: product.description,
-      images: [{ url: product.imageUrl, width: 800, height: 800, alt: product.name }],
+      images: [
+        { url: product.imageUrl, width: 800, height: 800, alt: product.name },
+      ],
       type: "article",
     },
     twitter: {
@@ -50,10 +52,9 @@ export default async function ProductDetails({ params }) {
     /* 🎨 UI Update: Using your lightPink (#FBB6E6) for the background */
     <div className="bg-[#F3F4F6]/50 min-h-screen pb-20">
       <div className="px-4 py-10 mx-auto max-w-7xl lg:py-16">
-        
         {/* Main Content */}
         <ProductDetailsContent product={product} />
-
+        <RecentlyViewed />
         {/* 🟢 HYDRATION FIX: Strictly using div to match ProductDetailsContent client structure */}
         <div className="mt-12 overflow-hidden bg-white border border-gray-100 shadow-sm rounded-3xl">
           <ProductReviews productId={id} />

@@ -55,29 +55,32 @@ export default function FeatureShowcase({ products }) {
       <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         
         {/* Category Section */}
-        <div className="w-full lg:w-auto">
-          <p className="text-[9px] md:text-[10px] font-black uppercase text-gray-400 mb-3 md:mb-5 tracking-[0.25em] ml-1">
-            Select Material
-          </p>
-          <div className="flex gap-2 md:gap-4 pb-2 overflow-x-auto no-scrollbar scroll-smooth">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => { setActiveCategory(cat); setVisibleCount(8); }}
-                className={`whitespace-nowrap px-6 py-3 md:px-10 md:py-5 rounded-xl md:rounded-[1.5rem] text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all duration-300 border ${
-                  activeCategory === cat
-                    ? "bg-[#3E442B] text-white border-[#3E442B] shadow-lg md:shadow-2xl -translate-y-0.5"
-                    : "bg-gray-50/50 text-gray-400 border-gray-100 hover:border-gray-300 hover:text-black hover:bg-white"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </div>
+<div className="w-full lg:w-auto">
+  <p className="text-[9px] md:text-[10px] font-black uppercase text-gray-400 mb-3 md:mb-5 tracking-[0.25em] ml-1">
+    Select Material
+  </p>
+  
+  {/* 🟢 FIXED: Added px-1 and py-1 to prevent edge clipping during horizontal scroll */}
+  <div className="flex gap-2 px-1 py-1 overflow-x-auto md:gap-4 no-scrollbar scroll-smooth items-center">
+    {categories.map((cat) => (
+      <button
+        key={cat}
+        onClick={() => { setActiveCategory(cat); setVisibleCount(8); }}
+        className={`whitespace-nowrap px-6 py-3 md:px-10 md:py-4 rounded-xl md:rounded-[1.5rem] text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-colors duration-200 border flex items-center justify-center leading-none overflow-visible ${
+          activeCategory === cat
+            ? "bg-[#3E442B] text-white border-[#3E442B]"
+            : "bg-transparent text-gray-400 border-gray-100 hover:border-[#EA638C] hover:text-[#EA638C]"
+        }`}
+      >
+        {/* Relative span ensures the bold text baseline is perfectly centered */}
+        <span className="relative inline-block">{cat}</span>
+      </button>
+    ))}
+  </div>
+</div>
 
         {/* Controls Section */}
-        <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-center w-full lg:w-auto">
+        <div className="grid w-full grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-center lg:w-auto">
           
           {/* Custom Sort Dropdown */}
           <div className="relative group">
@@ -90,7 +93,7 @@ export default function FeatureShowcase({ products }) {
               <option value="price-low">Price: Low-High</option>
               <option value="price-high">Price: High-Low</option>
             </select>
-            <ChevronDown className="absolute text-gray-400 right-4 top-1/2 -translate-y-1/2 pointer-events-none" size={12} />
+            <ChevronDown className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2" size={12} />
           </div>
 
           {/* Price Slider */}
@@ -109,7 +112,7 @@ export default function FeatureShowcase({ products }) {
 
           {/* Search Input */}
           <div className="relative group sm:w-64">
-            <Search className="absolute text-gray-400 left-5 top-1/2 -translate-y-1/2" size={14} />
+            <Search className="absolute text-gray-400 -translate-y-1/2 left-5 top-1/2" size={14} />
             <input
               type="text"
               placeholder="SEARCH SHOWCASE..."
@@ -124,7 +127,7 @@ export default function FeatureShowcase({ products }) {
       {/* --- GRID DESIGN --- */}
       {/* 💡 FIXED: grid-cols-2 for mobile compatibility */}
       {visibleProducts.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3 sm:gap-8 lg:grid-cols-3 xl:grid-cols-4 px-1 md:px-0">
+        <div className="grid grid-cols-2 gap-3 px-1 sm:gap-8 lg:grid-cols-3 xl:grid-cols-4 md:px-0">
           {visibleProducts.map((product) => (
             <ProductCard key={product._id} product={product} />
           ))}

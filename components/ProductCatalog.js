@@ -76,7 +76,7 @@ export default function ProductCatalog({ initialProducts }) {
 
             {/* SEARCH & FILTER BOX */}
             <div className="sticky z-30 pt-4 mb-12 top-20">
-                <div className="max-w-4xl mx-auto bg-white border border-gray-100 shadow-2xl rounded-3xl p-2 flex flex-col lg:flex-row items-stretch gap-2">
+                <div className="flex flex-col items-stretch max-w-4xl gap-2 p-2 mx-auto bg-white border border-gray-100 shadow-2xl rounded-3xl lg:flex-row">
                     
                     {/* Search Input */}
                     <div className="relative flex-1 group">
@@ -96,7 +96,7 @@ export default function ProductCatalog({ initialProducts }) {
                     </div>
 
                     {/* Filter Dropdowns Section */}
-                    <div className="flex flex-col sm:flex-row items-center gap-2 border-t lg:border-t-0 lg:border-l border-gray-100 pt-2 lg:pt-0 lg:pl-2">
+                    <div className="flex flex-col items-center gap-2 pt-2 border-t border-gray-100 sm:flex-row lg:border-t-0 lg:border-l lg:pt-0 lg:pl-2">
                         
                         {/* Main Category Dropdown */}
                         <div className="relative w-full sm:w-48 group">
@@ -112,7 +112,7 @@ export default function ProductCatalog({ initialProducts }) {
                                     <option key={cat} value={cat}>{cat === 'All' ? 'All Categories' : cat}</option>
                                 ))}
                             </select>
-                            <ChevronDownIcon className="absolute w-3 h-3 text-gray-400 pointer-events-none right-4 top-1/2 -translate-y-1/2" />
+                            <ChevronDownIcon className="absolute w-3 h-3 text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2" />
                         </div>
 
                         {/* Sub Category Dropdown (Conditional) */}
@@ -131,10 +131,10 @@ export default function ProductCatalog({ initialProducts }) {
                         </div>
 
                         {/* Visual Search Button */}
-                        <label className={`flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl cursor-pointer transition-all w-full sm:w-auto ${isImageLoading ? 'bg-pink-100 text-[#EA638C]' : 'bg-[#3E442B] text-white hover:bg-black'}`}>
+                       {/*  <label className={`flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl cursor-pointer transition-all w-full sm:w-auto ${isImageLoading ? 'bg-pink-100 text-[#EA638C]' : 'bg-[#3E442B] text-white hover:bg-black'}`}>
                             <CameraIcon className={`w-5 h-5 ${isImageLoading ? 'animate-spin' : ''}`} />
                             <input type="file" accept="image/*" className="hidden" onChange={handleImageSearch} disabled={isImageLoading} />
-                        </label>
+                        </label> */}
                     </div>
                 </div>
             </div>

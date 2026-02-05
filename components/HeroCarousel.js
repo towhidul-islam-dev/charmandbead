@@ -1,149 +1,90 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  ArrowRight,
-  ChevronLeft,
-  ChevronRight,
-  ShoppingBag,
-} from "lucide-react";
+import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
-
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const slides = [
   {
-    id: 1,
-    title: "BLACK FRIDAY",
-    subTitle: "সাধ্যের মধ্যে সবটুকু",
-    brand: "আমেরিকা",
-    bg: "from-[#e8f5e9] via-[#f1f8f6] to-[#e0f2f1]",
-    accent: "#1b5e20",
-    image: "/man-with-laptop.png",
+    image: "/image1.jpg", 
+    link: "/products?category=new-arrivals",
+    title: "New Arrivals",
   },
   {
-    id: 2,
-    title: "WINTER SALE",
-    subTitle: "নতুন কালেকশন",
-    brand: "লন্ডন",
-    bg: "from-[#e3f2fd] via-[#f0f4f8] to-[#e1f5fe]",
-    accent: "#0d47a1",
-    image: "/man-with-laptop.png", // Replace with another image if available
+    image: "/image2.jpg",
+    link: "/products?category=charms",
+    title: "Exquisite Charms",
   },
 ];
 
-export default function HeroCarousel() {
+const HeroCarousel = () => {
   const [current, setCurrent] = useState(0);
 
-  const nextSlide = useCallback(() => {
-    setCurrent((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrent((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+    }, 5000);
+    return () => clearInterval(timer);
   }, []);
 
-  const prevSlide = () => {
-    setCurrent((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
-  };
-
-  useEffect(() => {
-    const timer = setInterval(nextSlide, 5000);
-    return () => clearInterval(timer);
-  }, [nextSlide]);
+  const nextSlide = () => setCurrent(current === slides.length - 1 ? 0 : current + 1);
+  const prevSlide = () => setCurrent(current === 0 ? slides.length - 1 : current - 1);
 
   return (
-    <section
-      className={`relative min-h-[550px] w-full bg-gradient-to-r ${slides[current].bg} transition-all duration-1000 overflow-hidden flex items-center`}
-    >
-      {/* City Skyline Overlay */}
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none grayscale">
-        <div className="absolute bottom-0 w-full h-72 bg-[url('https://www.transparenttextures.com/patterns/city-skyline.png')] bg-repeat-x"></div>
-      </div>
-
-      <div className="container mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative z-10 py-12">
-        {/* Left Side (Content) */}
-        <div
-          key={slides[current].id}
-          className="space-y-8 animate-in fade-in slide-in-from-left duration-700"
-        >
-          <div className="relative inline-block">
-            <h2 className="text-7xl md:text-9xl font-black italic tracking-tighter text-gray-900 leading-[0.8]">
-              {slides[current].title.split(" ")[0]} <br />
-              <span className="text-6xl md:text-8xl">
-                {slides[current].title.split(" ")[1]}
-              </span>
-            </h2>
-            <span className="absolute -top-6 -left-8 text-gray-400 text-2xl">
-              ✦
-            </span>
-          </div>
-
-          <div className="space-y-4">
-            <div
-              className="inline-block px-8 py-3 rounded-md transform -skew-x-12 shadow-lg"
-              style={{ backgroundColor: slides[current].accent }}
-            >
-              <h3 className="text-white text-3xl md:text-5xl font-bold skew-x-12">
-                {slides[current].subTitle}
-              </h3>
-            </div>
-            <h1 className="text-6xl md:text-8xl font-black text-[#0d47a1] tracking-tight">
-              {slides[current].brand}
-            </h1>
-          </div>
-
-          <Link href="/products">
-            <button className="group flex items-center gap-3 bg-[#0d47a1] text-white px-10 py-5 rounded-full font-bold text-xl shadow-xl hover:bg-blue-800 transition-all">
-              Shop Now{" "}
-              <ArrowRight
-                size={24}
-                className="group-hover:translate-x-2 transition-transform"
-              />
-            </button>
-          </Link>
-        </div>
-
-        {/* Right Side (Image/Visuals) */}
-        <div className="relative flex justify-center lg:justify-end">
-          {/* Browser Mockup */}
-          <div className="absolute top-0 left-0 lg:-left-16 z-10 w-full max-w-[420px] bg-white/90 backdrop-blur-md rounded-3xl shadow-xl border border-white/50 p-5 hidden md:block">
-            <div className="grid grid-cols-3 gap-3">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="aspect-square bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200"
-                >
-                  <ShoppingBag className="text-blue-600/20" size={32} />
-                </div>
-              ))}
-            </div>
-          </div>
-          <img
-            src={slides[current].image}
-            alt="Hero"
-            className="relative z-20 w-[320px] h-[450px] md:w-[500px] md:h-[600px] object-contain drop-shadow-2xl animate-in zoom-in duration-1000"
-          />
-        </div>
-      </div>
-
-      {/* Navigation Arrows */}
-      <button
-        onClick={prevSlide}
-        className="absolute left-4 z-30 p-2 bg-white/50 rounded-full hover:bg-white transition-colors"
-      >
-        <ChevronLeft size={30} />
-      </button>
-      <button
-        onClick={nextSlide}
-        className="absolute right-4 z-30 p-2 bg-white/50 rounded-full hover:bg-white transition-colors"
-      >
-        <ChevronRight size={30} />
-      </button>
-
-      {/* Progress Dots */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2 z-30">
-        {slides.map((_, i) => (
+    // Reduced height from h-screen to h-[40vh] md:h-[50vh]
+    <section className="relative w-full h-[45vh] md:h-[55vh] overflow-hidden bg-gray-100 mt-2">
+      <div className="flex w-full h-full">
+        {slides.map((slide, index) => (
           <div
+            key={index}
+            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+              index === current ? "opacity-100 z-10" : "opacity-0 z-0"
+            }`}
+          >
+            {/* 🟢 The entire slide is now a clickable Link */}
+            <Link href={slide.link} className="relative block w-full h-full group">
+              <Image
+                src={slide.image}
+                alt={slide.title}
+                fill
+                priority={index === 0}
+                className="object-cover transition-transform duration-[10s] group-hover:scale-110"
+              />
+              {/* Subtle Overlay to make text pop if you add any */}
+              <div className="absolute inset-0 transition-colors bg-black/10 group-hover:bg-black/5" />
+            </Link>
+          </div>
+        ))}
+      </div>
+
+      {/* Navigation Controls */}
+      <button 
+        onClick={prevSlide}
+        className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/20 hover:bg-white text-white hover:text-[#3E442B] transition-all"
+      >
+        <ChevronLeft size={24} />
+      </button>
+      <button 
+        onClick={nextSlide}
+        className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/20 hover:bg-white text-white hover:text-[#3E442B] transition-all"
+      >
+        <ChevronRight size={24} />
+      </button>
+
+      {/* 🟢 Branded Indicators (Pink: #EA638C) */}
+      <div className="absolute z-20 flex gap-3 -translate-x-1/2 bottom-6 left-1/2">
+        {slides.map((_, i) => (
+          <button
             key={i}
-            className={`h-2 rounded-full transition-all duration-300 ${current === i ? "w-8 bg-blue-600" : "w-2 bg-gray-300"}`}
+            onClick={() => setCurrent(i)}
+            className={`h-1.5 transition-all rounded-full ${
+              current === i ? "w-8 bg-[#EA638C]" : "w-2 bg-white/50"
+            }`}
           />
         ))}
       </div>
     </section>
   );
-}
+};
+
+export default HeroCarousel;

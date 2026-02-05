@@ -23,10 +23,17 @@ const UserSchema = new mongoose.Schema({
   phone: { type: String, default: "" },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
   
-  // 💡 Added wishlist field to store product references
+  // 🟢 PASSWORD RESET FIELDS
+  resetToken: { type: String, default: null },
+  resetTokenExpiry: { type: Date, default: null },
+
+  // 🟢 2FA / OTP FIELDS
+  otpCode: { type: String, default: null },
+  otpExpiry: { type: Date, default: null },
+
   wishlist: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product' // 👈 Make sure this matches your Product model name exactly
+    ref: 'Product' 
   }],
 
   addresses: [{
@@ -43,10 +50,9 @@ const UserSchema = new mongoose.Schema({
   vipDiscount: { type: Number, default: 5 },
 }, { timestamps: true });
 
-// ✅ FIXED PRE-SAVE HOOK
+// Pre-save hook (already correct in your code)
 UserSchema.pre('save', async function() {
   if (!this.isModified('password')) return;
-
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);

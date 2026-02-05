@@ -135,6 +135,16 @@ export default function CheckoutPage() {
         sku: item.sku || "N/A",
       }));
 
+      const moqViolation = checkoutItems.find(
+        (item) => item.quantity < (item.minOrderQuantity || 1),
+      );
+      if (moqViolation) {
+        toast.error(
+          `Order error: ${moqViolation.name} requires a minimum of ${moqViolation.minOrderQuantity} pieces.`,
+        );
+        setLoading(false);
+        return;
+      }
       const orderData = {
         userId: session?.user?.id,
         items: mappedItems,
@@ -338,7 +348,7 @@ export default function CheckoutPage() {
             </div>
             {paymentMethod === "COD" && (
               <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-white/5">
-                <span className="text-[8px] font-black uppercase text-white/20 tracking-widest shrink-0">
+                <span className="text-[8px ] font-black uppercase text-white/20 tracking-widest shrink-0">
                   Due COD
                 </span>
                 <span className="font-serif text-xs italic font-bold text-white/60">
@@ -354,7 +364,11 @@ export default function CheckoutPage() {
             className="w-full bg-[#EA638C] text-white p-2 pr-6 md:pr-8 rounded-full font-black uppercase tracking-[0.1em] text-[9px] md:text-[10px] transition-all flex items-center justify-between group disabled:bg-white/10 shadow-xl active:scale-95"
           >
             <div className="bg-white p-3 rounded-full text-[#EA638C] shadow-lg shrink-0">
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+              {loading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <ShieldCheck size={16} />
+              )}
             </div>
             <span className="flex-1 font-black text-center">
               {loading ? "PROCESSING..." : `FINALIZE ORDER`}

@@ -16,9 +16,8 @@ export default function OrderDetailsModal({ order, onClose }) {
   // 🟢 Logic synced with Schema & Success Page
   const subtotal = order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const deliveryCharge = order.deliveryCharge || 0;
-  const mfsFee = order.mobileBankingFee || 0; // NEW FIELD
+  const mfsFee = order.mobileBankingFee || 0; 
   
-  // Total = Items + Delivery + Fee
   const totalAmount = order.totalAmount || (subtotal + deliveryCharge + mfsFee);
   const paidAmount = order.paidAmount || 0;
   const dueAmount = order.dueAmount || (totalAmount - paidAmount);
@@ -94,11 +93,23 @@ export default function OrderDetailsModal({ order, onClose }) {
              {order.items.map((item, i) => (
                <div key={i} className="flex items-center gap-3 p-2 border border-gray-50 rounded-xl bg-gray-50/20">
                  <div className="relative flex-shrink-0 w-9 h-9">
-                    <Image src={item.variant?.image || item.image || '/placeholder.png'} fill className="object-cover border border-white rounded-lg shadow-sm" alt="p" unoptimized />
+                    {/* 🟢 FIXED: Checking populated product imageUrl first */}
+                    <Image 
+                      src={item.product?.imageUrl || item.variant?.image || item.image || '/placeholder.png'} 
+                      fill 
+                      className="object-cover border border-white rounded-lg shadow-sm" 
+                      alt="product" 
+                      unoptimized 
+                    />
                  </div>
                  <div className="flex-1 min-w-0">
-                   <p className="text-[9px] font-black uppercase text-[#3E442B] truncate">{item.productName || item.name}</p>
-                   <p className="text-[7px] font-bold text-gray-400 uppercase tracking-tighter">{item.variant?.name || "Default"} • {item.variant?.size || "N/A"} × {item.quantity}</p>
+                    {/* 🟢 FIXED: Fallback chain for product name */}
+                    <p className="text-[9px] font-black uppercase text-[#3E442B] truncate">
+                      {item.productName || item.product?.name || item.name}
+                    </p>
+                    <p className="text-[7px] font-bold text-gray-400 uppercase tracking-tighter">
+                      {item.variant?.name || "Default"} • {item.variant?.size || "N/A"} × {item.quantity}
+                    </p>
                  </div>
                  {includePrice && <p className="text-[10px] font-black text-[#3E442B]">৳{(item.price * item.quantity).toLocaleString()}</p>}
                </div>
@@ -106,7 +117,7 @@ export default function OrderDetailsModal({ order, onClose }) {
            </div>
         </div>
 
-        {/* FINANCIAL SUMMARY (Controlled by Toggle) */}
+        {/* FINANCIAL SUMMARY */}
         {includePrice && (
           <div className="flex-shrink-0 px-8 py-4 border-t border-b border-gray-100 bg-gray-50">
             <div className="space-y-1.5">
@@ -119,7 +130,6 @@ export default function OrderDetailsModal({ order, onClose }) {
                 <span>+ ৳{deliveryCharge.toLocaleString()}</span>
               </div>
 
-              {/* 🟢 NEW: MFS FEE LINE */}
               {mfsFee > 0 && (
                 <div className="flex justify-between text-[9px] font-bold uppercase text-[#EA638C]">
                   <span className="flex items-center gap-1"><CreditCard size={10}/> MFS Fee (1.5%)</span>
@@ -150,10 +160,10 @@ export default function OrderDetailsModal({ order, onClose }) {
               
               <div className={`p-3 px-5 rounded-2xl text-right min-w-[150px] shadow-lg border-b-4 ${isPartial ? 'bg-[#EA638C] border-[#3E442B]' : 'bg-[#3E442B] border-[#EA638C]'}`}>
                  <p className="text-[7px] font-black text-white/50 uppercase leading-none mb-1">
-                   {isPartial ? "Balance Due (COD)" : "Fully Paid"}
+                    {isPartial ? "Balance Due (COD)" : "Fully Paid"}
                  </p>
                  <p className="text-2xl italic font-black leading-none tracking-tighter text-white">
-                   ৳{dueAmount.toLocaleString()}
+                    ৳{dueAmount.toLocaleString()}
                  </p>
               </div>
            </div>
