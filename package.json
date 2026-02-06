@@ -27,7 +27,7 @@
     "fs": "^0.0.1-security",
     "headlessui": "^0.0.0",
     "jsonwebtoken": "^9.0.3",
-    "jspdf": "^3.0.4",
+    "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.556.0",
     "mongoose": "^9.0.1",
