@@ -16,6 +16,15 @@ const playfair = Playfair_Display({
   variable: '--font-playfair',
 });
 
+// ✅ 1. NEW: Separated Viewport Export (Fixes Next.js 16 Build Warnings)
+export const viewport = {
+  themeColor: "#EA638C",
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+};
+
+// ✅ 2. UPDATED: Metadata Export (Structural fix only, content is identical)
 export const metadata = {
   title: {
     default: 'Charm & Bead | Unlock Creativity',
@@ -28,11 +37,8 @@ export const metadata = {
   
   metadataBase: new URL(process.env.NODE_ENV === 'development' 
     ? 'http://localhost:3000' 
-    : 'https://your-future-domain.com'), // 🟢 Remember to update this later
+    : 'https://your-future-domain.com'), 
   
-  // 🟢 BRANDING: Theme color for mobile browser bars
-  themeColor: "#EA638C", 
-
   openGraph: {
     type: 'website',
     locale: 'en_US',
@@ -56,20 +62,14 @@ export const metadata = {
     description: 'Source the finest materials for your jewelry workshop.',
     images: ['/og-image.jpg'], 
   },
-
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 5, 
-  },
 };
 
 export default async function ClientLayout({ children }) {
   // 🟢 Fetch arrival data (and others) from the server
   const globalData = await getAdminGlobalData();
 
-return (
-    <NotificationProvider> {/* 🟢 Wrapper added here to fix the destructuring error */}
+  return (
+    <NotificationProvider> {/* 🟢 Wrapper kept to fix the destructuring error */}
       <CartProvider>
         <WishlistProvider>
           <LoginNotifier />
@@ -91,7 +91,7 @@ return (
           <ConnectivityListener />
 
           <div className={`${playfair.variable} flex flex-col min-h-screen font-serif selection:bg-[#FBB6E6] selection:text-[#3E442B]`}>
-            {/* 🟢 Navbar is now INSIDE the NotificationProvider, so the Bell will work */}
+            {/* 🟢 Navbar is inside the NotificationProvider, so the Bell will work */}
             <Navbar globalData={globalData} /> 
 
             <main className="flex flex-col flex-1"> 

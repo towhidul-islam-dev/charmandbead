@@ -2,17 +2,19 @@
 import Link from "next/link";
 import Image from "next/image"; 
 import { useWishlist } from "@/Context/WishlistContext";
+import { useSession } from "next-auth/react"; // 🟢 Changed import to useSession
 import { Heart, Sparkles, Share2, Package } from "lucide-react"; 
 import toast from "react-hot-toast";
 
 const ProductCard = ({ product, index = 0 }) => {
   const { wishlist, toggleWishlist } = useWishlist();
+  const { data: session } = useSession(); // 🟢 Access session data
+  const user = session?.user; // 🟢 Determine if user is logged in
   
   const isFavorite = wishlist?.some((item) => item._id === product?._id);
   const isOutOfStock = product?.stock <= 0;
   const isLowStock = product?.stock > 0 && product?.stock <= 5;
 
-  // Mapping to your variants structure
   const moqValue = product?.variants?.[0]?.minOrderQuantity || 0;
 
   const isRecentlyCreated = product?.createdAt 
@@ -51,8 +53,8 @@ const ProductCard = ({ product, index = 0 }) => {
     <div className="group relative flex flex-col bg-white rounded-[2rem] shadow-sm hover:shadow-xl transition-all duration-500 border border-gray-100 overflow-hidden">
       
       {/* IMAGE CONTAINER */}
-      <div className="relative aspect-square w-full bg-gray-50 overflow-hidden">
-        <Link href={`/products/${product._id}`} className="block w-full h-full relative z-0">
+      <div className="relative w-full overflow-hidden aspect-square bg-gray-50">
+        <Link href={`/products/${product._id}`} className="relative z-0 block w-full h-full">
           <Image
             src={product.imageUrl || "/placeholder.png"}
             alt={product.name}
@@ -62,9 +64,9 @@ const ProductCard = ({ product, index = 0 }) => {
             priority={index < 4} 
           />
 
-          {/* 🟢 HIGH CONTRAST COMPACT CORNER MOQ BADGE */}
+          {/* MOQ BADGE */}
           {moqValue > 0 && !isOutOfStock && (
-            <div className="absolute bottom-3 left-3 z-20 transition-all duration-500 transform translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100">
+            <div className="absolute z-20 transition-all duration-500 transform translate-y-2 opacity-0 bottom-3 left-3 group-hover:translate-y-0 group-hover:opacity-100">
               <div className="bg-[#3E442B] border-2 border-[#FBB6E6]/40 px-3 py-1.5 rounded-xl shadow-2xl flex items-center gap-2">
                 <span className="text-[10px] font-black text-[#FBB6E6] uppercase tracking-wider">
                   MOQ :
@@ -81,7 +83,7 @@ const ProductCard = ({ product, index = 0 }) => {
         </Link>
 
         {/* TOP BADGES */}
-        <div className="absolute z-10 top-3 left-3 flex flex-col gap-1">
+        <div className="absolute z-10 flex flex-col gap-1 top-3 left-3">
           {showNewBadge && (
             <div className="flex items-center gap-1 px-3 py-1 text-[9px] font-black text-white bg-[#EA638C] rounded-lg shadow-md uppercase">
               <Sparkles size={10} /> NEW
@@ -92,15 +94,17 @@ const ProductCard = ({ product, index = 0 }) => {
           )}
         </div>
 
-        {/* FLOATING ACTIONS */}
-        <div className="absolute z-30 flex flex-col gap-2 transition-all duration-300 translate-x-12 opacity-0 top-3 right-3 group-hover:translate-x-0 group-hover:opacity-100">
-          <button onClick={handleWishlistClick} className="p-2.5 rounded-full bg-white shadow-md hover:bg-[#EA638C] group/heart transition-colors">
-            <Heart size={16} className={isFavorite ? "fill-[#EA638C] text-[#EA638C]" : "text-gray-400 group-hover/heart:text-white"} />
-          </button>
-          <button onClick={handleShare} className="p-2.5 rounded-full bg-white shadow-md hover:bg-[#3E442B] group/share transition-colors">
-            <Share2 size={16} className="text-gray-400 group-hover/share:text-white" />
-          </button>
-        </div>
+        {/* 🟢 FLOATING ACTIONS - Now using NextAuth session check */}
+        {user && (
+          <div className="absolute z-30 flex flex-col gap-2 transition-all duration-300 translate-x-12 opacity-0 top-3 right-3 group-hover:translate-x-0 group-hover:opacity-100">
+            <button onClick={handleWishlistClick} className="p-2.5 rounded-full bg-white shadow-md hover:bg-[#EA638C] group/heart transition-colors">
+              <Heart size={16} className={isFavorite ? "fill-[#EA638C] text-[#EA638C]" : "text-gray-400 group-hover/heart:text-white"} />
+            </button>
+            <button onClick={handleShare} className="p-2.5 rounded-full bg-white shadow-md hover:bg-[#3E442B] group/share transition-colors">
+              <Share2 size={16} className="text-gray-400 group-hover/share:text-white" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* INFO SECTION */}
@@ -110,7 +114,6 @@ const ProductCard = ({ product, index = 0 }) => {
             <div className="flex flex-col">
               <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate">{product.category}</p>
               
-              {/* Mobile MOQ Indicator (Static High Contrast) */}
               {moqValue > 0 && (
                 <div className="flex items-center gap-1 mt-1 md:hidden">
                    <Package size={10} className="text-[#3E442B]" />
@@ -128,7 +131,7 @@ const ProductCard = ({ product, index = 0 }) => {
         {/* STOCK BAR */}
         {!isOutOfStock && (
           <div className="mb-4">
-            <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
+            <div className="w-full h-1 overflow-hidden bg-gray-100 rounded-full">
               <div 
                 className={`h-full transition-all duration-1000 ${isLowStock ? 'bg-[#EA638C]' : 'bg-[#3E442B]'}`}
                 style={{ width: `${Math.min((product.stock / 20) * 100, 100)}%` }} 

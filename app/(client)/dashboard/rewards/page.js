@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getMyRewards } from "@/actions/surprise";
 import MyRewards from "@/components/profile/MyRewards";
 

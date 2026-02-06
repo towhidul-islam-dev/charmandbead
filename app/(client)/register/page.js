@@ -1,8 +1,8 @@
 "use client";
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, UserPlus, Loader2 } from 'lucide-react';
 
 export default function RegisterPage() {
     const [formData, setFormData] = useState({ name: '', email: '', password: '' });
@@ -10,6 +10,30 @@ export default function RegisterPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null); 
     const router = useRouter(); 
+
+    // 🟢 1. Password Strength Calculation (Integrated)
+    const strength = useMemo(() => {
+        const password = formData.password;
+        let score = 0;
+        if (!password) return 0;
+        if (password.length >= 8) score++; 
+        if (/[A-Z]/.test(password)) score++; 
+        if (/[0-9]/.test(password)) score++; 
+        if (/[^A-Za-z0-9]/.test(password)) score++; 
+        return score;
+    }, [formData.password]);
+
+    const getStrengthData = () => {
+        switch (strength) {
+            case 1: return { label: "WEAK", color: "#FF4D4D" };
+            case 2: return { label: "FAIR", color: "#FFA500" };
+            case 3: return { label: "GOOD", color: "#EA638C" }; // Brand Pink
+            case 4: return { label: "STRONG", color: "#3E442B" }; // Brand Green
+            default: return { label: "EMPTY", color: "#E5E7EB" };
+        }
+    };
+
+    const { label: strengthLabel, color: strengthColor } = getStrengthData();
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -26,8 +50,9 @@ export default function RegisterPage() {
             return;
         }
 
-        if (formData.password.length < 6) {
-            setError("Password must be at least 6 characters long.");
+        // Security Check: Only allow registration for "Good" or "Strong" passwords
+        if (formData.password && strength < 3) {
+            setError("Security Requirement: Password must be 'Good' or 'Strong'.");
             setLoading(false);
             return;
         }
@@ -47,7 +72,7 @@ export default function RegisterPage() {
                 setError(data.message || "Registration failed. Please try again.");
             }
         } catch (networkError) {
-            setError("Network error. Please check if your server is running.");
+            setError("Network error. Please check your connection.");
         } finally {
             setLoading(false);
         }
@@ -97,14 +122,21 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="space-y-1">
-                        <label className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.2em] ml-2">Password</label>
+                        <div className="flex justify-between items-center px-2 mb-1">
+                            <label className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.2em]">Password</label>
+                            {formData.password && (
+                                <span style={{ color: strengthColor }} className="text-[8px] font-black uppercase tracking-tighter transition-all">
+                                    {strengthLabel}
+                                </span>
+                            )}
+                        </div>
                         <div className="relative">
                             <input
                                 name="password" 
                                 type={showPassword ? "text" : "password"}
                                 required
                                 value={formData.password} onChange={handleChange}
-                                placeholder="MIN. 6 CHARACTERS"
+                                placeholder="MIN. 8 CHARACTERS"
                                 className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] outline-none focus:border-[#EA638C] transition-all pr-12"
                             />
                             <button
@@ -115,14 +147,29 @@ export default function RegisterPage() {
                                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                             </button>
                         </div>
+
+                        {/* 🟢 Strength Meter Bar Integration */}
+                        <div className="flex gap-1.5 px-2 mt-2">
+                            {[1, 2, 3, 4].map((s) => (
+                                <div 
+                                    key={s}
+                                    className="h-1 flex-1 rounded-full transition-all duration-500"
+                                    style={{ 
+                                        backgroundColor: strength >= s ? strengthColor : "#F3F4F6" 
+                                    }}
+                                />
+                            ))}
+                        </div>
                     </div>
 
                     <button
                         type="submit"
-                        disabled={loading}
-                        className="w-full py-4 text-white font-black text-[10px] uppercase tracking-[0.4em] bg-[#3E442B] rounded-2xl hover:bg-black active:scale-[0.98] transition-all disabled:opacity-50 shadow-xl shadow-[#3E442B]/10"
+                        disabled={loading || (formData.password && strength < 3)}
+                        className="w-full py-4 text-white font-black text-[10px] uppercase tracking-[0.4em] bg-[#3E442B] rounded-2xl hover:bg-black active:scale-[0.98] transition-all disabled:opacity-30 shadow-xl shadow-[#3E442B]/10 flex items-center justify-center gap-2"
                     >
-                        {loading ? 'Processing...' : 'Register Account'}
+                        {loading ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> PROCESSING</>
+                        ) : 'Register Account'}
                     </button>
                 </form>
 

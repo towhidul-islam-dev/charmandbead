@@ -100,20 +100,24 @@ const ClientHeader = ({ pathname }) => {
               </Link>
             )}
 
-            <Link href="/dashboard/wishlist" className="relative p-2 group">
-              <HeartIcon className="text-[#3E442B] h-6 w-6 group-hover:text-red-500 transition-colors" />
-              {wishlistCount > 0 && <span className={badgeStyle}>{wishlistCount}</span>}
-            </Link>
+            {/* 🟢 ONLY HIDE THESE IF NO SESSION */}
+            {session && (
+              <>
+                <Link href="/dashboard/wishlist" className="relative p-2 group">
+                  <HeartIcon className="text-[#3E442B] h-6 w-6 group-hover:text-red-500 transition-colors" />
+                  {wishlistCount > 0 && <span className={badgeStyle}>{wishlistCount}</span>}
+                </Link>
 
-            {/* 🟢 Ensure NotificationBell is inside this flex container */}
-            <div className="relative">
-               <NotificationBell />
-            </div>
+                <div className="relative">
+                   <NotificationBell />
+                </div>
 
-            <Link href="/cart" className="relative p-2 group">
-              <ShoppingCartIcon className="text-[#3E442B] h-6 w-6 group-hover:text-[#EA638C] transition-colors" />
-              {cartCount > 0 && <span className={badgeStyle}>{cartCount}</span>}
-            </Link>
+                <Link href="/cart" className="relative p-2 group">
+                  <ShoppingCartIcon className="text-[#3E442B] h-6 w-6 group-hover:text-[#EA638C] transition-colors" />
+                  {cartCount > 0 && <span className={badgeStyle}>{cartCount}</span>}
+                </Link>
+              </>
+            )}
 
             {session ? (
               <div className="relative" ref={dropdownRef}>

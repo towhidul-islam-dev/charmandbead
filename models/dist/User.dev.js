@@ -14,20 +14,20 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "d
 var UserSchema = new _mongoose["default"].Schema({
   name: {
     type: String,
-    required: [true, 'Name is required'],
-    maxlength: [100, 'Name cannot be more than 100 characters']
+    required: [true, "Name is required"],
+    maxlength: [100, "Name cannot be more than 100 characters"]
   },
   email: {
     type: String,
-    required: [true, 'Email is required'],
+    required: [true, "Email is required"],
     unique: true,
     lowercase: true,
     trim: true,
-    match: [/.+@.+\..+/, 'Must use a valid email address']
+    match: [/.+@.+\..+/, "Must use a valid email address"]
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
+    required: [true, "Password is required"],
     select: false
   },
   phone: {
@@ -36,8 +36,8 @@ var UserSchema = new _mongoose["default"].Schema({
   },
   role: {
     type: String,
-    "enum": ['user', 'admin'],
-    "default": 'user'
+    "enum": ["user", "admin"],
+    "default": "user"
   },
   // 🟢 PASSWORD RESET FIELDS
   resetToken: {
@@ -45,6 +45,10 @@ var UserSchema = new _mongoose["default"].Schema({
     "default": null
   },
   resetTokenExpiry: {
+    type: Date,
+    "default": null
+  },
+  resetTokenSentAt: {
     type: Date,
     "default": null
   },
@@ -59,7 +63,7 @@ var UserSchema = new _mongoose["default"].Schema({
   },
   wishlist: [{
     type: _mongoose["default"].Schema.Types.ObjectId,
-    ref: 'Product'
+    ref: "Product"
   }],
   addresses: [{
     label: String,
@@ -92,13 +96,13 @@ var UserSchema = new _mongoose["default"].Schema({
   timestamps: true
 }); // Pre-save hook (already correct in your code)
 
-UserSchema.pre('save', function _callee() {
+UserSchema.pre("save", function _callee() {
   var salt;
   return regeneratorRuntime.async(function _callee$(_context) {
     while (1) {
       switch (_context.prev = _context.next) {
         case 0:
-          if (this.isModified('password')) {
+          if (this.isModified("password")) {
             _context.next = 2;
             break;
           }
@@ -160,7 +164,7 @@ UserSchema.methods.comparePassword = function _callee2(candidatePassword) {
   }, null, this);
 };
 
-var User = _mongoose["default"].models.User || _mongoose["default"].model('User', UserSchema);
+var User = _mongoose["default"].models.User || _mongoose["default"].model("User", UserSchema);
 
 var _default = User;
 exports["default"] = _default;

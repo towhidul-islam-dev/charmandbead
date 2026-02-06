@@ -5,9 +5,8 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.startPasswordReset = startPasswordReset;
+exports.verifyOTPAction = verifyOTPAction;
 exports.updatePasswordAction = updatePasswordAction;
-
-var _bcryptjs = _interopRequireDefault(require("bcryptjs"));
 
 var _User = _interopRequireDefault(require("@/models/User"));
 
@@ -15,15 +14,17 @@ var _tokens = require("@/lib/tokens");
 
 var _mongodb = _interopRequireDefault(require("@/lib/mongodb"));
 
-var _resend = require("resend");
+var _nodemailer = _interopRequireDefault(require("nodemailer"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "default": obj }; }
 
-var resend = new _resend.Resend(process.env.RESEND_API_KEY);
+// Ensure you have a function that returns a 6-digit string
 
+/**
+ * STEP 1: Start Reset (Generate & Send 6-Digit OTP)
+ */
 function startPasswordReset(email) {
-  var normalizedEmail, resetToken, expiry, user, resetLink, _ref, error;
-
+  var normalizedEmail, user, lastSent, cooldown, timeLeft, otp, transporter;
   return regeneratorRuntime.async(function startPasswordReset$(_context) {
     while (1) {
       switch (_context.prev = _context.next) {
@@ -33,24 +34,17 @@ function startPasswordReset(email) {
           return regeneratorRuntime.awrap((0, _mongodb["default"])());
 
         case 3:
-          // Normalize email to ensure it matches the DB (prevents "Email not found" bugs)
           normalizedEmail = email.toLowerCase().trim();
-          resetToken = (0, _tokens.generateResetToken)();
-          expiry = Date.now() + 3600000; // Use normalizedEmail to find the user
-
-          _context.next = 8;
-          return regeneratorRuntime.awrap(_User["default"].findOneAndUpdate({
+          _context.next = 6;
+          return regeneratorRuntime.awrap(_User["default"].findOne({
             email: normalizedEmail
-          }, {
-            resetToken: resetToken,
-            resetTokenExpiry: expiry
           }));
 
-        case 8:
+        case 6:
           user = _context.sent;
 
           if (user) {
-            _context.next = 11;
+            _context.next = 9;
             break;
           }
 
@@ -58,56 +52,83 @@ function startPasswordReset(email) {
             success: true
           });
 
-        case 11:
-          resetLink = "".concat(process.env.NEXTAUTH_URL || 'http://localhost:3000', "/reset-password/").concat(resetToken);
-          _context.next = 14;
-          return regeneratorRuntime.awrap(resend.emails.send({
-            from: 'Charm & Bead Security <onboarding@resend.dev>',
-            // Keep your current verified sender
-            to: [normalizedEmail],
-            subject: 'Secure Access Recovery',
-            html: "\n        <div style=\"font-family: sans-serif; max-width: 600px; margin: auto; padding: 40px; border: 2px solid #FBB6E6; border-radius: 32px; background-color: #ffffff; text-align: center;\">\n          <h2 style=\"color: #3E442B; text-transform: uppercase; letter-spacing: 2px; font-style: italic;\">Recover <span style=\"color: #EA638C;\">Access</span></h2>\n          <p style=\"color: #3E442B; font-size: 14px; font-weight: 600;\">A password reset was requested for your account.</p>\n          <div style=\"margin: 30px 0;\">\n            <a href=\"".concat(resetLink, "\" style=\"background-color: #3E442B; color: #ffffff; padding: 18px 36px; text-decoration: none; border-radius: 16px; font-weight: 900; font-size: 11px; display: inline-block; letter-spacing: 2px;\">ESTABLISH NEW KEY</a>\n          </div>\n          <p style=\"color: #EA638C; font-size: 10px; font-weight: 900; letter-spacing: 1px;\">LINK EXPIRES IN 1 HOUR.</p>\n          <hr style=\"border: none; border-top: 1px solid #FBB6E6; margin-top: 30px;\" />\n          <p style=\"font-size: 9px; color: #3E442B; opacity: 0.6; text-transform: uppercase;\">Charm & Bead Official Registry</p>\n        </div>\n      ")
-          }));
-
-        case 14:
-          _ref = _context.sent;
-          error = _ref.error;
-
-          if (!error) {
-            _context.next = 18;
+        case 9:
+          if (!user.resetTokenSentAt) {
+            _context.next = 15;
             break;
           }
 
+          lastSent = new Date(user.resetTokenSentAt).getTime();
+          cooldown = 2 * 60 * 1000;
+
+          if (!(Date.now() - lastSent < cooldown)) {
+            _context.next = 15;
+            break;
+          }
+
+          timeLeft = Math.ceil((cooldown - (Date.now() - lastSent)) / 1000);
           return _context.abrupt("return", {
             success: false,
-            error: "Email service is temporarily busy."
+            error: "Wait ".concat(timeLeft, "s before retrying.")
           });
 
-        case 18:
+        case 15:
+          // 🔢 Generate 6-Digit OTP
+          otp = (0, _tokens.generateOTP)(); // e.g., "542910"
+
+          user.otpCode = otp;
+          user.otpExpiry = Date.now() + 600000; // 10 Minutes expiry
+
+          user.resetTokenSentAt = new Date();
+          _context.next = 21;
+          return regeneratorRuntime.awrap(user.save());
+
+        case 21:
+          // ✉️ Send OTP Email
+          transporter = _nodemailer["default"].createTransport({
+            service: "gmail",
+            auth: {
+              user: process.env.EMAIL_USER,
+              pass: process.env.EMAIL_PASS
+            }
+          });
+          _context.next = 24;
+          return regeneratorRuntime.awrap(transporter.sendMail({
+            from: "\"Charm & Bead Security\" <".concat(process.env.EMAIL_USER, ">"),
+            to: normalizedEmail,
+            subject: "Your Security Code: ".concat(otp),
+            html: "\n        <div style=\"font-family: sans-serif; max-width: 450px; margin: auto; padding: 40px; border: 2px solid #FBB6E6; border-radius: 32px; background-color: #ffffff; text-align: center;\">\n          <h2 style=\"color: #3E442B; text-transform: uppercase; font-style: italic;\">Identity <span style=\"color: #EA638C;\">Verification</span></h2>\n          <p style=\"color: #3E442B; font-size: 14px; margin-bottom: 25px;\">Use the following code to authorize your password reset.</p>\n          \n          <div style=\"background-color: #f9f9f9; padding: 20px; border-radius: 20px; border: 1px dashed #3E442B/20;\">\n            <span style=\"font-size: 36px; font-weight: 900; letter-spacing: 12px; color: #3E442B; font-family: monospace;\">".concat(otp, "</span>\n          </div>\n\n          <p style=\"color: #EA638C; font-size: 10px; font-weight: 900; margin-top: 25px; letter-spacing: 1px;\">THIS CODE EXPIRES IN 10 MINUTES.</p>\n          <hr style=\"border: none; border-top: 1px solid #eee; margin: 30px 0;\" />\n          <p style=\"font-size: 9px; color: #3E442B; opacity: 0.6; text-transform: uppercase;\">If you did not request this, please secure your account immediately.</p>\n        </div>\n      ")
+          }));
+
+        case 24:
           return _context.abrupt("return", {
             success: true
           });
 
-        case 21:
-          _context.prev = 21;
+        case 27:
+          _context.prev = 27;
           _context.t0 = _context["catch"](0);
           console.error("Auth Action Error:", _context.t0);
           return _context.abrupt("return", {
             success: false,
-            error: "System error. Please try again."
+            error: "System failure. Try again later."
           });
 
-        case 25:
+        case 31:
         case "end":
           return _context.stop();
       }
     }
-  }, null, null, [[0, 21]]);
+  }, null, null, [[0, 27]]);
 }
+/**
+ * STEP 2: Verify OTP & Issue Temporary Reset Token
+ */
 
-function updatePasswordAction(token, newPassword) {
-  var user;
-  return regeneratorRuntime.async(function updatePasswordAction$(_context2) {
+
+function verifyOTPAction(email, otp) {
+  var normalizedEmail, user, resetToken;
+  return regeneratorRuntime.async(function verifyOTPAction$(_context2) {
     while (1) {
       switch (_context2.prev = _context2.next) {
         case 0:
@@ -116,7 +137,78 @@ function updatePasswordAction(token, newPassword) {
           return regeneratorRuntime.awrap((0, _mongodb["default"])());
 
         case 3:
-          _context2.next = 5;
+          normalizedEmail = email.toLowerCase().trim();
+          _context2.next = 6;
+          return regeneratorRuntime.awrap(_User["default"].findOne({
+            email: normalizedEmail,
+            otpCode: otp,
+            otpExpiry: {
+              $gt: Date.now()
+            }
+          }));
+
+        case 6:
+          user = _context2.sent;
+
+          if (user) {
+            _context2.next = 9;
+            break;
+          }
+
+          return _context2.abrupt("return", {
+            success: false,
+            error: "Invalid or expired security code."
+          });
+
+        case 9:
+          // Generate a temporary reset token (Big companies use this to "unlock" the reset page)
+          resetToken = Math.random().toString(36).substring(2, 15);
+          user.resetToken = resetToken;
+          user.resetTokenExpiry = Date.now() + 600000; // 10 minutes to finish the password change
+
+          user.otpCode = null; // Clear OTP after use
+
+          _context2.next = 15;
+          return regeneratorRuntime.awrap(user.save());
+
+        case 15:
+          return _context2.abrupt("return", {
+            success: true,
+            token: resetToken
+          });
+
+        case 18:
+          _context2.prev = 18;
+          _context2.t0 = _context2["catch"](0);
+          return _context2.abrupt("return", {
+            success: false,
+            error: "Verification failed."
+          });
+
+        case 21:
+        case "end":
+          return _context2.stop();
+      }
+    }
+  }, null, null, [[0, 18]]);
+}
+/**
+ * STEP 3: Final Password Update
+ */
+
+
+function updatePasswordAction(token, newPassword) {
+  var user;
+  return regeneratorRuntime.async(function updatePasswordAction$(_context3) {
+    while (1) {
+      switch (_context3.prev = _context3.next) {
+        case 0:
+          _context3.prev = 0;
+          _context3.next = 3;
+          return regeneratorRuntime.awrap((0, _mongodb["default"])());
+
+        case 3:
+          _context3.next = 5;
           return regeneratorRuntime.awrap(_User["default"].findOne({
             resetToken: token,
             resetTokenExpiry: {
@@ -125,43 +217,42 @@ function updatePasswordAction(token, newPassword) {
           }));
 
         case 5:
-          user = _context2.sent;
+          user = _context3.sent;
 
           if (user) {
-            _context2.next = 8;
+            _context3.next = 8;
             break;
           }
 
-          return _context2.abrupt("return", {
+          return _context3.abrupt("return", {
             success: false,
-            error: "Invalid or expired link."
+            error: "Session expired. Please restart."
           });
 
         case 8:
-          // Update fields exactly as before
-          user.password = newPassword;
-          user.resetToken = null;
-          user.resetTokenExpiry = null; // This triggers your pre-save hook for hashing - safely preserved.
+          user.password = newPassword; // Hashing happens in user model pre-save hook
 
-          _context2.next = 13;
+          user.resetToken = null;
+          user.resetTokenExpiry = null;
+          _context3.next = 13;
           return regeneratorRuntime.awrap(user.save());
 
         case 13:
-          return _context2.abrupt("return", {
+          return _context3.abrupt("return", {
             success: true
           });
 
         case 16:
-          _context2.prev = 16;
-          _context2.t0 = _context2["catch"](0);
-          return _context2.abrupt("return", {
+          _context3.prev = 16;
+          _context3.t0 = _context3["catch"](0);
+          return _context3.abrupt("return", {
             success: false,
-            error: "System update failed."
+            error: "Update failed."
           });
 
         case 19:
         case "end":
-          return _context2.stop();
+          return _context3.stop();
       }
     }
   }, null, null, [[0, 16]]);

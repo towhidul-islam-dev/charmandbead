@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation'; 
 import { signIn } from "next-auth/react"; 
 import toast from 'react-hot-toast';
-import { UserCircle } from "lucide-react";
+import { UserCircle, Eye, EyeOff, Loader2 } from "lucide-react"; // Added Eye icons and Loader
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false); // 🟢 State for visibility
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null); 
     const router = useRouter(); 
@@ -31,11 +32,7 @@ export default function LoginPage() {
                 toast.error("Access Denied");
             } else {
                 toast.success("Identity Confirmed");
-                
-                // 🟢 Direct redirection to Home Page
                 router.push("/");
-                
-                // Forces Next.js to re-fetch session data for navbars/protected routes
                 router.refresh(); 
             }
 
@@ -83,22 +80,34 @@ export default function LoginPage() {
 
                     <div className="space-y-1">
                         <label className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.2em] ml-2">Security Key</label>
-                        <input
-                            type="password"
-                            required
-                            placeholder="••••••••"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] outline-none focus:border-[#EA638C] focus:bg-white transition-all"
-                        />
+                        <div className="relative">
+                            <input
+                                type={showPassword ? "text" : "password"} // 🟢 Toggle type
+                                required
+                                placeholder="••••••••"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] outline-none focus:border-[#EA638C] focus:bg-white transition-all pr-12"
+                            />
+                            {/* 🟢 Visibility Toggle Button */}
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-[#EA638C] transition-colors"
+                            >
+                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                        </div>
                     </div>
 
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full py-4 text-white font-black text-[10px] uppercase tracking-[0.4em] bg-[#3E442B] rounded-2xl hover:bg-black active:scale-[0.98] transition-all disabled:opacity-50 shadow-xl shadow-[#3E442B]/10"
+                        className="w-full py-4 text-white font-black text-[10px] uppercase tracking-[0.4em] bg-[#3E442B] rounded-2xl hover:bg-black active:scale-[0.98] transition-all disabled:opacity-50 shadow-xl shadow-[#3E442B]/10 flex items-center justify-center gap-2"
                     >
-                        {loading ? 'Verifying...' : 'Establish Session'}
+                        {loading ? (
+                            <><Loader2 size={14} className="animate-spin" /> Verifying...</>
+                        ) : 'Establish Session'}
                     </button>
                 </form>
 
