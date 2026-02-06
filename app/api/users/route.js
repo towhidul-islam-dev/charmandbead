@@ -3,7 +3,7 @@
 import connectToDatabase from '@/lib/mongodb';
 import User from '@/models/User';
 import { NextResponse } from 'next/server';
-import { verifyAuthToken } from '@/lib/auth'; // 💡 Import the utility to check for Admin status
+import { authorizeAdmin } from '@/lib/auth'; // 💡 Import the utility to check for Admin status
 
 // --- PUT (Update User Role/Promote) ---
 export async function PUT(request) {

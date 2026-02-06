@@ -28,7 +28,8 @@ export async function createOrder(orderData) {
 
     if (existingOrder) {
       await session.abortTransaction();
-      return { success: true, orderId: existingOrder._id };
+      // 🛡️ FIX 1: Convert ID to string
+      return { success: true, orderId: existingOrder._id.toString() };
     }
 
     // 2. Create the Order
@@ -38,9 +39,9 @@ export async function createOrder(orderData) {
           product: i.productId || i.product || i._id,
           productName: i.name,
           variant: {
-             name: i.color || "Default",
-             size: i.size || "N/A",
-             variantId: i.variantId
+              name: i.color || "Default",
+              size: i.size || "N/A",
+              variantId: i.variantId
           },
           quantity: Number(i.quantity),
           price: Number(i.price),
@@ -55,7 +56,7 @@ export async function createOrder(orderData) {
         isStockReduced: false
     }], { session });
 
-    // ... (Your inventory logic stays the same) ...
+    // ... (Your inventory/log logic remains here) ...
     const productDeductions = items.reduce((acc, item) => {
       const pId = (item.productId || item.product || item._id).toString();
       if (!acc[pId]) acc[pId] = { totalQty: 0, variants: [], name: item.name };
@@ -111,7 +112,8 @@ export async function createOrder(orderData) {
     revalidatePath("/admin/orders");
     revalidatePath("/products");
 
-    return { success: true, orderId: newOrder._id };
+    // 🛡️ FIX 2: Convert ID to string before returning to Client Component
+    return { success: true, orderId: newOrder._id.toString() };
 
   } catch (error) {
     if (session.transaction.state !== 'TRANSACTION_ABORTED') {

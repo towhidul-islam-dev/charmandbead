@@ -16,12 +16,12 @@ const OrderSchema = new mongoose.Schema(
           name: String,
           image: String,
           size: String,
-          // 🟢 Ensure variantId is stored to track stock changes accurately
+          // 🟢 Stored as ID but serialized to String for the UI
           variantId: mongoose.Schema.Types.ObjectId, 
         },
         quantity: { type: Number, required: true },
         price: { type: Number, required: true },
-        sku: String, // 🟢 Added for better logging
+        sku: String, 
       },
     ],
     totalAmount: Number,
@@ -51,17 +51,46 @@ const OrderSchema = new mongoose.Schema(
         isRead: { type: Boolean, default: false },
       },
     ],
-    // 🟢 Critical Lock: Indexed for high-performance idempotency checks
+    // 🟢 Critical Lock for Stock Idempotency
     isStockReduced: { type: Boolean, default: false, index: true },
   },
-  { timestamps: true },
+  { 
+    timestamps: true,
+    // Ensure virtuals like 'id' are included when sending to frontend
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+  },
 );
 
+// --- SEARCH INDEXES ---
 OrderSchema.index({ createdAt: -1 });
-
 OrderSchema.index({
   "shippingAddress.name": "text",
   "shippingAddress.phone": "text",
+});
+
+// --- 🛡️ NEXT.JS 16 SERIALIZATION FIX ---
+// This automatically converts ObjectIds to Strings whenever the data is sent to a Client Component
+OrderSchema.set('toJSON', {
+  transform: (doc, ret) => {
+    ret._id = ret._id.toString();
+    if (ret.user) ret.user = ret.user.toString();
+    
+    if (ret.items) {
+      ret.items = ret.items.map(item => ({
+        ...item,
+        _id: item._id?.toString(),
+        product: item.product?.toString(),
+        variant: item.variant ? {
+          ...item.variant,
+          variantId: item.variant.variantId?.toString()
+        } : item.variant
+      }));
+    }
+    // Clean up internal Mongoose versioning
+    delete ret.__v;
+    return ret;
+  }
 });
 
 export default mongoose.models.Order || mongoose.model("Order", OrderSchema);
