@@ -13,7 +13,6 @@ export default function OrderDetailsModal({ order, onClose }) {
 
   if (!order) return null;
 
-  // 🟢 Logic synced with Schema & Success Page
   const subtotal = order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const deliveryCharge = order.deliveryCharge || 0;
   const mfsFee = order.mobileBankingFee || 0; 
@@ -93,9 +92,9 @@ export default function OrderDetailsModal({ order, onClose }) {
              {order.items.map((item, i) => (
                <div key={i} className="flex items-center gap-3 p-2 border border-gray-50 rounded-xl bg-gray-50/20">
                  <div className="relative flex-shrink-0 w-9 h-9">
-                    {/* 🟢 FIXED: Checking populated product imageUrl first */}
+                    {/* 🟢 RESOLVER: Priority to Variant Image, then Product Image */}
                     <Image 
-                      src={item.product?.imageUrl || item.variant?.image || item.image || '/placeholder.png'} 
+                      src={item.variant?.image || item.product?.imageUrl || item.image || '/placeholder.png'} 
                       fill 
                       className="object-cover border border-white rounded-lg shadow-sm" 
                       alt="product" 
@@ -103,12 +102,15 @@ export default function OrderDetailsModal({ order, onClose }) {
                     />
                  </div>
                  <div className="flex-1 min-w-0">
-                    {/* 🟢 FIXED: Fallback chain for product name */}
+                    {/* 🟢 DATA BINDING: Prioritize productName field from order item */}
                     <p className="text-[9px] font-black uppercase text-[#3E442B] truncate">
                       {item.productName || item.product?.name || item.name}
                     </p>
-                    <p className="text-[7px] font-bold text-gray-400 uppercase tracking-tighter">
-                      {item.variant?.name || "Default"} • {item.variant?.size || "N/A"} × {item.quantity}
+                    <p className="text-[7px] font-bold text-[#EA638C] uppercase tracking-tighter">
+                      {/* 🟢 UI REFINEMENT: Hides 'Default' but shows custom variant names (colors) */}
+                      {item.variant?.name && item.variant.name !== "Default" ? `${item.variant.name} • ` : ""}
+                      {item.variant?.size ? `${item.variant.size} • ` : ""}
+                      {item.quantity} units
                     </p>
                  </div>
                  {includePrice && <p className="text-[10px] font-black text-[#3E442B]">৳{(item.price * item.quantity).toLocaleString()}</p>}

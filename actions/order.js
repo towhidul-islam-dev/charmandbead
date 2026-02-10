@@ -28,20 +28,21 @@ export async function createOrder(orderData) {
 
     if (existingOrder) {
       await session.abortTransaction();
-      // 🛡️ FIX 1: Convert ID to string
       return { success: true, orderId: existingOrder._id.toString() };
     }
 
-    // 2. Create the Order
+    // 2. Create the Order with improved mapping
     const [newOrder] = await Order.create([{
         user: userId, 
         items: items.map(i => ({
           product: i.productId || i.product || i._id,
-          productName: i.name,
+          // 🟢 Capture name robustly
+          productName: i.productName || i.name || "Unnamed Product",
           variant: {
-              name: i.color || "Default",
-              size: i.size || "N/A",
-              variantId: i.variantId
+              // 🟢 The "Convenient" Way: Priority logic for the variant label
+              name: i.variantName || i.color || i.variant?.name || "Default",
+              size: i.size || i.variant?.size || "N/A",
+              variantId: i.variantId || i.variant?._id
           },
           quantity: Number(i.quantity),
           price: Number(i.price),
@@ -56,14 +57,19 @@ export async function createOrder(orderData) {
         isStockReduced: false
     }], { session });
 
-    // ... (Your inventory/log logic remains here) ...
+    // 3. Inventory logic
     const productDeductions = items.reduce((acc, item) => {
       const pId = (item.productId || item.product || item._id).toString();
-      if (!acc[pId]) acc[pId] = { totalQty: 0, variants: [], name: item.name };
+      // Use the same robust name logic here for the logs
+      const name = item.productName || item.name || "Product"; 
+      
+      if (!acc[pId]) acc[pId] = { totalQty: 0, variants: [], name: name };
       const qty = Number(item.quantity);
       acc[pId].totalQty += qty;
-      if (item.variantId) {
-        acc[pId].variants.push({ vId: item.variantId.toString(), qty });
+
+      const vId = item.variantId || item.variant?._id;
+      if (vId) {
+        acc[pId].variants.push({ vId: vId.toString(), qty });
       }
       return acc;
     }, {});
@@ -81,12 +87,15 @@ export async function createOrder(orderData) {
           if (target.stock < orderedVar.qty) throw new Error(`Low stock for ${data.name}`);
           target.stock -= orderedVar.qty;
         });
-        product.stock = product.variants.reduce((sum, v) => sum + (v.stock || 0), 0);
+        // Sync total product stock from variants
+        product.stock = product.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
       } else {
         if (product.stock < data.totalQty) throw new Error(`Low stock for ${data.name}`);
         product.stock -= data.totalQty;
       }
+      
       await product.save({ session });
+      
       await InventoryLog.create([{
         productId,
         productName: data.name,
@@ -98,7 +107,6 @@ export async function createOrder(orderData) {
 
     await Order.updateOne({ _id: newOrder._id }, { isStockReduced: true }, { session });
     
-    // 🟢 3. TRIGGER INITIAL NOTIFICATION
     await createInAppNotification({
       title: "Order Placed! 🎉",
       message: `Your order ${orderRef} has been received and is being processed.`,
@@ -112,13 +120,13 @@ export async function createOrder(orderData) {
     revalidatePath("/admin/orders");
     revalidatePath("/products");
 
-    // 🛡️ FIX 2: Convert ID to string before returning to Client Component
     return { success: true, orderId: newOrder._id.toString() };
 
   } catch (error) {
     if (session.transaction.state !== 'TRANSACTION_ABORTED') {
       await session.abortTransaction();
     }
+    console.error("CREATE ORDER ERROR:", error);
     return { success: false, message: error.message };
   } finally {
     session.endSession();
@@ -326,9 +334,20 @@ export async function getAllOrders(page = 1, limit = 10, search = "", status = "
 export async function getOrderById(orderId) {
   try {
     await dbConnect();
-    const order = await Order.findById(orderId).lean();
+    // 🟢 Added population to match Admin Registry logic
+    const order = await Order.findById(orderId)
+      .populate({
+        path: 'items.product',
+        select: 'imageUrl minOrderQuantity', // Pulling fields needed for Buy Again
+        model: Product
+      })
+      .lean();
+      
     return order ? JSON.parse(JSON.stringify(order)) : null;
-  } catch (error) { return null; }
+  } catch (error) { 
+    console.error("Get Order Error:", error);
+    return null; 
+  }
 }
 
 export async function deleteOrder(orderId) {
@@ -347,9 +366,21 @@ export async function deleteOrder(orderId) {
 export async function getUserOrders(userId) {
   try {
     await dbConnect();
-    const orders = await Order.find({ user: userId }).sort({ createdAt: -1 }).lean();
+    // 🟢 Added population here too so the Order History list shows images correctly
+    const orders = await Order.find({ user: userId })
+      .sort({ createdAt: -1 })
+      .populate({
+        path: 'items.product',
+        select: 'imageUrl',
+        model: Product
+      })
+      .lean();
+      
     return JSON.parse(JSON.stringify(orders));
-  } catch (error) { return []; }
+  } catch (error) { 
+    console.error("User Orders Error:", error);
+    return []; 
+  }
 }
 
 export async function getNewOrdersCount() {

@@ -59,7 +59,8 @@ const ClientHeader = ({ pathname }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const cartCount = new Set(cart.map((item) => item.productId)).size;
+  // Optimized count: ensures we only count items that have a valid ID
+  const cartCount = new Set(cart.filter(item => item.productId).map((item) => item.productId)).size;
   const wishlistCount = wishlist.length;
 
   const getLinkClasses = (href) => {
@@ -69,20 +70,29 @@ const ClientHeader = ({ pathname }) => {
     }`;
   };
 
-  const badgeStyle = "absolute top-1 right-1 h-4 w-4 rounded-full bg-[#3E442B] ring-2 ring-white text-[9px] font-black text-white flex items-center justify-center animate-in zoom-in";
+  // Improved badge positioning for better visibility
+  const badgeStyle = "absolute top-0 right-0 h-4 w-4 rounded-full bg-[#3E442B] ring-2 ring-white text-[9px] font-black text-white flex items-center justify-center animate-in zoom-in";
 
   return (
     <>
       <header className="fixed top-0 left-0 z-50 w-full h-16 border-b border-gray-100 md:h-20 bg-white/80 backdrop-blur-md">
-        <div className="flex items-center justify-between h-full px-6 mx-auto max-w-7xl">
+        <div className="flex items-center justify-between h-full px-4 md:px-6 mx-auto max-w-7xl">
           
-          <Link href="/" className="flex items-center gap-3 group">
+          <Link href="/" className="flex items-center gap-2 md:gap-3 group shrink-0">
             <div className="relative flex items-center justify-center w-10 h-10 md:w-12 md:h-12 overflow-hidden rounded-full bg-[#FBB6E6] shadow-sm">
-              <Image src="/logo.svg" alt="Logo" width={48} height={48} priority className="object-cover w-full h-full" />
+              <Image 
+                src="/logo.svg" 
+                alt="Charm & Bead Logo" 
+                width={48} 
+                height={48} 
+                priority 
+                className="object-cover w-full h-full"
+                sizes="(max-width: 768px) 40px, 48px"
+              />
             </div>
-            <div className="flex flex-col">
+            <div className="hidden md:flex flex-col">
               <span className="text-lg md:text-xl font-medium italic text-[#3E442B] leading-none font-serif text-nowrap">CHARM&BEAD</span>
-              <span className="text-[8px] font-bold tracking-[0.2em] text-[#EA638C] uppercase">Unlock Creativity</span>
+              <span className="text-[8px] font-bold tracking-[0.2em] text-[#EA638C] uppercase text-nowrap">Unlock Creativity</span>
             </div>
           </Link>
 
@@ -93,26 +103,25 @@ const ClientHeader = ({ pathname }) => {
             ))}
           </nav>
 
-          <div className="flex items-center space-x-2 md:space-x-4">
+          <div className="flex items-center space-x-1 md:space-x-4">
             {session?.user?.role === "admin" && (
               <Link href="/admin" className="hidden lg:flex items-center gap-2 px-4 py-2 bg-[#EA638C]/10 border border-[#EA638C]/20 rounded-xl text-[#EA638C] text-[10px] font-black uppercase tracking-widest hover:bg-[#EA638C] hover:text-white transition-all shadow-sm">
                 <ShieldCheckIcon className="w-4 h-4" /> Admin Panel
               </Link>
             )}
 
-            {/* 🟢 ONLY HIDE THESE IF NO SESSION */}
             {session && (
               <>
-                <Link href="/dashboard/wishlist" className="relative p-2 group">
+                <Link href="/dashboard/wishlist" className="relative p-2 group -m-1" aria-label="Wishlist">
                   <HeartIcon className="text-[#3E442B] h-6 w-6 group-hover:text-red-500 transition-colors" />
                   {wishlistCount > 0 && <span className={badgeStyle}>{wishlistCount}</span>}
                 </Link>
 
                 <div className="relative">
-                   <NotificationBell />
+                    <NotificationBell />
                 </div>
 
-                <Link href="/cart" className="relative p-2 group">
+                <Link href="/cart" className="relative p-2 group -m-1" aria-label="Cart">
                   <ShoppingCartIcon className="text-[#3E442B] h-6 w-6 group-hover:text-[#EA638C] transition-colors" />
                   {cartCount > 0 && <span className={badgeStyle}>{cartCount}</span>}
                 </Link>
@@ -168,7 +177,7 @@ const ClientHeader = ({ pathname }) => {
               </div>
             )}
 
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 md:hidden text-[#3E442B]">
+            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 md:hidden text-[#3E442B]" aria-label="Toggle Menu">
               {isMenuOpen ? <XMarkIcon className="w-6 h-6" /> : <Bars3Icon className="w-6 h-6" />}
             </button>
           </div>
@@ -210,7 +219,7 @@ export default function Navbar() {
       <>
         <header className="fixed top-0 left-0 z-50 flex items-center w-full h-16 px-8 text-white shadow-lg bg-[#3E442B]">
           <Link href="/admin/dashboard" className="flex items-center gap-2">
-            <Image src="/logo.svg" alt="Admin Logo" width={32} height={32} className="invert" />
+            <Image src="/logo.svg" alt="Admin Logo" width={32} height={32} className="invert" priority />
             <span className="text-xl font-bold tracking-tight text-[#EA638C]">Admin Console</span>
           </Link>
           <div className="flex items-center gap-4 ml-auto">

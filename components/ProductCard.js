@@ -2,14 +2,14 @@
 import Link from "next/link";
 import Image from "next/image"; 
 import { useWishlist } from "@/Context/WishlistContext";
-import { useSession } from "next-auth/react"; // 🟢 Changed import to useSession
+import { useSession } from "next-auth/react"; 
 import { Heart, Sparkles, Share2, Package } from "lucide-react"; 
 import toast from "react-hot-toast";
 
 const ProductCard = ({ product, index = 0 }) => {
   const { wishlist, toggleWishlist } = useWishlist();
-  const { data: session } = useSession(); // 🟢 Access session data
-  const user = session?.user; // 🟢 Determine if user is logged in
+  const { data: session } = useSession(); 
+  const user = session?.user; 
   
   const isFavorite = wishlist?.some((item) => item._id === product?._id);
   const isOutOfStock = product?.stock <= 0;
@@ -94,13 +94,24 @@ const ProductCard = ({ product, index = 0 }) => {
           )}
         </div>
 
-        {/* 🟢 FLOATING ACTIONS - Now using NextAuth session check */}
+        {/* FLOATING ACTIONS */}
         {user && (
           <div className="absolute z-30 flex flex-col gap-2 transition-all duration-300 translate-x-12 opacity-0 top-3 right-3 group-hover:translate-x-0 group-hover:opacity-100">
-            <button onClick={handleWishlistClick} className="p-2.5 rounded-full bg-white shadow-md hover:bg-[#EA638C] group/heart transition-colors">
+            {/* 🟢 ADDED ARIA-LABEL FOR WISHLIST */}
+            <button 
+              onClick={handleWishlistClick} 
+              aria-label={isFavorite ? "Remove from wishlist" : "Add to wishlist"}
+              className="p-2.5 rounded-full bg-white shadow-md hover:bg-[#EA638C] group/heart transition-colors"
+            >
               <Heart size={16} className={isFavorite ? "fill-[#EA638C] text-[#EA638C]" : "text-gray-400 group-hover/heart:text-white"} />
             </button>
-            <button onClick={handleShare} className="p-2.5 rounded-full bg-white shadow-md hover:bg-[#3E442B] group/share transition-colors">
+            
+            {/* 🟢 ADDED ARIA-LABEL FOR SHARE */}
+            <button 
+              onClick={handleShare} 
+              aria-label="Share product link"
+              className="p-2.5 rounded-full bg-white shadow-md hover:bg-[#3E442B] group/share transition-colors"
+            >
               <Share2 size={16} className="text-gray-400 group-hover/share:text-white" />
             </button>
           </div>
@@ -116,8 +127,8 @@ const ProductCard = ({ product, index = 0 }) => {
               
               {moqValue > 0 && (
                 <div className="flex items-center gap-1 mt-1 md:hidden">
-                   <Package size={10} className="text-[#3E442B]" />
-                   <span className="text-[10px] font-black text-[#3E442B] uppercase tracking-tighter">MOQ : {moqValue}</span>
+                    <Package size={10} className="text-[#3E442B]" />
+                    <span className="text-[10px] font-black text-[#3E442B] uppercase tracking-tighter">MOQ : {moqValue}</span>
                 </div>
               )}
             </div>

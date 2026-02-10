@@ -54,11 +54,11 @@ export default async function ProductDetails({ params }) {
       <div className="px-4 py-10 mx-auto max-w-7xl lg:py-16">
         {/* Main Content */}
         <ProductDetailsContent product={product} />
-        <RecentlyViewed />
+        {/* <RecentlyViewed /> */}
         {/* 🟢 HYDRATION FIX: Strictly using div to match ProductDetailsContent client structure */}
-        <div className="mt-12 overflow-hidden bg-white border border-gray-100 shadow-sm rounded-3xl">
+        {/* <div className="mt-12 overflow-hidden bg-white border border-gray-100 shadow-sm rounded-3xl">
           <ProductReviews productId={id} />
-        </div>
+        </div> */}
 
         {relatedItems?.length > 0 && (
           <div className="mt-24">

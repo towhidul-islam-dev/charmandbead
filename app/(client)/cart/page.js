@@ -77,17 +77,31 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
     }
   };
 
+  // 🟢 FIXED: MOQ Stepped Quantity Update
   const handleQuantityUpdate = (item, delta) => {
-    const newQty = item.quantity + delta;
     const moq = item.minOrderQuantity || 1;
+    const currentQty = item.quantity;
+    
+    // delta will be +moq or -moq
+    let newQty = currentQty + delta;
+
+    // Safety: Snap to multiple of MOQ if the data is somehow out of sync
+    if (newQty % moq !== 0) {
+      newQty = Math.ceil(newQty / moq) * moq;
+    }
+
     if (newQty > item.stock) {
       toast.error(`Stock limit reached! Only ${item.stock} pieces available.`, {
         style: { borderRadius: '10px', background: '#3E442B', color: '#fff' }
       });
       return;
     }
+
     if (newQty < moq) return;
-    addToCart(item, delta);
+
+    // addToCart in your context likely takes the item and the amount to change (delta)
+    const actualDelta = newQty - currentQty;
+    addToCart(item, actualDelta);
   };
 
   const handleCheckout = () => {
@@ -158,7 +172,7 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                     const moq = variant.minOrderQuantity || 1;
                     const remainingStock = variant.stock - variant.quantity;
                     const isLowStock = remainingStock <= moq;
-                    const isMaxed = remainingStock === 0;
+                    const isMaxed = remainingStock < moq;
 
                     return (
                       <div key={variant.uniqueKey} className={`p-6 px-8 transition-all duration-500 ${isSelected ? 'bg-[#EA638C]/5' : ''}`}>
@@ -190,7 +204,7 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                                 <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-1.5 px-4 shadow-sm">
                                 <button onClick={() => handleQuantityUpdate(variant, -moq)} disabled={variant.quantity <= moq} className="p-1 text-[#3E442B] hover:text-[#EA638C] disabled:opacity-20 transition-all"><MinusIcon className="w-4 h-4 stroke-[3px]" /></button>
                                 <span className="w-6 text-sm font-black text-center text-[#3E442B]">{variant.quantity}</span>
-                                <button onClick={() => handleQuantityUpdate(variant, moq)} disabled={variant.quantity >= variant.stock} className="p-1 text-[#3E442B] hover:text-[#EA638C] disabled:opacity-10 transition-all"><PlusIcon className="w-4 h-4 stroke-[3px]" /></button>
+                                <button onClick={() => handleQuantityUpdate(variant, moq)} disabled={variant.quantity + moq > variant.stock} className="p-1 text-[#3E442B] hover:text-[#EA638C] disabled:opacity-10 transition-all"><PlusIcon className="w-4 h-4 stroke-[3px]" /></button>
                                 </div>
                             </div>
                             <div className="text-right min-w-[100px]">

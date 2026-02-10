@@ -27,15 +27,19 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
   const params = use(paramsPromise);
   const id = params?.id;
   const router = useRouter();
-
-  // Hooks
   const { addToCart } = useCart();
 
-  // State
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const getProductImage = (item) => {
+    if (!item) return "/placeholder.png";
+    if (item.variant?.image) return item.variant.image;
+    if (item.product?.imageUrl) return item.product.imageUrl;
+    return "/placeholder.png";
+  };
 
   useEffect(() => {
     if (!id || id === "undefined" || id.length < 12) return;
@@ -54,36 +58,37 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
     fetchOrder();
   }, [id]);
 
-  // --- ACTIONS ---
   const handleCopyId = () => {
     navigator.clipboard.writeText(order._id);
     setCopied(true);
     toast.success("Order ID Copied", {
       style: { background: "#3E442B", color: "#fff", fontSize: "12px", fontWeight: "bold", borderRadius: "12px" },
-      iconTheme: { primary: "#EA638C", secondary: "#fff" },
     });
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleBuyAgain = (item) => {
     try {
+      const pId = item.product?._id || item.product;
+      const displayImage = getProductImage(item);
+
       const productData = {
-        _id: item.productId?._id || item.productId,
-        name: item.name,
-        price: Number(item.price),
-        imageUrl: item.imageUrl || "/placeholder.png",
-        minOrderQuantity: item.minOrderQuantity || 1, // Integrated your MOQ functionality
+        _id: pId,
+        name: item.productName || "Product",
+        price: Number(item.price) || 0,
+        imageUrl: displayImage,
+        minOrderQuantity: item.product?.minOrderQuantity || 1,
       };
 
       const variantData = {
-        _id: item.variantId || `std-${productData._id}`,
-        price: Number(item.price),
-        size: item.size || "Standard",
-        color: item.color || "Default",
+        _id: item.variant?.variantId || `std-${pId}`,
+        price: Number(item.price) || 0,
+        size: item.variant?.size || "Standard",
+        color: item.variant?.name || "Default", // Mapping 'name' back to 'color' for Context
       };
 
-      addToCart(productData, variantData, item.quantity);
-      toast.success(`${item.name} added!`, {
+      addToCart(productData, variantData, item.quantity || 1);
+      toast.success(`${item.productName || "Item"} added!`, {
         style: { background: "#3E442B", color: "#fff" },
         iconTheme: { primary: "#EA638C", secondary: "#fff" },
       });
@@ -93,8 +98,7 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
     }
   };
 
-  // --- LOGIC ---
-  const itemsSubtotal = order?.items?.reduce((acc, item) => acc + Number(item.price) * Number(item.quantity), 0) || 0;
+  const itemsSubtotal = order?.items?.reduce((acc, item) => acc + (Number(item.price || 0) * Number(item.quantity || 0)), 0) || 0;
   const isDelivered = order?.status === "Delivered";
 
   const steps = [
@@ -121,21 +125,17 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
   );
 
   return (
-    <div className="min-h-screen bg-white pb-20">
+    <div className="min-h-screen pb-20 bg-white">
       <div className="max-w-6xl px-4 pt-10 mx-auto">
-        <Link href="/dashboard/orders" className="flex items-center gap-2 mb-8 text-[10px] font-black tracking-widest text-gray-400 uppercase hover:text-[#3E442B] print:hidden transition-colors">
+        <Link href="/dashboard/orders" className="flex items-center gap-2 mb-8 text-[10px] font-black tracking-widest text-gray-400 uppercase hover:text-[#3E442B] transition-colors">
           <ArrowLeft size={14} /> Back to History
         </Link>
 
         <div className="bg-white p-6 md:p-12 rounded-[3.5rem] shadow-sm border border-gray-100">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-16">
+          <div className="flex flex-col items-start justify-between gap-6 mb-16 md:flex-row md:items-center">
             <div>
               <h2 className="text-4xl italic font-black tracking-tighter text-[#3E442B] uppercase">Order Summary</h2>
-              <div 
-                onClick={handleCopyId}
-                className="flex items-center gap-2 mt-2 cursor-pointer group w-fit"
-              >
+              <div onClick={handleCopyId} className="flex items-center gap-2 mt-2 cursor-pointer group w-fit">
                 <p className="text-[10px] font-black uppercase text-gray-400 group-hover:text-[#3E442B] transition-colors">
                   Order ID: <span className="text-gray-900">#{order._id.slice(-12).toUpperCase()}</span>
                 </p>
@@ -149,9 +149,8 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
             </div>
           </div>
 
-          {/* Status Tracker */}
           {order.status !== "Cancelled" ? (
-            <div className="relative flex justify-between px-2 mb-24 max-w-3xl mx-auto print:hidden">
+            <div className="relative flex justify-between max-w-3xl px-2 mx-auto mb-24">
               {steps.map((step, index) => {
                 const Icon = step.icon;
                 const isDone = index <= activeIndex;
@@ -166,61 +165,70 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
                 );
               })}
               <div className="absolute top-6 md:top-8 left-0 w-full h-[3px] bg-gray-50 -z-0 rounded-full">
-                <div 
-                  className="h-full bg-[#EA638C] transition-all duration-1000 ease-out" 
-                  style={{ width: `${(activeIndex / (steps.length - 1)) * 100}%` }} 
-                />
+                <div className="h-full bg-[#EA638C] transition-all duration-1000 ease-out" style={{ width: `${(activeIndex / (steps.length - 1)) * 100}%` }} />
               </div>
             </div>
           ) : (
-            <div className="p-6 mb-20 text-center border-2 border-dashed border-red-100 bg-red-50/50 rounded-[2rem] print:hidden">
+            <div className="p-6 mb-20 text-center border-2 border-dashed border-red-100 bg-red-50/50 rounded-[2rem]">
               <p className="text-xs font-black tracking-widest text-red-500 uppercase">Transaction Voided / Cancelled</p>
             </div>
           )}
 
           <div className="grid gap-16 lg:grid-cols-5">
-            {/* Left: Product Details */}
-            <div className="lg:col-span-3 space-y-6">
+            <div className="space-y-6 lg:col-span-3">
               <h3 className="flex items-center gap-2 text-[10px] font-black tracking-[0.3em] text-gray-400 uppercase mb-4">
                 <Package size={14} /> My Charms & Beads
               </h3>
               <div className="space-y-4">
-                {order.items?.map((item, idx) => (
-                  <div key={idx} className="flex flex-col sm:flex-row items-center gap-6 p-6 border border-gray-50 bg-gray-50/30 rounded-[2.5rem] transition-all hover:shadow-md">
-                    <div className="relative flex-shrink-0 w-24 h-24 bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-inner">
-                      <Image 
-                        src={item.imageUrl || item.image || "/placeholder.png"} 
-                        alt={item.name} 
-                        fill 
-                        className="object-cover" 
-                      />
-                    </div>
-                    <div className="flex-1 text-center sm:text-left">
-                      <p className="text-sm font-black text-[#3E442B] uppercase mb-1">{item.name}</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">
-                        {item.size || "Standard"} • Qty: {item.quantity}
-                      </p>
-                      <div className="flex flex-wrap justify-center sm:justify-start gap-2 mt-4 print:hidden">
-                        <button onClick={() => handleBuyAgain(item)} className="flex items-center gap-1.5 px-4 py-2 bg-[#3E442B] text-white rounded-xl text-[9px] font-black uppercase hover:bg-[#EA638C] transition-all active:scale-95 shadow-lg shadow-[#3E442B]/10">
-                          <Zap size={12} fill="currentColor" /> Buy Again
-                        </button>
-                        {isDelivered && (
-                          <Link href={`/dashboard/reviews/new?productId=${item.productId?._id || item.productId}&orderId=${order._id}`} className="flex items-center gap-1.5 px-4 py-2 bg-white border border-gray-200 text-[#3E442B] rounded-xl text-[9px] font-black uppercase hover:border-[#EA638C] transition-all">
-                            <Star size={12} className="text-[#EA638C]" /> Review
-                          </Link>
-                        )}
+                {order.items?.map((item, idx) => {
+                  const pId = item.product?._id || item.product;
+                  const displayImage = getProductImage(item);
+                  
+                  return (
+                    <div key={idx} className="flex flex-col sm:flex-row items-center gap-6 p-6 border border-gray-50 bg-gray-50/30 rounded-[2.5rem] transition-all hover:shadow-md">
+                      <div className="relative flex-shrink-0 w-24 h-24 overflow-hidden bg-white border border-gray-100 shadow-inner rounded-3xl">
+                        <Image 
+                          src={displayImage || "/placeholder.png"} 
+                          alt={item.productName || "Ordered product"} 
+                          fill 
+                          className="object-cover" 
+                          unoptimized 
+                        />
+                      </div>
+                      <div className="flex-1 text-center sm:text-left">
+                        {/* 🟢 FIXED: Now correctly displays item.productName */}
+                        <p className="text-sm font-black text-[#3E442B] uppercase mb-1">
+                          {item.productName || "Unnamed Product"}
+                        </p>
+                        
+                        {/* 🟢 FIXED: Clean variant display (hides Default/NA) */}
+                        <p className="text-[10px] font-bold text-gray-400 uppercase">
+                          {item.variant?.name && item.variant.name !== "Default" ? `${item.variant.name} • ` : ""}
+                          {item.variant?.size && item.variant.size !== "N/A" ? `${item.variant.size} • ` : ""}
+                          Qty: {item.quantity || 1}
+                        </p>
+                        
+                        <div className="flex flex-wrap justify-center gap-2 mt-4 sm:justify-start">
+                          <button onClick={() => handleBuyAgain(item)} className="flex items-center gap-1.5 px-4 py-2 bg-[#3E442B] text-white rounded-xl text-[9px] font-black uppercase hover:bg-[#EA638C] transition-all active:scale-95">
+                            <Zap size={12} fill="currentColor" /> Buy Again
+                          </button>
+                          {isDelivered && (
+                            <Link href={`/dashboard/reviews/new?productId=${pId}&orderId=${order._id}`} className="flex items-center gap-1.5 px-4 py-2 bg-white border border-gray-200 text-[#3E442B] rounded-xl text-[9px] font-black uppercase hover:border-[#EA638C]">
+                              <Star size={12} className="text-[#EA638C]" /> Review
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-lg font-black text-[#3E442B]">
+                        ৳{(Number(item.price || 0) * Number(item.quantity || 0)).toLocaleString()}
                       </div>
                     </div>
-                    <div className="text-lg font-black text-[#3E442B]">
-                      ৳{(Number(item.price) * Number(item.quantity)).toLocaleString()}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            {/* Right: Address & Totals */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="space-y-6 lg:col-span-2">
               <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
                 <h4 className="text-[10px] font-black uppercase text-gray-400 mb-6 flex items-center gap-2 tracking-widest">
                   <MapPin size={14} /> Shipping Destination
@@ -234,12 +242,12 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
 
               <div className="bg-[#3E442B] text-white p-8 rounded-[3rem] shadow-2xl relative overflow-hidden">
                 <div className="relative z-10">
-                  <div className="space-y-4 mb-8 border-b border-white/10 pb-8">
-                    <div className="flex justify-between text-[11px] font-black uppercase text-gray-400 tracking-tighter">
+                  <div className="pb-8 mb-8 space-y-4 border-b border-white/10">
+                    <div className="flex justify-between text-[11px] font-black uppercase text-gray-400">
                       <span>Subtotal</span>
                       <span>৳{itemsSubtotal.toLocaleString()}</span>
                     </div>
-                    <div className="flex justify-between text-[11px] font-black uppercase text-gray-400 tracking-tighter">
+                    <div className="flex justify-between text-[11px] font-black uppercase text-gray-400">
                       <span>Shipping Fee</span>
                       <span>+ ৳{(order.deliveryCharge || 0).toLocaleString()}</span>
                     </div>
@@ -248,25 +256,19 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
                       <span>- ৳{Number(order.paidAmount || 0).toLocaleString()}</span>
                     </div>
                   </div>
-                  
                   <div className="flex items-end justify-between">
                     <div>
                       <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Total Due</p>
-                      <p className="text-5xl font-black text-white tracking-tighter">৳{Number(order.dueAmount || 0).toLocaleString()}</p>
+                      <p className="text-5xl font-black tracking-tighter text-white">৳{Number(order.dueAmount || 0).toLocaleString()}</p>
                     </div>
                     <div className="p-4 bg-[#EA638C] rounded-[1.5rem] shadow-xl shadow-[#EA638C]/20">
                       <Wallet size={28} />
                     </div>
                   </div>
-
-                  <button 
-                    onClick={() => window.print()} 
-                    className="w-full mt-10 flex items-center justify-center gap-3 py-5 bg-[#EA638C] text-white rounded-[2rem] text-[11px] font-black uppercase tracking-[0.2em] transition-all hover:bg-[#d54d76] hover:scale-[1.02] shadow-xl shadow-[#EA638C]/40 print:hidden"
-                  >
+                  <button onClick={() => window.print()} className="w-full mt-10 flex items-center justify-center gap-3 py-5 bg-[#EA638C] text-white rounded-[2rem] text-[11px] font-black uppercase tracking-[0.2em] transition-all hover:bg-[#d54d76] shadow-xl shadow-[#EA638C]/40">
                     <Download size={16} /> Download Invoice
                   </button>
                 </div>
-                {/* Decorative background element */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-[#EA638C]/10 rounded-full -mr-16 -mt-16 blur-3xl" />
               </div>
             </div>

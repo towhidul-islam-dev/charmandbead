@@ -3,7 +3,7 @@ import { useState, useActionState, useEffect, useRef } from "react";
 import { saveProduct } from "@/actions/product";
 import { createInAppNotification } from "@/actions/inAppNotifications";
 import { useNotifications } from "@/Context/NotificationContext";
-import ProductCard from "@/components/ProductCard"; // 🟢 Added for Live Preview
+import ProductCard from "@/components/ProductCard";
 import toast, { Toaster } from "react-hot-toast";
 import { 
   PhotoIcon, SparklesIcon, XMarkIcon, 
@@ -23,27 +23,25 @@ export default function ProductForm({ initialData, categoryStructure }) {
   const [mainCategory, setMainCategory] = useState(initialData?.category || "");
   const [subCategory, setSubCategory] = useState(initialData?.subCategory || "");
   
-  // 🟢 Track individual fields for the Live Preview
   const [previewName, setPreviewName] = useState(initialData?.name || "");
   const [previewPrice, setPreviewPrice] = useState(initialData?.price || 0);
 
   const [state, formAction, isPending] = useActionState(saveProduct, null);
 
-  // 🟢 MOCK OBJECT FOR LIVE PREVIEW
+  // 🟢 LIVE PREVIEW OBJECT
   const previewProduct = {
     _id: "preview",
     name: previewName || "Product Name",
     category: subCategory || mainCategory || "Category",
-    price: useVariants ? (variants[0]?.price || 0) : previewPrice,
+    price: useVariants ? (variants[0]?.price || previewPrice) : previewPrice,
     imageUrl: mainPreview,
     isNewArrival: isNewArrival,
     createdAt: new Date(),
   };
 
-  // 🟢 FIX: Handle Category Change without wiping initial selection on mount
   const handleCategoryChange = (e) => {
     setMainCategory(e.target.value);
-    setSubCategory(""); // Only reset sub-category on manual main-category change
+    setSubCategory(""); 
   };
 
   useEffect(() => {
@@ -51,7 +49,6 @@ export default function ProductForm({ initialData, categoryStructure }) {
       if (state?.success && state?.message) {
         toast.success(state.message);
 
-        // 🟢 FIX: Loop Guard - Only notify if isNewArrival is true
         if (isNewArrival) {
           const productName = previewName || "A new treasure";
           try {
@@ -84,7 +81,7 @@ export default function ProductForm({ initialData, categoryStructure }) {
     };
 
     if (state) handleSuccess();
-  }, [state]); // 🟢 FIX: Only depend on state to prevent infinite loops
+  }, [state]);
 
   // --- LOGIC HELPERS ---
   const generateAutoSKUs = () => {
@@ -121,10 +118,13 @@ export default function ProductForm({ initialData, categoryStructure }) {
     formData.set("existingImage", initialData?.imageUrl || "");
     formData.set("category", mainCategory);
     formData.set("subCategory", subCategory);
+    formData.set("price", Number(previewPrice) || 0);
 
     if (useVariants) {
       formData.set("variantsJson", JSON.stringify(variants.map(({ preview, ...rest }) => ({
         ...rest,
+        // 🟢 SYNC WITH ORDER REGISTRY: Combines color/size for the variant display name
+        name: `${rest.color} ${rest.size}`.trim() || "Default", 
         minOrderQuantity: Number(rest.minOrderQuantity) || 1,
         price: Number(rest.price) || 0,
         stock: Number(rest.stock) || 0
@@ -143,6 +143,7 @@ export default function ProductForm({ initialData, categoryStructure }) {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           
           <div className="space-y-6 lg:col-span-2">
+            {/* ESSENCE SECTION */}
             <section className={sectionClass}>
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-pink-50 rounded-xl text-[#EA638C]"><TagIcon className="w-5 h-5" /></div>
@@ -165,6 +166,7 @@ export default function ProductForm({ initialData, categoryStructure }) {
               </div>
             </section>
 
+            {/* INVENTORY & VARIANTS */}
             <section className={sectionClass}>
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3"><CubeIcon className="w-5 h-5 text-[#3E442B]" /><h3 className="text-sm font-black tracking-widest text-[#3E442B] uppercase">Inventory</h3></div>
@@ -185,7 +187,7 @@ export default function ProductForm({ initialData, categoryStructure }) {
                   {variants.map((v, i) => (
                     <div key={i} className="relative p-4 bg-gray-50 rounded-[2rem] border border-gray-100 grid grid-cols-2 md:grid-cols-7 gap-4 items-center">
                         <div className="flex flex-col items-center gap-1">
-                          <div onClick={() => document.getElementById(`v-img-${i}`).click()} className="w-12 h-12 overflow-hidden bg-white border-2 border-gray-200 border-dashed cursor-pointer rounded-xl flex items-center justify-center">
+                          <div onClick={() => document.getElementById(`v-img-${i}`).click()} className="flex items-center justify-center w-12 h-12 overflow-hidden bg-white border-2 border-gray-200 border-dashed cursor-pointer rounded-xl">
                             {v.preview || v.imageUrl ? <img src={v.preview || v.imageUrl} className="object-cover w-full h-full" /> : <CameraIcon className="w-5 h-5 text-gray-300" />}
                           </div>
                           <input type="file" id={`v-img-${i}`} className="hidden" onChange={(e) => handlePreview(e.target.files[0], null, i)} />
@@ -205,14 +207,14 @@ export default function ProductForm({ initialData, categoryStructure }) {
             </section>
           </div>
 
+          {/* RIGHT SIDEBAR: PREVIEW & ACTIONS */}
           <div className="space-y-6">
-            {/* 🟢 LIVE PREVIEW CARD */}
             <div className="sticky top-6">
               <div className="flex items-center gap-2 mb-4 ml-4">
                 <EyeIcon className="w-4 h-4 text-[#EA638C]" />
                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Shop Preview</span>
               </div>
-              <div className="pointer-events-none scale-95 origin-top">
+              <div className="origin-top scale-95 pointer-events-none">
                  <ProductCard product={previewProduct} />
               </div>
 

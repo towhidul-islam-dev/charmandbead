@@ -1,53 +1,42 @@
-"use client"; // 💡 Required for the Logout button to work
+"use client";
 
-import React from 'react';
-import Link from 'next/link';
-import { signOut } from 'next-auth/react'; // 💡 Import signOut
-import { ExternalLink, LogOut } from 'lucide-react'; // Adding some icons to match your style
+import { LogOut, ExternalLink } from "lucide-react";
+import { signOut } from "next-auth/react";
 
 export default function AdminHeader({ user }) {
-    
-    const handleLogout = () => {
-        signOut({ callbackUrl: '/login' });
-    };
+  return (
+    <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-100 sticky top-0 z-40">
+      
+      {/* 🟢 HIDE ON MOBILE: Removed the cross-marked section for mobile layout */}
+      <div className="hidden md:block">
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Admin Portal</p>
+        <h1 className="text-sm font-black text-[#3E442B] uppercase italic">
+          Welcome, <span className="text-[#EA638C]">{user?.name}</span>
+        </h1>
+      </div>
 
-    return (
-        <header className="z-10 flex items-center justify-between p-4 bg-white border-b border-gray-100 shadow-sm">
-            <div className="flex items-center space-x-4">
-                {/* Mobile Logo */}
-                <h1 className="text-lg font-black text-[#EA638C] md:hidden italic tracking-tighter">
-                    💎 JM
-                </h1>
-                
-                <div className="flex flex-col">
-                    <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest leading-none mb-1">
-                        Admin Portal
-                    </p>
-                    <div className="text-sm font-black tracking-tight text-gray-800 uppercase md:text-base">
-                        Welcome, <span className="text-[#EA638C] italic">{user?.name || 'Administrator'}</span>
-                    </div>
-                </div>
-            </div>
+      {/* Spacer to push logout to the right on mobile */}
+      <div className="md:hidden flex-1" /> 
 
-            <div className="flex items-center space-x-4 md:space-x-6">
-                {/* Link to Public Site */}
-                <Link 
-                    href="/" 
-                    className="hidden sm:flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-[#EA638C] transition"
-                >
-                    <ExternalLink size={14} />
-                    View Site
-                </Link>
+      <div className="flex items-center gap-4">
+        {/* Desktop View Site Button (Unchanged logic, hidden on mobile) */}
+        <a 
+          href="/" 
+          target="_blank"
+          className="hidden md:flex items-center gap-2 px-4 py-2 text-[10px] font-black text-[#3E442B] uppercase hover:bg-gray-50 rounded-xl transition-all border border-gray-100"
+        >
+          <ExternalLink size={14} className="text-[#EA638C]" />
+          View Site
+        </a>
 
-                {/* 💡 Functional Logout Button */}
-                <button 
-                    onClick={handleLogout}
-                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 px-4 py-2 rounded-xl transition"
-                >
-                    <LogOut size={14} />
-                    <span className="hidden xs:block">Logout</span>
-                </button>
-            </div>
-        </header>
-    );
+        {/* Logout Button (Unchanged) */}
+        <button 
+          onClick={() => signOut()}
+          className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-100"
+        >
+          <LogOut size={18} />
+        </button>
+      </div>
+    </header>
+  );
 }

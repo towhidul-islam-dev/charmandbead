@@ -19,9 +19,25 @@ import {
 } from "lucide-react";
 
 const DHAKA_ZONES = [
-  "Badda", "Banani", "Banglamotor", "Bashundhara", "Cantonment", "Dhanmondi", "Gulshan",
-  "Jatrabari", "Khilgaon", "Mirpur", "Mohakhali", "Savar", "Mohammadpur", "Motijheel",
-  "New Market", "Old Dhaka", "Pallabi", "Rampura", "Uttara",
+  "Badda",
+  "Banani",
+  "Banglamotor",
+  "Bashundhara",
+  "Cantonment",
+  "Dhanmondi",
+  "Gulshan",
+  "Jatrabari",
+  "Khilgaon",
+  "Mirpur",
+  "Mohakhali",
+  "Savar",
+  "Mohammadpur",
+  "Motijheel",
+  "New Market",
+  "Old Dhaka",
+  "Pallabi",
+  "Rampura",
+  "Uttara",
 ];
 
 export default function CheckoutPage() {
@@ -56,7 +72,9 @@ export default function CheckoutPage() {
           setPhone(response.address.phone || "");
           const city = response.address.city || "";
           const isInsideDhaka = DHAKA_ZONES.some(
-            (zone) => city.toLowerCase().includes(zone.toLowerCase()) || city.toLowerCase() === "dhaka"
+            (zone) =>
+              city.toLowerCase().includes(zone.toLowerCase()) ||
+              city.toLowerCase() === "dhaka",
           );
           setShippingCharge(isInsideDhaka ? 80 : 130);
         }
@@ -98,12 +116,16 @@ export default function CheckoutPage() {
         userId: session?.user?.id,
         items: checkoutItems.map((item) => ({
           product: item.productId || item._id,
-          name: item.name,
-          variant: { name: item.color || "Default", size: item.size || "N/A", variantId: item.variantId || null },
+          name: item.name || "Product Name Missing", // 🟢 Ensure name is passed
+          variant: {
+            name: item.color || "Default",
+            size: item.size || "N/A",
+            variantId: item.variantId || null,
+          },
           quantity: Number(item.quantity),
           price: Number(item.price),
           imageUrl: item.imageUrl,
-          sku: item.sku || "N/A",
+          sku: item.sku || "C&B-GEN", // 🟢 Ensure SKU is passed or give a fallback
         })),
         totalAmount: Number((finalTotal + mobileBankingFee).toFixed(2)),
         paidAmount: Number(payableNow.toFixed(2)),
@@ -187,13 +209,22 @@ export default function CheckoutPage() {
           <div className="border-2 border-[#3E442B]/10 p-8 rounded-[2.5rem] bg-white group hover:border-[#3E442B] transition-all">
             <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
               <div className="min-w-0">
-                <p className="text-[10px] font-black text-[#EA638C] uppercase tracking-[0.2em] mb-1">Registered Address</p>
-                <p className="text-xl font-bold font-serif text-[#3E442B] truncate">{session?.user?.name}</p>
+                <p className="text-[10px] font-black text-[#EA638C] uppercase tracking-[0.2em] mb-1">
+                  Registered Address
+                </p>
+                <p className="text-xl font-bold font-serif text-[#3E442B] truncate">
+                  {session?.user?.name}
+                </p>
                 <p className="mt-1 text-sm italic font-bold leading-relaxed text-gray-400">
-                  {userAddress ? `${userAddress.street}, ${userAddress.city}` : "Missing shipping coordinates"}
+                  {userAddress
+                    ? `${userAddress.street}, ${userAddress.city}`
+                    : "Missing shipping coordinates"}
                 </p>
               </div>
-              <Link href="/dashboard/address" className="shrink-0 flex items-center gap-2 text-[10px] font-black uppercase text-[#3E442B] hover:text-[#EA638C] bg-gray-50 px-6 py-3 rounded-full transition-colors">
+              <Link
+                href="/dashboard/address"
+                className="shrink-0 flex items-center gap-2 text-[10px] font-black uppercase text-[#3E442B] hover:text-[#EA638C] bg-gray-50 px-6 py-3 rounded-full transition-colors"
+              >
                 Modify <ChevronRight size={14} />
               </Link>
             </div>
@@ -207,15 +238,25 @@ export default function CheckoutPage() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {[
               { id: "COD", label: "Partial COD", sub: "Pay Shipping Now" },
-              { id: "Online", label: "Full Pre-pay", sub: "100% Secure Payment" },
+              {
+                id: "Online",
+                label: "Full Pre-pay",
+                sub: "100% Secure Payment",
+              },
             ].map((method) => (
               <button
                 key={method.id}
                 onClick={() => setPaymentMethod(method.id)}
                 className={`p-8 rounded-[2.5rem] border-2 flex flex-col gap-1 items-start transition-all ${paymentMethod === method.id ? "border-[#EA638C] bg-[#3E442B] text-white shadow-xl scale-[1.02]" : "border-gray-100 text-gray-400 bg-white"}`}
               >
-                <span className={`text-sm italic font-bold font-serif tracking-widest uppercase ${paymentMethod === method.id ? "text-[#FBB6E6]" : "text-[#3E442B]"}`}>{method.label}</span>
-                <span className="text-[10px] font-black uppercase tracking-wider opacity-60">{method.sub} (+1.5% fee)</span>
+                <span
+                  className={`text-sm italic font-bold font-serif tracking-widest uppercase ${paymentMethod === method.id ? "text-[#FBB6E6]" : "text-[#3E442B]"}`}
+                >
+                  {method.label}
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-wider opacity-60">
+                  {method.sub} (+1.5% fee)
+                </span>
               </button>
             ))}
           </div>
@@ -224,35 +265,68 @@ export default function CheckoutPage() {
 
       <div className="h-auto lg:sticky lg:top-32">
         <div className="bg-[#3E442B] border-t-8 border-[#EA638C] rounded-[3rem] p-6 md:p-8 shadow-2xl w-full overflow-hidden">
-          <h2 className="mb-6 font-serif text-xl italic font-bold text-white uppercase">Summary</h2>
+          <h2 className="mb-6 font-serif text-xl italic font-bold text-white uppercase">
+            Summary
+          </h2>
           <div className="mb-8 space-y-4">
             <div className="flex justify-between items-center gap-2 text-[9px] font-black text-white/40 uppercase tracking-widest">
               <span className="shrink-0">Subtotal</span>
-              <span className="font-serif text-xs italic text-white">৳{subtotal.toLocaleString()}</span>
+              <span className="font-serif text-xs italic text-white">
+                ৳{subtotal.toLocaleString()}
+              </span>
             </div>
             <div className="flex justify-between items-center gap-2 text-[9px] font-black text-white/40 uppercase tracking-widest">
-              <span className="flex items-center gap-2 shrink-0"><Truck size={12} className="text-[#FBB6E6]" /> Logistics</span>
-              <span className="font-serif text-xs italic text-white">৳{shippingCharge}</span>
+              <span className="flex items-center gap-2 shrink-0">
+                <Truck size={12} className="text-[#FBB6E6]" /> Logistics
+              </span>
+              <span className="font-serif text-xs italic text-white">
+                ৳{shippingCharge}
+              </span>
             </div>
             <div className="flex justify-between items-center gap-2 text-[9px] font-black text-[#EA638C] uppercase tracking-widest bg-white/5 p-3 rounded-xl border border-white/10">
-              <span className="flex items-center gap-1.5 text-white/60 shrink-0"><Info size={12} /> Gateway (1.5%)</span>
-              <span className="text-[#FBB6E6] font-serif text-[11px] italic">৳{mobileBankingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              <span className="flex items-center gap-1.5 text-white/60 shrink-0">
+                <Info size={12} /> Gateway (1.5%)
+              </span>
+              <span className="text-[#FBB6E6] font-serif text-[11px] italic">
+                ৳
+                {mobileBankingFee.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
+              </span>
             </div>
             <div className="flex items-center justify-between gap-2 pt-5 text-lg border-t border-dashed border-white/10">
-              <span className="font-black text-white/30 uppercase text-[8px] tracking-[0.2em] shrink-0">Total Bill</span>
-              <span className="font-serif text-lg italic font-bold text-white md:text-xl">৳{(finalTotal + mobileBankingFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              <span className="font-black text-white/30 uppercase text-[8px] tracking-[0.2em] shrink-0">
+                Total Bill
+              </span>
+              <span className="font-serif text-lg italic font-bold text-white md:text-xl">
+                ৳
+                {(finalTotal + mobileBankingFee).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
+              </span>
             </div>
           </div>
 
           <div className="rounded-[2rem] p-5 md:p-6 mb-8 bg-white/5 border border-white/10">
             <div className="flex flex-col mb-1">
-              <span className="text-[8px] font-black uppercase text-[#FBB6E6] tracking-[0.3em] mb-1">Payable Now</span>
-              <span className="font-serif text-xl italic font-bold text-white truncate md:text-2xl">৳{payableNow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              <span className="text-[8px] font-black uppercase text-[#FBB6E6] tracking-[0.3em] mb-1">
+                Payable Now
+              </span>
+              <span className="font-serif text-xl italic font-bold text-white truncate md:text-2xl">
+                ৳
+                {payableNow.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
+              </span>
             </div>
             {paymentMethod === "COD" && (
               <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-white/5">
-                <span className="text-[8px] font-black uppercase text-white/20 tracking-widest shrink-0">Due COD</span>
-                <span className="font-serif text-xs italic font-bold text-white/60">৳{dueOnDelivery.toLocaleString()}</span>
+                <span className="text-[8px] font-black uppercase text-white/20 tracking-widest shrink-0">
+                  Due COD
+                </span>
+                <span className="font-serif text-xs italic font-bold text-white/60">
+                  ৳{dueOnDelivery.toLocaleString()}
+                </span>
               </div>
             )}
           </div>
@@ -263,11 +337,19 @@ export default function CheckoutPage() {
             className="w-full bg-[#EA638C] text-white p-2 pr-6 md:pr-8 rounded-full font-black uppercase tracking-[0.1em] text-[9px] md:text-[10px] transition-all flex items-center justify-between group disabled:bg-white/10 shadow-xl active:scale-95"
           >
             <div className="bg-white p-3 rounded-full text-[#EA638C] shadow-lg shrink-0">
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+              {loading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <ShieldCheck size={16} />
+              )}
             </div>
-            <span className="flex-1 font-black text-center">{loading ? "PROCESSING..." : `FINALIZE ORDER`}</span>
+            <span className="flex-1 font-black text-center">
+              {loading ? "PROCESSING..." : `FINALIZE ORDER`}
+            </span>
           </button>
-          <p className="mt-6 text-[8px] text-center font-black text-white/20 uppercase tracking-[0.3em]">Secure Wholesale Registry Active</p>
+          <p className="mt-6 text-[8px] text-center font-black text-white/20 uppercase tracking-[0.3em]">
+            Secure Wholesale Registry Active
+          </p>
         </div>
       </div>
     </div>

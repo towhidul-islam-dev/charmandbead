@@ -74,7 +74,7 @@ export default function OrdersListPage() {
                 <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-center">
                   
                   {/* LEFT: Status & ID */}
-                  <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-6 min-w-[200px]">
                     <div className={`p-5 rounded-[1.8rem] transition-all group-hover:scale-110 duration-500 ${getStatusStyle(order.status)}`}>
                       {order.status === "Delivered" ? <CheckCircle size={24} /> : 
                        order.status === "Shipped" ? <Truck size={24} /> :
@@ -87,19 +87,27 @@ export default function OrdersListPage() {
                     </div>
                   </div>
 
-                  {/* MIDDLE: Visual Progress Bar */}
-                  <div className="flex-1 max-w-md bg-gray-50/50 p-5 rounded-[2rem] border border-gray-100/50">
-                    <div className="flex justify-between mb-2">
-                       <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Payment Journey</span>
-                       <span className={`text-[10px] font-black uppercase ${isDue ? 'text-[#EA638C]' : 'text-green-600'}`}>
-                        {isDue ? `${Math.round(paymentProgress)}% Completed` : '100% Secured'}
-                       </span>
-                    </div>
-                    <div className="w-full h-2 overflow-hidden rounded-full bg-gray-200/50">
-                      <div 
-                        className={`h-full transition-all duration-1000 cubic-bezier(0.4, 0, 0.2, 1) ${isDue ? 'bg-[#EA638C]' : 'bg-green-500'}`}
-                        style={{ width: `${paymentProgress}%` }}
-                      ></div>
+                  {/* MIDDLE: Quick Items Preview */}
+                  <div className="flex-1 px-4 border-l border-gray-100 hidden md:block">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Package Contents</p>
+                    <div className="flex flex-wrap gap-2">
+                      {order.items?.slice(0, 3).map((item, idx) => (
+                        <div key={idx} className="bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
+                          <p className="text-[10px] font-black text-[#3E442B] uppercase truncate max-w-[120px]">
+                            {item.productName || "Product"}
+                          </p>
+                          <p className="text-[8px] font-bold text-[#EA638C] uppercase">
+                             {/* 🟢 Using the correct variant name mapping */}
+                             {item.variant?.name && item.variant.name !== "Default" ? `${item.variant.name} • ` : ""}
+                             {item.quantity} units
+                          </p>
+                        </div>
+                      ))}
+                      {order.items?.length > 3 && (
+                        <div className="bg-[#FBB6E6]/20 px-3 py-1.5 rounded-xl flex items-center">
+                          <p className="text-[10px] font-black text-[#EA638C]">+{order.items.length - 3} MORE</p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
