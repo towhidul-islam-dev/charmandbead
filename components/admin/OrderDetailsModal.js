@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { X, MessageSquare, MapPin, Printer, Wallet, Truck, Copy, Check, Info, CreditCard } from "lucide-react";
+import { X, MessageSquare, MapPin, Printer, Wallet, Truck, Copy, Check, Info, CreditCard, Hash, ShieldCheck } from "lucide-react";
 import toast from "react-hot-toast";
 
 // Brand Colors: Green: #3E442B | Pink: #EA638C | lightPink: #FBB6E6
@@ -21,6 +21,9 @@ export default function OrderDetailsModal({ order, onClose }) {
   const paidAmount = order.paidAmount || 0;
   const dueAmount = order.dueAmount || (totalAmount - paidAmount);
   const isPartial = dueAmount > 0;
+
+  // 🟢 NEW: Calculation for Net Revenue (Total minus gateway fees)
+  const netRevenue = totalAmount - mfsFee;
 
   const handleCopyAddress = () => {
     const text = `${order.shippingAddress?.name}\n${order.shippingAddress?.phone}\n${order.shippingAddress?.street}, ${order.shippingAddress?.city}`;
@@ -46,7 +49,14 @@ export default function OrderDetailsModal({ order, onClose }) {
           <h2 className="text-[10px] font-black text-white uppercase italic tracking-widest">
             Order <span className="text-[#EA638C]">Analytics</span>
           </h2>
-          <button onClick={onClose} className="text-white/30 hover:text-[#EA638C] transition-all"><X size={18}/></button>
+          <div className="flex items-center gap-4">
+            {/* 🟢 NEW: Transaction Status Pulse */}
+            <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1 rounded-full">
+              <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${!isPartial ? 'bg-green-400' : 'bg-[#FBB6E6]'}`}></span>
+              <span className="text-[7px] font-black text-white uppercase tracking-tighter">{!isPartial ? "Paid" : "Pending"}</span>
+            </div>
+            <button onClick={onClose} className="text-white/30 hover:text-[#EA638C] transition-all"><X size={18}/></button>
+          </div>
         </div>
 
         {/* CUSTOMER & TOGGLE BAR */}
@@ -75,6 +85,20 @@ export default function OrderDetailsModal({ order, onClose }) {
            </div>
         </div>
 
+        {/* 🟢 NEW: TRANSACTION ID BAR (Operational Hub) */}
+        {order.transactionId && (
+          <div className="flex items-center justify-between px-6 py-2 bg-[#F3FDF5] border-b border-green-100">
+            <div className="flex items-center gap-2">
+              <Hash size={10} className="text-[#3E442B]/40" />
+              <span className="text-[8px] font-black text-[#3E442B] uppercase">TXN: {order.transactionId}</span>
+            </div>
+            <div className="flex items-center gap-1">
+               <ShieldCheck size={10} className="text-green-600" />
+               <span className="text-[7px] font-black text-green-700 uppercase">Verified Gateway</span>
+            </div>
+          </div>
+        )}
+
         {/* COURIER UTILITY BAR */}
         <div className="flex justify-end flex-shrink-0 px-6 py-2 bg-white">
           <button 
@@ -92,7 +116,6 @@ export default function OrderDetailsModal({ order, onClose }) {
              {order.items.map((item, i) => (
                <div key={i} className="flex items-center gap-3 p-2 border border-gray-50 rounded-xl bg-gray-50/20">
                  <div className="relative flex-shrink-0 w-9 h-9">
-                    {/* 🟢 RESOLVER: Priority to Variant Image, then Product Image */}
                     <Image 
                       src={item.variant?.image || item.product?.imageUrl || item.image || '/placeholder.png'} 
                       fill 
@@ -102,12 +125,10 @@ export default function OrderDetailsModal({ order, onClose }) {
                     />
                  </div>
                  <div className="flex-1 min-w-0">
-                    {/* 🟢 DATA BINDING: Prioritize productName field from order item */}
                     <p className="text-[9px] font-black uppercase text-[#3E442B] truncate">
                       {item.productName || item.product?.name || item.name}
                     </p>
                     <p className="text-[7px] font-bold text-[#EA638C] uppercase tracking-tighter">
-                      {/* 🟢 UI REFINEMENT: Hides 'Default' but shows custom variant names (colors) */}
                       {item.variant?.name && item.variant.name !== "Default" ? `${item.variant.name} • ` : ""}
                       {item.variant?.size ? `${item.variant.size} • ` : ""}
                       {item.quantity} units
@@ -134,10 +155,18 @@ export default function OrderDetailsModal({ order, onClose }) {
 
               {mfsFee > 0 && (
                 <div className="flex justify-between text-[9px] font-bold uppercase text-[#EA638C]">
-                  <span className="flex items-center gap-1"><CreditCard size={10}/> MFS Fee (1.5%)</span>
+                  <span className="flex items-center gap-1 font-black underline decoration-dotted underline-offset-2">
+                    <CreditCard size={10}/> MFS Fee
+                  </span>
                   <span>+ ৳{mfsFee.toLocaleString()}</span>
                 </div>
               )}
+
+              {/* 🟢 NEW: NET REVENUE DISPLAY (For Admin Internal Use) */}
+              <div className="flex justify-between text-[8px] font-bold uppercase text-gray-300 italic">
+                <span className="flex items-center gap-1"><Info size={9}/> Estimated Net</span>
+                <span>৳{netRevenue.toLocaleString()}</span>
+              </div>
 
               <div className="flex justify-between text-[11px] font-black uppercase text-[#3E442B] pt-1 border-t border-dashed border-gray-300">
                 <span>Grand Total</span>
@@ -153,22 +182,22 @@ export default function OrderDetailsModal({ order, onClose }) {
 
         {/* FOOTER & ACTUAL DUE */}
         <div className="flex-shrink-0 p-5 bg-white">
-           <div className="flex items-center justify-between gap-4">
-              <div className="max-w-[150px]">
-                 <p className="text-[7px] font-black text-[#EA638C] uppercase mb-1 flex items-center gap-1"><MapPin size={8}/> Ship To</p>
-                 <p className="text-[9px] font-bold text-[#3E442B] uppercase leading-tight">{order.shippingAddress?.street}</p>
-                 <p className="text-[8px] font-bold text-gray-300 uppercase mt-0.5">{order.shippingAddress?.city}</p>
-              </div>
-              
-              <div className={`p-3 px-5 rounded-2xl text-right min-w-[150px] shadow-lg border-b-4 ${isPartial ? 'bg-[#EA638C] border-[#3E442B]' : 'bg-[#3E442B] border-[#EA638C]'}`}>
-                 <p className="text-[7px] font-black text-white/50 uppercase leading-none mb-1">
-                    {isPartial ? "Balance Due (COD)" : "Fully Paid"}
-                 </p>
-                 <p className="text-2xl italic font-black leading-none tracking-tighter text-white">
-                    ৳{dueAmount.toLocaleString()}
-                 </p>
-              </div>
-           </div>
+            <div className="flex items-center justify-between gap-4">
+               <div className="max-w-[150px]">
+                  <p className="text-[7px] font-black text-[#EA638C] uppercase mb-1 flex items-center gap-1"><MapPin size={8}/> Ship To</p>
+                  <p className="text-[9px] font-bold text-[#3E442B] uppercase leading-tight">{order.shippingAddress?.street}</p>
+                  <p className="text-[8px] font-bold text-gray-300 uppercase mt-0.5">{order.shippingAddress?.city}</p>
+               </div>
+               
+               <div className={`p-3 px-5 rounded-2xl text-right min-w-[150px] shadow-lg border-b-4 ${isPartial ? 'bg-[#EA638C] border-[#3E442B]' : 'bg-[#3E442B] border-[#EA638C]'}`}>
+                  <p className="text-[7px] font-black text-white/50 uppercase leading-none mb-1">
+                     {isPartial ? "Balance Due (COD)" : "Fully Paid"}
+                  </p>
+                  <p className="text-2xl italic font-black leading-none tracking-tighter text-white">
+                     ৳{dueAmount.toLocaleString()}
+                  </p>
+               </div>
+            </div>
         </div>
 
         {/* ACTIONS */}
