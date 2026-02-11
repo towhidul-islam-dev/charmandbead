@@ -6,12 +6,12 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const slides = [
   {
-    image: "/image1.jpg", 
+    image: "/banner.png", 
     link: "/products?category=new-arrivals",
     title: "New Arrivals",
   },
   {
-    image: "/image2.jpg",
+    image: "/c&b1.png",
     link: "/products?category=charms",
     title: "Exquisite Charms",
   },
@@ -35,8 +35,9 @@ const HeroCarousel = () => {
 
   return (
     <section 
-      className="relative w-full mt-2 overflow-hidden bg-gray-100 aspect-[16/9] md:aspect-[21/9]" 
-      style={{ minHeight: '320px' }} // Critical: Reserve space to prevent CLS
+      /* 🟢 UPDATED: Shorter aspect ratios (21/9 for mobile, 3/1 for desktop) */
+      className="relative w-full mt-2 overflow-hidden bg-gray-100 aspect-[21/9] md:aspect-[3/1] lg:aspect-[3.5/1]" 
+      style={{ minHeight: '220px' }} // Reduced minHeight for a sleeker look
     >
       <div className="relative w-full h-full">
         {slides.map((slide, index) => {
@@ -48,18 +49,17 @@ const HeroCarousel = () => {
                 isActive ? "opacity-100 z-10" : "opacity-0 z-0"
               }`}
             >
-              {/* Only the active slide and the first slide (for LCP) are rendered with high priority */}
               <Link href={slide.link} className="relative block w-full h-full">
                 <Image
                   src={slide.image}
                   alt={slide.title}
                   fill
-                  // 🟢 Performance Secret: Force the first image to load with the HTML
                   priority={index === 0} 
                   loading={index === 0 ? "eager" : "lazy"}
                   sizes="100vw"
-                  className="object-cover"
-                  quality={80} // 🟢 Dropping quality to 80 saves ~40% file size with minimal visual loss
+                  /* 🟢 UPDATED: Added object-center to keep focus in middle */
+                  className="object-cover object-center" 
+                  quality={80}
                 />
                 <div className="absolute inset-0 bg-black/5" />
               </Link>
@@ -68,32 +68,32 @@ const HeroCarousel = () => {
         })}
       </div>
 
-      {/* Optimized Navigation */}
-      <div className="absolute inset-0 z-20 flex items-center justify-between px-4 pointer-events-none">
+      {/* Navigation - Made slightly smaller to match shorter height */}
+      <div className="absolute inset-0 z-20 flex items-center justify-between px-3 md:px-6 pointer-events-none">
         <button 
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); prevSlide(); }}
-          className="p-2 transition-all rounded-full pointer-events-auto bg-white/30 backdrop-blur-sm text-white hover:bg-white hover:text-[#3E442B] active:scale-95"
+          className="p-1.5 md:p-2 transition-all rounded-full pointer-events-auto bg-white/30 backdrop-blur-sm text-white hover:bg-white hover:text-[#3E442B] active:scale-95"
           aria-label="Previous slide"
         >
-          <ChevronLeft size={24} />
+          <ChevronLeft size={20} className="md:w-6 md:h-6" />
         </button>
         <button 
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); nextSlide(); }}
-          className="p-2 transition-all rounded-full pointer-events-auto bg-white/30 backdrop-blur-sm text-white hover:bg-white hover:text-[#3E442B] active:scale-95"
+          className="p-1.5 md:p-2 transition-all rounded-full pointer-events-auto bg-white/30 backdrop-blur-sm text-white hover:bg-white hover:text-[#3E442B] active:scale-95"
           aria-label="Next slide"
         >
-          <ChevronRight size={24} />
+          <ChevronRight size={20} className="md:w-6 md:h-6" />
         </button>
       </div>
 
-      {/* Branded Indicators */}
-      <div className="absolute z-20 flex gap-2 -translate-x-1/2 bottom-4 left-1/2">
+      {/* Indicators */}
+      <div className="absolute z-20 flex gap-1.5 -translate-x-1/2 bottom-3 left-1/2">
         {slides.map((_, i) => (
           <button
             key={i}
             onClick={() => setCurrent(i)}
-            className={`h-1.5 transition-all rounded-full ${
-              current === i ? "w-8 bg-[#EA638C]" : "w-2 bg-white/50"
+            className={`h-1 transition-all rounded-full ${
+              current === i ? "w-6 bg-[#EA638C]" : "w-1.5 bg-white/50"
             }`}
             aria-label={`Go to slide ${i + 1}`}
           />
