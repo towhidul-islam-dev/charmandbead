@@ -15,9 +15,20 @@ export async function createOrder(orderData) {
 
   try {
     await dbConnect();
-    const { items, phone, totalAmount, userId, shippingAddress, paidAmount, dueAmount, paymentMethod } = orderData;
+    const { 
+      items, phone, totalAmount, userId, shippingAddress, 
+      paidAmount, dueAmount, paymentMethod, 
+      tran_id, paymentDetails // 🟢 New inputs for ledger tracking
+    } = orderData;
 
     if (!userId) throw new Error("User ID is required.");
+
+    // --- 🟢 FINANCIAL CALCULATIONS (Ledger Support) ---
+    // Example: 2% fee for mobile banking, 0 for COD
+    let mobileBankingFee = 0;
+    if (["bKash", "Nagad", "Rocket", "Upay", "Card"].includes(paymentMethod)) {
+      mobileBankingFee = Number((totalAmount * 0.02).toFixed(2)); 
+    }
 
     // 1. Idempotency Check
     const existingOrder = await Order.findOne({
@@ -31,15 +42,13 @@ export async function createOrder(orderData) {
       return { success: true, orderId: existingOrder._id.toString() };
     }
 
-    // 2. Create the Order with improved mapping
+    // 2. Create the Order
     const [newOrder] = await Order.create([{
         user: userId, 
         items: items.map(i => ({
           product: i.productId || i.product || i._id,
-          // 🟢 Capture name robustly
           productName: i.productName || i.name || "Unnamed Product",
           variant: {
-              // 🟢 The "Convenient" Way: Priority logic for the variant label
               name: i.variantName || i.color || i.variant?.name || "Default",
               size: i.size || i.variant?.size || "N/A",
               variantId: i.variantId || i.variant?._id
@@ -53,24 +62,25 @@ export async function createOrder(orderData) {
         paidAmount,
         dueAmount,
         paymentMethod,
+        mobileBankingFee, // 🟢 Saved for Financial Ledger
+        tran_id,          // 🟢 Saved for Reference tracking
+        paymentDetails: {
+          source: phone, // Defaulting to order phone unless specified
+          ...paymentDetails
+        },
         status: "Pending",
         isStockReduced: false
     }], { session });
 
-    // 3. Inventory logic
+    // 3. Inventory logic (Unchanged logic)
     const productDeductions = items.reduce((acc, item) => {
       const pId = (item.productId || item.product || item._id).toString();
-      // Use the same robust name logic here for the logs
       const name = item.productName || item.name || "Product"; 
-      
       if (!acc[pId]) acc[pId] = { totalQty: 0, variants: [], name: name };
       const qty = Number(item.quantity);
       acc[pId].totalQty += qty;
-
       const vId = item.variantId || item.variant?._id;
-      if (vId) {
-        acc[pId].variants.push({ vId: vId.toString(), qty });
-      }
+      if (vId) acc[pId].variants.push({ vId: vId.toString(), qty });
       return acc;
     }, {});
 
@@ -79,7 +89,6 @@ export async function createOrder(orderData) {
     for (const [productId, data] of Object.entries(productDeductions)) {
       const product = await Product.findById(productId).session(session);
       if (!product) throw new Error(`Product ${data.name} not found.`);
-      
       if (product.hasVariants) {
         data.variants.forEach(orderedVar => {
           const target = product.variants.id(orderedVar.vId);
@@ -87,15 +96,12 @@ export async function createOrder(orderData) {
           if (target.stock < orderedVar.qty) throw new Error(`Low stock for ${data.name}`);
           target.stock -= orderedVar.qty;
         });
-        // Sync total product stock from variants
         product.stock = product.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
       } else {
         if (product.stock < data.totalQty) throw new Error(`Low stock for ${data.name}`);
         product.stock -= data.totalQty;
       }
-      
       await product.save({ session });
-      
       await InventoryLog.create([{
         productId,
         productName: data.name,
@@ -118,14 +124,10 @@ export async function createOrder(orderData) {
     await session.commitTransaction();
     revalidatePath("/admin/products");
     revalidatePath("/admin/orders");
-    revalidatePath("/products");
-
     return { success: true, orderId: newOrder._id.toString() };
 
   } catch (error) {
-    if (session.transaction.state !== 'TRANSACTION_ABORTED') {
-      await session.abortTransaction();
-    }
+    if (session.transaction.state !== 'TRANSACTION_ABORTED') await session.abortTransaction();
     console.error("CREATE ORDER ERROR:", error);
     return { success: false, message: error.message };
   } finally {
@@ -133,13 +135,12 @@ export async function createOrder(orderData) {
   }
 }
 
-export async function updateOrderStatus(orderId, newStatus) {
+export async function updateOrderStatus(orderId, newStatus, trackingNumber = "") {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     await dbConnect();
-
     const order = await Order.findById(orderId).session(session);
     if (!order) {
       await session.abortTransaction();
@@ -149,22 +150,25 @@ export async function updateOrderStatus(orderId, newStatus) {
     const oldStatus = order.status;
     const orderTag = order._id.toString().slice(-6).toUpperCase();
 
-    // 🟢 1. NOTIFICATION LOGIC BASED ON STATUS
+    // 1. Notification Logic
     let notifyTitle = "Order Updated";
     let notifyMessage = `The status of your Order #INV-${orderTag} is now ${newStatus}.`;
 
     if (newStatus === "Shipped") {
       notifyTitle = "Order Shipped! 🚚";
-      notifyMessage = `Good news! Your order #INV-${orderTag} is on the way.`;
+      notifyMessage = `Good news! Your order #INV-${orderTag} is on the way. ${trackingNumber ? `Track: ${trackingNumber}` : ''}`;
+      if (trackingNumber) order.trackingNumber = trackingNumber; // 🟢 Save tracking ID
     } else if (newStatus === "Delivered") {
       notifyTitle = "Package Delivered! ✨";
       notifyMessage = `Your order #INV-${orderTag} has been successfully delivered.`;
+      order.paymentStatus = "Paid"; // 🟢 Assume paid on delivery
+      order.dueAmount = 0;
+      order.paidAmount = order.totalAmount;
     } else if (newStatus === "Cancelled") {
       notifyTitle = "Order Cancelled ❌";
       notifyMessage = `Your order #INV-${orderTag} has been cancelled.`;
     }
 
-    // TRIGGER THE NOTIFICATION 🟢
     if (order.user) {
         await createInAppNotification({
           title: notifyTitle,
@@ -175,14 +179,12 @@ export async function updateOrderStatus(orderId, newStatus) {
         });
     }
 
-    // 2. STOCK RESTORATION LOGIC (Keep your existing logic)
+    // 2. Stock Restoration
     if (newStatus === "Cancelled" && oldStatus !== "Cancelled" && order.isStockReduced) {
       const orderRef = `Cancel #${orderTag}`;
-
       for (const item of order.items) {
         const product = await Product.findById(item.product).session(session);
         if (!product) continue;
-
         if (product.hasVariants && item.variant?.variantId) {
           const target = product.variants.id(item.variant.variantId);
           if (target) {
@@ -192,7 +194,6 @@ export async function updateOrderStatus(orderId, newStatus) {
         } else {
           product.stock += item.quantity;
         }
-
         await product.save({ session });
         await InventoryLog.create([{
           productId: product._id,
@@ -207,22 +208,16 @@ export async function updateOrderStatus(orderId, newStatus) {
 
     order.status = newStatus;
     await order.save({ session });
-
     await session.commitTransaction();
 
     revalidatePath("/admin/orders");
     revalidatePath("/dashboard/orders");
-    revalidatePath("/admin/products"); 
     
-    if (newStatus === "Delivered" && order.user) {
-      await syncVIPStatus(order.user);
-    }
+    if (newStatus === "Delivered" && order.user) await syncVIPStatus(order.user);
 
     return { success: true, order: JSON.parse(JSON.stringify(order)) };
   } catch (error) {
-    if (session.inAtomicallyExecutableOperation()) {
-      await session.abortTransaction();
-    }
+    if (session.inAtomicallyExecutableOperation()) await session.abortTransaction();
     return { success: false, message: "Failed to update status: " + error.message };
   } finally {
     session.endSession();

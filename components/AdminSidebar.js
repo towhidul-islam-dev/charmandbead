@@ -6,7 +6,8 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { 
     HomeIcon, UserGroupIcon, CubeIcon, ShoppingCartIcon,
     SparklesIcon, ChatBubbleLeftRightIcon, GiftIcon, WrenchIcon,
-    Bars3Icon, XMarkIcon, ArrowTopRightOnSquareIcon 
+    Bars3Icon, XMarkIcon, ArrowTopRightOnSquareIcon,
+    BanknotesIcon // 🟢 Added for Transactions
 } from '@heroicons/react/24/outline';
 import AdminDesktopSidebar from './AdminDesktopSidebar';
 
@@ -15,23 +16,25 @@ export default function AdminSidebar({ user, globalData }) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
 
-    // 🟢 Logic preserved: Exact same navItems structure
+    // 🟢 Updated navItems to include Transactions
     const navItems = [
         { name: 'Dashboard', href: '/admin', icon: HomeIcon },
         { name: 'Products', href: '/admin/products', icon: CubeIcon },
         { name: 'Inventory', href: '/admin/inventory', icon: WrenchIcon },
         { name: 'New Arrivals', href: '/admin/new-arrivals', icon: SparklesIcon }, 
         { name: 'Orders', href: '/admin/orders', icon: ShoppingCartIcon, badge: globalData?.newOrdersCount || 0 },
+        // 🟢 Added Transactions link
+        { name: 'Transactions', href: '/admin/transactions', icon: BanknotesIcon },
         { name: 'Gifts', href: '/admin/gifts', icon: GiftIcon },
         { name: 'Users', href: '/admin/users', icon: UserGroupIcon, badge: globalData?.newUsersCount || 0 },
         { name: 'Reviews', href: '/admin/reviews', icon: ChatBubbleLeftRightIcon },
     ];
 
-    // 🟢 Logic preserved: Exact same isActive check
     const isActive = (item) => {
         const isNewArrivalActive = searchParams ? searchParams.get('newArrival') === 'true' : false;
         if (item.href === '/admin') return pathname === '/admin';
-        return pathname.startsWith(item.href) || (item.name === 'New Arrivals' && isNewArrivalActive);
+        // 🟢 Enhanced logic to handle sub-routes correctly
+        return pathname === item.href || pathname.startsWith(item.href + '/') || (item.name === 'New Arrivals' && isNewArrivalActive);
     };
 
     return (
@@ -56,7 +59,7 @@ export default function AdminSidebar({ user, globalData }) {
                             </button>
                         </div>
 
-                        {/* Navigation section is now scrollable to protect the footer */}
+                        {/* Navigation section */}
                         <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-2">
                             {navItems.map((item) => {
                                 const Icon = item.icon;
@@ -82,9 +85,8 @@ export default function AdminSidebar({ user, globalData }) {
                             })}
                         </nav>
 
-                        {/* 🟢 NEW: Mobile Sidebar Footer */}
+                        {/* Mobile Sidebar Footer */}
                         <div className="pt-4 mt-4 border-t border-white/10 space-y-4 shrink-0">
-                            {/* View Site Link */}
                             <Link 
                                 href="/" 
                                 className="flex items-center gap-4 px-4 py-3 text-[#FBB6E6] hover:bg-white/10 rounded-xl transition-all group"
@@ -93,7 +95,6 @@ export default function AdminSidebar({ user, globalData }) {
                                 <span className="font-black text-xs uppercase tracking-widest">View Site</span>
                             </Link>
 
-                            {/* Mobile Profile Section */}
                             <div className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/5">
                                 <div className="w-10 h-10 rounded-xl bg-[#EA638C] flex items-center justify-center text-white font-black text-lg border border-[#FBB6E6]/20 shadow-lg">
                                     {user?.name?.charAt(0).toUpperCase()}
@@ -112,7 +113,7 @@ export default function AdminSidebar({ user, globalData }) {
                 </aside>
             </div>
 
-            {/* 3. Desktop Sidebar (Logic preserved) */}
+            {/* 3. Desktop Sidebar */}
             <div className="hidden md:block">
                 <AdminDesktopSidebar 
                     user={user} 

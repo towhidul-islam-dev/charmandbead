@@ -10,6 +10,7 @@ import {
   ChatBubbleLeftRightIcon,
   GiftIcon,
   WrenchIcon,
+  BanknotesIcon, // 🟢 New Icon for Transactions
 } from "@heroicons/react/24/outline";
 
 export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
@@ -30,6 +31,12 @@ export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
       icon: ShoppingCartIcon,
       badge: globalData?.newOrdersCount || 0,
     },
+    // 🟢 NEW: Transactions Section added for Financial Ledger
+    { 
+      name: "Transactions", 
+      href: "/admin/transactions", 
+      icon: BanknotesIcon 
+    },
     { name: "Gifts", href: "/admin/gifts", icon: GiftIcon },
     {
       name: "Users",
@@ -46,7 +53,6 @@ export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
   };
 
   return (
-    /* 🟢 FIXED: Added fixed, top-0, left-0, and h-screen */
     <div className="fixed top-0 left-0 hidden h-screen md:flex flex-col w-64 bg-white border-r border-gray-100 z-[50]">
       {/* Logo Section */}
       <div className="p-6 border-b border-gray-100 shrink-0">

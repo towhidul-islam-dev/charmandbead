@@ -16,7 +16,6 @@ const OrderSchema = new mongoose.Schema(
           name: String,
           image: String,
           size: String,
-          // 🟢 Stored as ID but serialized to String for the UI
           variantId: mongoose.Schema.Types.ObjectId, 
         },
         quantity: { type: Number, required: true },
@@ -28,6 +27,10 @@ const OrderSchema = new mongoose.Schema(
     deliveryCharge: { type: Number, default: 0 },
     paidAmount: { type: Number, default: 0 },
     dueAmount: { type: Number, default: 0 },
+    
+    // 🟢 Financial Ledger Support
+    mobileBankingFee: { type: Number, default: 0 }, // To store gateway processing fees
+    
     shippingAddress: Object,
     status: {
       type: String,
@@ -40,7 +43,29 @@ const OrderSchema = new mongoose.Schema(
       enum: ["Unpaid", "Partially Paid", "Paid"],
       default: "Unpaid",
     },
+
+    // --- 💳 EXTENDED PAYMENT SOURCE TRACKING ---
+    paymentMethod: { 
+      type: String, 
+      enum: [
+        "bKash", "Nagad", "Rocket", "Upay", 
+        "Card", "Bank Transfer", "COD", "Other"
+      ],
+      default: "COD",
+      index: true 
+    },
+    
+    // The Unique Transaction ID from Gateway
     tran_id: { type: String, unique: true, sparse: true },
+
+    paymentDetails: {
+      source: String,           // Phone number (MFS) or Account Number (Bank)
+      cardType: String,         // Visa, Mastercard, AMEX (if Card)
+      cardIssuer: String,       // City Bank, EBL, etc.
+      bankApp: String,          // City Touch, EBL Skybank, etc.
+      gatewayResponse: Object,  // Raw JSON from SSLCommerz/AmarPay
+    },
+
     trackingNumber: { type: String, default: "" },
 
     notifications: [
@@ -51,12 +76,10 @@ const OrderSchema = new mongoose.Schema(
         isRead: { type: Boolean, default: false },
       },
     ],
-    // 🟢 Critical Lock for Stock Idempotency
     isStockReduced: { type: Boolean, default: false, index: true },
   },
   { 
     timestamps: true,
-    // Ensure virtuals like 'id' are included when sending to frontend
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
   },
@@ -67,10 +90,11 @@ OrderSchema.index({ createdAt: -1 });
 OrderSchema.index({
   "shippingAddress.name": "text",
   "shippingAddress.phone": "text",
+  "tran_id": "text",
+  "paymentDetails.source": "text"
 });
 
 // --- 🛡️ NEXT.JS 16 SERIALIZATION FIX ---
-// This automatically converts ObjectIds to Strings whenever the data is sent to a Client Component
 OrderSchema.set('toJSON', {
   transform: (doc, ret) => {
     ret._id = ret._id.toString();
@@ -87,7 +111,6 @@ OrderSchema.set('toJSON', {
         } : item.variant
       }));
     }
-    // Clean up internal Mongoose versioning
     delete ret.__v;
     return ret;
   }
