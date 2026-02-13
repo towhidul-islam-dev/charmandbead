@@ -67,40 +67,45 @@ export default async function HomePage() {
         )}
 
         {/* Instagram QR Section */}
-        <div className="mt-24 relative overflow-hidden bg-white rounded-[3rem] md:rounded-[4rem] border border-gray-100 shadow-2xl shadow-gray-200/50 flex flex-col md:flex-row items-stretch mx-2">
-          <div className="z-10 flex-1 p-10 md:p-16 lg:p-20 bg-gradient-to-br from-white to-pink-50/20">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#EA638C]/10 text-[#EA638C] mb-6">
-              <Instagram size={14} />
-              <span className="text-[9px] font-black uppercase tracking-widest">Connect with us</span>
+{/* --- SHRUNK INSTAGRAM SECTION --- */}
+        <div className="mt-16 max-w-4xl mx-auto relative overflow-hidden bg-white rounded-[2.5rem] md:rounded-[3rem] border border-gray-100 shadow-xl shadow-gray-200/40 flex flex-col md:flex-row items-stretch">
+          <div className="z-10 flex-1 p-8 md:p-12 bg-gradient-to-br from-white to-pink-50/20">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EA638C]/10 text-[#EA638C] mb-4">
+              <Instagram size={12} />
+              <span className="text-[8px] font-black uppercase tracking-widest">Connect with us</span>
             </div>
-            <h2 className="text-4xl md:text-6xl font-black text-[#3E442B] uppercase italic tracking-tighter leading-[0.9] mb-6">
+            
+            <h2 className="text-3xl md:text-5xl font-black text-[#3E442B] uppercase italic tracking-tighter leading-[0.9] mb-4">
               Style <br /> On Your <br /> 
               <span className="text-[#EA638C]">Feed.</span>
             </h2>
-            <p className="max-w-xs mb-8 text-xs font-medium leading-relaxed text-gray-500 md:text-sm">
+
+            <p className="max-w-[240px] mb-6 text-[11px] font-medium leading-relaxed text-gray-500">
               Scan the code to follow us on Instagram for exclusive drops and design inspiration.
             </p>
+
             <a 
               href={instagramUrl}
               target="_blank"
-              className="group inline-flex items-center gap-3 bg-[#3E442B] text-white px-8 py-4 rounded-2xl hover:bg-black transition-all duration-500 shadow-xl shadow-[#3E442B]/20"
+              className="group inline-flex items-center gap-2.5 bg-[#3E442B] text-white px-6 py-3.5 rounded-xl hover:bg-black transition-all duration-500 shadow-lg shadow-[#3E442B]/20"
             >
-              <span className="font-black uppercase text-[10px] tracking-widest">Follow @charm.and.bead</span>
-              <ArrowUpRight size={16} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              <span className="font-black uppercase text-[9px] tracking-widest">Follow @charm.and.bead</span>
+              <ArrowUpRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </a>
           </div>
 
-          <div className="w-full md:w-[400px] bg-[#3E442B] p-12 flex flex-col items-center justify-center relative min-h-[400px]">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-[#EA638C] rounded-full blur-[120px] opacity-20 animate-pulse" />
+          {/* Right Side - Shrunk QR Container */}
+          <div className="w-full md:w-[320px] bg-[#3E442B] p-8 flex flex-col items-center justify-center relative min-h-[300px]">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-[#EA638C] rounded-full blur-[100px] opacity-20 animate-pulse" />
             
             <div className="relative group">
-              <div className="absolute -inset-6 bg-[#EA638C]/20 rounded-[3rem] blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-              <div className="relative bg-white p-6 rounded-[2.5rem] shadow-2xl transition-transform duration-700 group-hover:scale-105 group-hover:rotate-1">
-                <div className="p-2 border border-gray-100 border-dashed rounded-2xl">
-                  {/* 🟢 Using the new component that avoids the build error */}
-                  <InstagramQR url={instagramUrl} />
+              <div className="absolute -inset-4 bg-[#EA638C]/20 rounded-[2rem] blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+              <div className="relative bg-white p-4 rounded-[2rem] shadow-2xl transition-transform duration-700 group-hover:scale-105">
+                <div className="p-1.5 border border-gray-100 border-dashed rounded-xl">
+                  {/* Reduced QR scale inside the component container if possible */}
+                  <InstagramQR url={instagramUrl} size={140} /> 
                 </div>
-                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#EA638C] text-white px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest whitespace-nowrap shadow-lg">
+                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-[#EA638C] text-white px-3 py-1 rounded-full text-[7px] font-black uppercase tracking-widest whitespace-nowrap shadow-lg">
                   Scan to Follow
                 </div>
               </div>
