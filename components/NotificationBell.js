@@ -3,8 +3,8 @@ import { useState, useRef, useEffect } from "react";
 import { Bell, Settings, ChevronDown, ChevronUp, Box, Truck, X, Inbox } from "lucide-react";
 import { useNotifications } from "@/Context/NotificationContext";
 import { useRouter } from "next/navigation";
-import { markAsReadAction } from "@/actions/inappnotification"; // 🟢 Import your Server Action
 import Image from "next/image";
+import { markAsReadAction } from "@/actions/inAppNotifications";
 
 export default function NotificationBell() {
   const { notifications, unreadCount, setNotifications } = useNotifications(); // 🟢 Use setNotifications to update UI locally

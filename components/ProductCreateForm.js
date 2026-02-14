@@ -1,7 +1,7 @@
 "use client";
 import { useState, useActionState, useEffect, useRef } from "react"; 
 import { saveProduct } from "@/actions/product";
-import { createInAppNotification } from "@/actions/inAppNotifications";
+import { createInAppNotification } from "@/actions/inAppNotifications"; // 🟢 Added import
 import { useNotifications } from "@/Context/NotificationContext";
 import ProductCard from "@/components/ProductCard";
 import toast, { Toaster } from "react-hot-toast";
@@ -13,7 +13,7 @@ import {
 
 export default function ProductForm({ initialData, categoryStructure }) {
   const formRef = useRef(null);
-  const { addNotification } = useNotifications();
+  const { addNotification } = useNotifications(); // 🟢 Used to update UI instantly
 
   // --- STATE MANAGEMENT ---
   const [useVariants, setUseVariants] = useState(initialData?.hasVariants || false);
@@ -43,22 +43,32 @@ export default function ProductForm({ initialData, categoryStructure }) {
     setSubCategory(""); 
   };
 
+  // 🟢 SUCCESS LOGIC ENHANCED
   useEffect(() => {
     const handleSuccess = async () => {
       if (state?.success && state?.message) {
         toast.success(state.message);
+
+        // --- GLOBAL NOTIFICATION LOGIC ---
+        // Triggered only if isNewArrival is checked
         if (isNewArrival) {
           try {
             const res = await createInAppNotification({
               title: "New Arrival! 🔥",
-              message: `${previewName || "A new treasure"} added.`,
+              message: `${previewName || "A new treasure"} has been added to the shop.`,
               type: "arrival",
-              recipientId: "GLOBAL",
+              recipientId: "GLOBAL", // 🟢 Sent to everyone
               link: state.data?._id ? `/product/${state.data._id}` : "/products"
             });
+            
+            // Instantly update the current admin's bell icon
             if (res.success) addNotification(res.data);
-          } catch (err) { console.error(err); }
+          } catch (err) { 
+            console.error("Notification trigger failed:", err); 
+          }
         }
+
+        // Reset Form (only for new products)
         if (!initialData) {
           formRef.current?.reset();
           setVariants([]);
@@ -116,12 +126,12 @@ export default function ProductForm({ initialData, categoryStructure }) {
         minOrderQuantity: Number(rest.minOrderQuantity) || 1,
         price: Number(rest.price) || 0,
         stock: Number(rest.stock) || 0
-      }))));
+      })))));
     }
     formAction(formData);
   };
 
-  // UI CONSTANTS (Keeping your brand styles)
+  // UI CONSTANTS
   const inputClass = "w-full bg-gray-50 border-none p-3.5 md:p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-sm";
   const sectionClass = "bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-6";
 
@@ -178,7 +188,6 @@ export default function ProductForm({ initialData, categoryStructure }) {
                 <div className="space-y-4">
                   {variants.map((v, i) => (
                     <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100 group transition-all">
-                        {/* Mobile Header: Photo + SKU + Close */}
                         <div className="flex items-center gap-4 mb-5">
                             <div onClick={() => document.getElementById(`v-img-${i}`).click()} className="relative flex items-center justify-center w-16 h-16 overflow-hidden bg-white border-2 border-gray-200 border-dashed cursor-pointer rounded-2xl shrink-0">
                                 {v.preview || v.imageUrl ? <img src={v.preview || v.imageUrl} className="object-cover w-full h-full" /> : <CameraIcon className="w-6 h-6 text-gray-300" />}
@@ -192,7 +201,6 @@ export default function ProductForm({ initialData, categoryStructure }) {
                             </button>
                         </div>
 
-                        {/* Responsive Grid: 2 columns on mobile, 4 on desktop */}
                         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                             <div className="space-y-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 ml-2">Size</span>
@@ -227,7 +235,6 @@ export default function ProductForm({ initialData, categoryStructure }) {
           {/* RIGHT SIDEBAR */}
           <div className="space-y-6">
             <div className="lg:sticky lg:top-6">
-              {/* Preview - Hidden on small mobile to focus on form, visible sm+ */}
               <div className="hidden sm:block">
                 <div className="flex items-center gap-2 mb-4 ml-4">
                     <EyeIcon className="w-4 h-4 text-[#EA638C]" />

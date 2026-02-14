@@ -5,10 +5,10 @@ import { useEffect, useState, Suspense, useRef } from "react";
 import { getOrderById } from "@/actions/order";
 import { processOrderStock } from "@/actions/inventoryWatcher";
 import { sendInvoiceEmail } from "@/actions/emailActions";
-import { createInAppNotification } from "@/actions/inAppNotifications";
+import { createInAppNotification } from "@/actions/inAppNotifications"; // 🟢 Import the action
 import { useCart } from "@/Context/CartContext";
 import { useSession } from "next-auth/react";
-import { useNotifications } from "@/Context/NotificationContext";
+import { useNotifications } from "@/Context/NotificationContext"; // 🟢 Used for instant UI update
 import Link from "next/link";
 import {
   CheckCircle,
@@ -52,7 +52,7 @@ const getBase64ImageFromURL = (url) => {
 function SuccessContent() {
   const { deleteSelectedItems } = useCart();
   const { data: session } = useSession();
-  const { addNotification } = useNotifications();
+  const { addNotification } = useNotifications(); // 🟢 For context update
   const searchParams = useSearchParams();
   const router = useRouter();
   const orderId = searchParams.get("orderId");
@@ -64,7 +64,6 @@ function SuccessContent() {
   const [emailSent, setEmailSent] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
-  // 🟢 GATEKEEPER: Prevents the effect from running multiple times
   const hasProcessed = useRef(false);
 
   const handleResendEmail = async () => {
@@ -94,7 +93,6 @@ function SuccessContent() {
 
   useEffect(() => {
     async function fetchAndProcessOrder() {
-      // 🟢 Prevent double execution
       if (!orderId || hasProcessed.current) return;
       hasProcessed.current = true;
 
@@ -109,7 +107,7 @@ function SuccessContent() {
 
           setOrder(data);
 
-          // 1. Trigger In-App Notification
+          // 🟢 1. Trigger In-App Notification (Private)
           const isPaidInFull = (data.dueAmount ?? 0) <= 0;
           const orderTag = data._id.slice(-6).toUpperCase();
           
@@ -120,12 +118,12 @@ function SuccessContent() {
                 ? `Your payment for Order #INV-${orderTag} was successful.` 
                 : `Order #INV-${orderTag} received. Residual COD: ৳${data.dueAmount.toLocaleString()}`,
               type: "payment",
-              recipientId: session?.user?.id || "GUEST",
+              recipientId: session?.user?.id || "GUEST", // 🟢 Linked to current user session
               link: `/dashboard/orders`
             });
 
             if (dbNotify.success) {
-              addNotification(dbNotify.data);
+              addNotification(dbNotify.data); // Update bell icon immediately
             }
           } catch (notifyErr) {
             console.error("Notification Error:", notifyErr);
@@ -179,8 +177,7 @@ function SuccessContent() {
     }
 
     fetchAndProcessOrder();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId]); // 🟢 Only trigger when the orderId changes
+  }, [orderId]); 
 
   const generateInvoice = async (orderData) => {
     if (!orderData || !orderData.items || isGenerating) return;
