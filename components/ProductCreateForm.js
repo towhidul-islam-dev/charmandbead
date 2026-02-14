@@ -126,7 +126,7 @@ export default function ProductForm({ initialData, categoryStructure }) {
         minOrderQuantity: Number(rest.minOrderQuantity) || 1,
         price: Number(rest.price) || 0,
         stock: Number(rest.stock) || 0
-      })))));
+      }))));
     }
     formAction(formData);
   };
