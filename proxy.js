@@ -19,9 +19,9 @@ export async function proxy(req) {
   });
 
   // 🔴 DEBUG LOGS: Keep these until we confirm it works!
-  console.log("--- PROXY DEBUG ---");
+  /* console.log("--- PROXY DEBUG ---");
   console.log("Path:", pathname);
-  console.log("Token Found:", !!token);
+  console.log("Token Found:", !!token); */
   if (token) {
     console.log("User Role:", token.role);
   } else {

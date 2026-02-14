@@ -37,11 +37,12 @@ function proxy(req) {
 
         case 6:
           token = _context.sent;
-          // 🔴 DEBUG LOGS: Keep these until we confirm it works!
-          console.log("--- PROXY DEBUG ---");
-          console.log("Path:", pathname);
-          console.log("Token Found:", !!token);
 
+          // 🔴 DEBUG LOGS: Keep these until we confirm it works!
+
+          /* console.log("--- PROXY DEBUG ---");
+          console.log("Path:", pathname);
+          console.log("Token Found:", !!token); */
           if (token) {
             console.log("User Role:", token.role);
           } else {
@@ -57,44 +58,44 @@ function proxy(req) {
           isAdminPage = pathname.startsWith("/admin"); // Logic 1: Redirect unauthenticated users
 
           if (!(!token && isProtectedPage)) {
-            _context.next = 20;
+            _context.next = 17;
             break;
           }
 
           if (!(pathname === "/admin/unauthorized")) {
-            _context.next = 17;
+            _context.next = 14;
             break;
           }
 
           return _context.abrupt("return", _server.NextResponse.next());
 
-        case 17:
+        case 14:
           loginUrl = new URL("/login", req.url);
           loginUrl.searchParams.set("callbackUrl", req.nextUrl.href); // Keep full destination
 
           return _context.abrupt("return", _server.NextResponse.redirect(loginUrl));
 
-        case 20:
+        case 17:
           if (!(token && isAdminPage && token.role !== 'admin')) {
-            _context.next = 22;
+            _context.next = 19;
             break;
           }
 
           return _context.abrupt("return", _server.NextResponse.redirect(new URL("/admin/unauthorized", req.url)));
 
-        case 22:
+        case 19:
           if (!(token && isAuthPage)) {
-            _context.next = 25;
+            _context.next = 22;
             break;
           }
 
           redirectUrl = token.role === 'admin' ? "/admin/dashboard" : "/dashboard/orders";
           return _context.abrupt("return", _server.NextResponse.redirect(new URL(redirectUrl, req.url)));
 
-        case 25:
+        case 22:
           return _context.abrupt("return", _server.NextResponse.next());
 
-        case 26:
+        case 23:
         case "end":
           return _context.stop();
       }

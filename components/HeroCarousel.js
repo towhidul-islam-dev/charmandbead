@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const slides = [
   {
-    image: "/banner.png", 
+    image: "/giveaway1.png", 
     link: "/products?category=new-arrivals",
     title: "New Arrivals",
   },
@@ -69,7 +69,7 @@ const HeroCarousel = () => {
       </div>
 
       {/* Navigation - Made slightly smaller to match shorter height */}
-      <div className="absolute inset-0 z-20 flex items-center justify-between px-3 md:px-6 pointer-events-none">
+      <div className="absolute inset-0 z-20 flex items-center justify-between px-3 pointer-events-none md:px-6">
         <button 
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); prevSlide(); }}
           className="p-1.5 md:p-2 transition-all rounded-full pointer-events-auto bg-white/30 backdrop-blur-sm text-white hover:bg-white hover:text-[#3E442B] active:scale-95"
