@@ -69,13 +69,3 @@ export async function createInAppNotification({ title, message, type, recipientI
   }
 }
 
-export async function markAsReadAction(notificationId) {
-  try {
-    await dbConnect();
-    await Notification.findByIdAndUpdate(notificationId, { isRead: true });
-    revalidatePath("/"); 
-    return { success: true };
-  } catch (error) {
-    return { success: false };
-  }
-}
