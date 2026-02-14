@@ -10,50 +10,47 @@ export async function proxy(req) {
     return NextResponse.next();
   }
 
-  // 2. Attempt to get the token
+  // 2. 🟢 THE FIX: Handle the "__Secure-" prefix for Vercel
   const token = await getToken({ 
     req, 
     secret: process.env.NEXTAUTH_SECRET,
+    // When this is true, getToken looks for "__Secure-next-auth.session-token"
     secureCookie: isProduction 
   });
 
-  // 🔴 DEBUG LOGS: This is what you will look for in Vercel
-  console.log("--- PROXY DEBUG START ---");
+  // 🔴 DEBUG LOGS: Keep these until we confirm it works!
+  console.log("--- PROXY DEBUG ---");
   console.log("Path:", pathname);
   console.log("Token Found:", !!token);
   if (token) {
-    console.log("User Email:", token.email);
     console.log("User Role:", token.role);
   } else {
-    // If token is null, we log the cookie names to see if they exist
-    const allCookies = req.cookies.getAll().map(c => c.name);
-    console.log("Available Cookies:", allCookies);
+    // This logs all cookies to see if the session cookie is actually being sent
+    const cookieNames = req.cookies.getAll().map(c => c.name);
+    console.log("Cookies Sent by Browser:", cookieNames);
   }
-  console.log("--- PROXY DEBUG END ---");
 
   const isAuthPage = pathname === "/login" || pathname === "/register";
-  const isDashboardPage = pathname.startsWith("/dashboard");
+  const isProtectedPage = pathname.startsWith("/dashboard") || pathname.startsWith("/admin") || pathname === "/checkout";
   const isAdminPage = pathname.startsWith("/admin");
 
-  // Logic: Redirect to login if no token for protected routes
-  if (!token && (isDashboardPage || isAdminPage)) {
+  // Logic 1: Redirect unauthenticated users
+  if (!token && isProtectedPage) {
     if (pathname === "/admin/unauthorized") return NextResponse.next();
     const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
+    loginUrl.searchParams.set("callbackUrl", req.nextUrl.href); // Keep full destination
     return NextResponse.redirect(loginUrl);
   }
 
-  // Logic: Admin Authorization
+  // Logic 2: Admin Authorization
   if (token && isAdminPage && token.role !== 'admin') {
-    if (pathname !== "/admin/unauthorized") {
-      return NextResponse.redirect(new URL("/admin/unauthorized", req.url));
-    }
+    return NextResponse.redirect(new URL("/admin/unauthorized", req.url));
   }
 
-  // Logic: Logged-in users away from Login
+  // Logic 3: Logged-in users away from Login/Register
   if (token && isAuthPage) {
-    const dashboardUrl = token.role === 'admin' ? "/admin/dashboard" : "/dashboard/orders";
-    return NextResponse.redirect(new URL(dashboardUrl, req.url));
+    const redirectUrl = token.role === 'admin' ? "/admin/dashboard" : "/dashboard/orders";
+    return NextResponse.redirect(new URL(redirectUrl, req.url));
   }
 
   return NextResponse.next();

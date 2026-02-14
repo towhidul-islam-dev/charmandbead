@@ -11,7 +11,7 @@ var _jwt = require("next-auth/jwt");
 var _server = require("next/server");
 
 function proxy(req) {
-  var pathname, isProduction, token, allCookies, isAuthPage, isDashboardPage, isAdminPage, loginUrl, dashboardUrl;
+  var pathname, isProduction, token, cookieNames, isAuthPage, isProtectedPage, isAdminPage, loginUrl, redirectUrl;
   return regeneratorRuntime.async(function proxy$(_context) {
     while (1) {
       switch (_context.prev = _context.next) {
@@ -31,75 +31,70 @@ function proxy(req) {
           return regeneratorRuntime.awrap((0, _jwt.getToken)({
             req: req,
             secret: process.env.NEXTAUTH_SECRET,
+            // When this is true, getToken looks for "__Secure-next-auth.session-token"
             secureCookie: isProduction
           }));
 
         case 6:
           token = _context.sent;
-          // 🔴 DEBUG LOGS: This is what you will look for in Vercel
-          console.log("--- PROXY DEBUG START ---");
+          // 🔴 DEBUG LOGS: Keep these until we confirm it works!
+          console.log("--- PROXY DEBUG ---");
           console.log("Path:", pathname);
           console.log("Token Found:", !!token);
 
           if (token) {
-            console.log("User Email:", token.email);
             console.log("User Role:", token.role);
           } else {
-            // If token is null, we log the cookie names to see if they exist
-            allCookies = req.cookies.getAll().map(function (c) {
+            // This logs all cookies to see if the session cookie is actually being sent
+            cookieNames = req.cookies.getAll().map(function (c) {
               return c.name;
             });
-            console.log("Available Cookies:", allCookies);
+            console.log("Cookies Sent by Browser:", cookieNames);
           }
 
-          console.log("--- PROXY DEBUG END ---");
           isAuthPage = pathname === "/login" || pathname === "/register";
-          isDashboardPage = pathname.startsWith("/dashboard");
-          isAdminPage = pathname.startsWith("/admin"); // Logic: Redirect to login if no token for protected routes
+          isProtectedPage = pathname.startsWith("/dashboard") || pathname.startsWith("/admin") || pathname === "/checkout";
+          isAdminPage = pathname.startsWith("/admin"); // Logic 1: Redirect unauthenticated users
 
-          if (!(!token && (isDashboardPage || isAdminPage))) {
-            _context.next = 21;
+          if (!(!token && isProtectedPage)) {
+            _context.next = 20;
             break;
           }
 
           if (!(pathname === "/admin/unauthorized")) {
-            _context.next = 18;
+            _context.next = 17;
             break;
           }
 
           return _context.abrupt("return", _server.NextResponse.next());
 
-        case 18:
+        case 17:
           loginUrl = new URL("/login", req.url);
-          loginUrl.searchParams.set("callbackUrl", pathname);
+          loginUrl.searchParams.set("callbackUrl", req.nextUrl.href); // Keep full destination
+
           return _context.abrupt("return", _server.NextResponse.redirect(loginUrl));
 
-        case 21:
+        case 20:
           if (!(token && isAdminPage && token.role !== 'admin')) {
-            _context.next = 24;
-            break;
-          }
-
-          if (!(pathname !== "/admin/unauthorized")) {
-            _context.next = 24;
+            _context.next = 22;
             break;
           }
 
           return _context.abrupt("return", _server.NextResponse.redirect(new URL("/admin/unauthorized", req.url)));
 
-        case 24:
+        case 22:
           if (!(token && isAuthPage)) {
-            _context.next = 27;
+            _context.next = 25;
             break;
           }
 
-          dashboardUrl = token.role === 'admin' ? "/admin/dashboard" : "/dashboard/orders";
-          return _context.abrupt("return", _server.NextResponse.redirect(new URL(dashboardUrl, req.url)));
+          redirectUrl = token.role === 'admin' ? "/admin/dashboard" : "/dashboard/orders";
+          return _context.abrupt("return", _server.NextResponse.redirect(new URL(redirectUrl, req.url)));
 
-        case 27:
+        case 25:
           return _context.abrupt("return", _server.NextResponse.next());
 
-        case 28:
+        case 26:
         case "end":
           return _context.stop();
       }
