@@ -7,7 +7,7 @@ import Image from "next/image";
 import { markAsReadAction } from "@/actions/inAppNotifications";
 
 export default function NotificationBell() {
-  const { notifications, unreadCount, setNotifications } = useNotifications(); // 🟢 Use setNotifications to update UI locally
+  const { notifications, unreadCount, setNotifications } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
   const [expandedSection, setExpandedSection] = useState("orders");
   const dropdownRef = useRef(null);
@@ -28,26 +28,24 @@ export default function NotificationBell() {
     setIsOpen(!isOpen);
   };
 
-  // 🟢 Settings Redirect (Functional)
   const handleSettingsClick = () => {
     setIsOpen(false);
     router.push("/dashboard/settings"); 
   };
 
-  // Grouping Logic
-  const orderNotifications = notifications?.filter(n => n.type === 'order') || [];
+  const orderNotifications = notifications?.filter(n => n.type === 'order' || n.type === 'payment') || [];
   const shipmentNotifications = notifications?.filter(n => n.type === 'shipment' || n.type === 'delivery') || [];
-  const otherNotifications = notifications?.filter(n => n.type !== 'order' && n.type !== 'shipment' && n.type !== 'delivery') || [];
+  const otherNotifications = notifications?.filter(n => n.type !== 'order' && n.type !== 'payment' && n.type !== 'shipment' && n.type !== 'delivery') || [];
 
   const hasAnyNotifications = notifications && notifications.length > 0;
 
   return (
     <div className="relative" ref={dropdownRef}>
       {/* --- BELL ICON --- */}
-      <button onClick={handleToggle} className="relative p-2 transition-all active:scale-95 group">
+      <button onClick={handleToggle} className="relative p-2 transition-all active:scale-95 group z-[101]">
         <Bell size={24} className={`transition-colors ${isOpen ? 'text-[#EA638C]' : 'text-[#3E442B] group-hover:text-[#EA638C]'}`} />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 h-5 w-5 rounded-full bg-[#EA638C] text-[10px] font-black text-white flex items-center justify-center border-2 border-white shadow-sm animate-in zoom-in">
+          <span className="absolute top-1 right-1 h-5 w-5 rounded-full bg-[#EA638C] text-[10px] font-black text-white flex items-center justify-center border-2 border-white shadow-sm">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -55,15 +53,15 @@ export default function NotificationBell() {
 
       {isOpen && (
         <>
-          {/* MOBILE BACKDROP */}
+          {/* BACKDROP */}
           <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[90] md:hidden" onClick={() => setIsOpen(false)} />
 
-          {/* MAIN MODAL */}
+          {/* MAIN MODAL - Position Fix Applied Here */}
           <div className={`
-            fixed left-1/2 -translate-x-1/2 bottom-4 w-[calc(100vw-24px)] max-w-[450px] z-[100]
-            md:absolute md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 md:translate-x-0 md:w-[400px]
+            fixed top-[80px] left-3 right-3 z-[100]
+            md:absolute md:top-full md:left-auto md:right-0 md:mt-3 md:w-[400px] md:translate-x-0
             bg-white rounded-[2.5rem] md:rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gray-100 overflow-hidden 
-            animate-in fade-in slide-in-from-bottom-6 md:zoom-in-95 duration-300
+            animate-in fade-in slide-in-from-top-4 duration-300
           `}>
             
             {/* HEADER */}
@@ -85,15 +83,14 @@ export default function NotificationBell() {
             {/* CONTENT AREA */}
             <div className="max-h-[60vh] md:max-h-[480px] overflow-y-auto no-scrollbar bg-white">
               {!hasAnyNotifications ? (
-                 <div className="flex flex-col items-center justify-center px-10 py-20 text-center">
-                     <div className="flex items-center justify-center w-20 h-20 mb-4 rounded-full bg-[#FBB6E6]/20">
-                         <Inbox className="text-[#EA638C]/30" size={40} />
-                     </div>
-                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Your tray is empty</p>
-                 </div>
+                  <div className="flex flex-col items-center justify-center px-10 py-20 text-center">
+                      <div className="flex items-center justify-center w-20 h-20 mb-4 rounded-full bg-[#FBB6E6]/20">
+                          <Inbox className="text-[#EA638C]/30" size={40} />
+                      </div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Your tray is empty</p>
+                  </div>
               ) : (
                 <div className="flex flex-col">
-                  {/* ORDERS SECTION */}
                   {orderNotifications.length > 0 && (
                     <div className="border-b border-gray-50">
                       <button onClick={() => setExpandedSection(expandedSection === 'orders' ? '' : 'orders')} className="flex items-center justify-between w-full p-5 transition-colors hover:bg-gray-50">
@@ -107,7 +104,6 @@ export default function NotificationBell() {
                     </div>
                   )}
 
-                  {/* SHIPMENTS SECTION */}
                   {shipmentNotifications.length > 0 && (
                     <div className="border-b border-gray-50">
                       <button onClick={() => setExpandedSection(expandedSection === 'shipment' ? '' : 'shipment')} className="flex items-center justify-between w-full p-5 transition-colors hover:bg-gray-50">
@@ -121,7 +117,6 @@ export default function NotificationBell() {
                     </div>
                   )}
 
-                  {/* RECENT ACTIVITY */}
                   {otherNotifications.length > 0 && (
                      <div className="p-3">
                         <p className="px-4 py-3 text-[9px] font-black text-gray-300 uppercase tracking-[0.2em]">Recent Activity</p>
@@ -153,13 +148,10 @@ export default function NotificationBell() {
 function NotificationItem({ notif, plain = false, setIsOpen, setNotifications }) {
   const router = useRouter();
 
-  // 🟢 Handles both Database Update and UI Navigation
   const handleAction = async () => {
-    // 1. Mark as read in DB via Server Action
     if (!notif.isRead) {
       const result = await markAsReadAction(notif._id);
       if (result.success) {
-        // Update context locally so unreadCount updates immediately
         setNotifications(prev => 
           prev.map(item => item._id === notif._id ? { ...item, isRead: true } : item)
         );
@@ -168,11 +160,10 @@ function NotificationItem({ notif, plain = false, setIsOpen, setNotifications })
 
     setIsOpen(false);
 
-    // 2. Redirect logic (Global vs Specific)
     if (notif.link) {
         router.push(notif.link);
-    } else if (notif.type === 'order') {
-        router.push(`/dashboard/orders/${notif.orderId || ''}`);
+    } else if (notif.type === 'order' || notif.type === 'payment') {
+        router.push(`/dashboard/orders`);
     } else {
         router.push('/dashboard');
     }
@@ -183,7 +174,6 @@ function NotificationItem({ notif, plain = false, setIsOpen, setNotifications })
       onClick={handleAction}
       className={`p-4 flex gap-4 transition-all cursor-pointer relative ${notif.isRead ? 'opacity-60' : 'bg-[#FBB6E6]/5'} ${plain ? 'hover:bg-gray-50 rounded-2xl mx-1 my-0.5' : 'border-t border-gray-100/50'}`}
     >
-      {/* 🔴 Brand Pink Unread Dot */}
       {!notif.isRead && (
         <span className="absolute top-5 right-5 h-2 w-2 rounded-full bg-[#EA638C] shadow-[0_0_10px_#EA638C]" />
       )}
@@ -194,8 +184,8 @@ function NotificationItem({ notif, plain = false, setIsOpen, setNotifications })
           width={48} height={48} alt="thumb" className="object-cover"
         />
       </div>
-      <div className="flex-1">
-        <p className="text-[11px] font-bold text-[#3E442B] leading-snug">{notif.message}</p>
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-bold text-[#3E442B] leading-snug line-clamp-2">{notif.message}</p>
         <div className="flex items-center justify-between mt-2">
             <span className="text-[10px] font-black text-[#EA638C] uppercase tracking-tighter">
               View Details
