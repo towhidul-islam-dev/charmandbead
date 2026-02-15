@@ -7,7 +7,8 @@ import {
     HomeIcon, UserGroupIcon, CubeIcon, ShoppingCartIcon,
     SparklesIcon, ChatBubbleLeftRightIcon, GiftIcon, WrenchIcon,
     Bars3Icon, XMarkIcon, ArrowTopRightOnSquareIcon,
-    BanknotesIcon // 🟢 Added for Transactions
+    BanknotesIcon,
+    FolderIcon // 🟢 Added for Categories
 } from '@heroicons/react/24/outline';
 import AdminDesktopSidebar from './AdminDesktopSidebar';
 
@@ -16,14 +17,14 @@ export default function AdminSidebar({ user, globalData }) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
 
-    // 🟢 Updated navItems to include Transactions
     const navItems = [
         { name: 'Dashboard', href: '/admin', icon: HomeIcon },
         { name: 'Products', href: '/admin/products', icon: CubeIcon },
+        // 🟢 Added Categories to the mobile list
+        { name: 'Categories', href: '/admin/categories', icon: FolderIcon }, 
         { name: 'Inventory', href: '/admin/inventory', icon: WrenchIcon },
         { name: 'New Arrivals', href: '/admin/new-arrivals', icon: SparklesIcon }, 
         { name: 'Orders', href: '/admin/orders', icon: ShoppingCartIcon, badge: globalData?.newOrdersCount || 0 },
-        // 🟢 Added Transactions link
         { name: 'Transactions', href: '/admin/transactions', icon: BanknotesIcon },
         { name: 'Gifts', href: '/admin/gifts', icon: GiftIcon },
         { name: 'Users', href: '/admin/users', icon: UserGroupIcon, badge: globalData?.newUsersCount || 0 },
@@ -33,7 +34,7 @@ export default function AdminSidebar({ user, globalData }) {
     const isActive = (item) => {
         const isNewArrivalActive = searchParams ? searchParams.get('newArrival') === 'true' : false;
         if (item.href === '/admin') return pathname === '/admin';
-        // 🟢 Enhanced logic to handle sub-routes correctly
+        // Logic to keep link active for sub-routes (like /admin/categories/edit)
         return pathname === item.href || pathname.startsWith(item.href + '/') || (item.name === 'New Arrivals' && isNewArrivalActive);
     };
 
@@ -42,7 +43,7 @@ export default function AdminSidebar({ user, globalData }) {
             {/* 1. Mobile Hamburger Button */}
             <button 
                 onClick={() => setIsOpen(true)}
-                className="fixed top-4 left-4 z-[110] p-2 rounded-lg bg-[#3E442B] text-white shadow-md md:hidden"
+                className="fixed top-4 left-4 z-[110] p-2 rounded-lg bg-[#3E442B] text-white shadow-md md:hidden border border-white/10"
             >
                 <Bars3Icon className="w-6 h-6" />
             </button>
@@ -70,11 +71,11 @@ export default function AdminSidebar({ user, globalData }) {
                                         href={item.href}
                                         onClick={() => setIsOpen(false)}
                                         className={`flex items-center gap-4 px-4 py-3 rounded-xl transition-all ${
-                                            active ? 'bg-[#EA638C] text-white' : 'text-gray-300 hover:bg-white/10'
+                                            active ? 'bg-[#EA638C] text-white shadow-lg' : 'text-gray-300 hover:bg-white/10'
                                         }`}
                                     >
                                         <Icon className="w-6 h-6" />
-                                        <span className="font-bold text-sm uppercase">{item.name}</span>
+                                        <span className="font-bold text-sm uppercase tracking-tight">{item.name}</span>
                                         {item.badge > 0 && (
                                             <span className="ml-auto bg-[#FBB6E6] text-[#3E442B] text-[10px] font-black px-2 py-0.5 rounded-full">
                                                 {item.badge}

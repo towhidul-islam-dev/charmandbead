@@ -10,13 +10,16 @@ import {
   ChatBubbleLeftRightIcon,
   GiftIcon,
   WrenchIcon,
-  BanknotesIcon, // 🟢 New Icon for Transactions
+  BanknotesIcon,
+  FolderIcon, // 🟢 New Icon for Categories
 } from "@heroicons/react/24/outline";
 
 export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
   const navItems = [
     { name: "Dashboard", href: "/admin", icon: HomeIcon },
     { name: "Products", href: "/admin/products", icon: CubeIcon },
+    // 🟢 Added Categories link here
+    { name: "Categories", href: "/admin/categories", icon: FolderIcon }, 
     { name: "Inventory", href: "/admin/inventory", icon: WrenchIcon },
     {
       name: "New Arrivals",
@@ -31,7 +34,6 @@ export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
       icon: ShoppingCartIcon,
       badge: globalData?.newOrdersCount || 0,
     },
-    // 🟢 NEW: Transactions Section added for Financial Ledger
     { 
       name: "Transactions", 
       href: "/admin/transactions", 
@@ -49,6 +51,10 @@ export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
 
   const isActive = (item) => {
     if (item.name === "New Arrivals") return currentPath === "/admin/new-arrivals";
+    // Ensures sub-paths of /admin/categories also highlight the link
+    if (item.href !== "/admin") {
+        return currentPath.startsWith(item.href);
+    }
     return currentPath === item.href;
   };
 
