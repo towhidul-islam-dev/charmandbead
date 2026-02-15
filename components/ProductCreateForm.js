@@ -1,7 +1,7 @@
 "use client";
 import { useState, useActionState, useEffect, useRef } from "react"; 
 import { saveProduct } from "@/actions/product";
-import { createInAppNotification } from "@/actions/inAppNotifications"; // 🟢 Added import
+import { createInAppNotification } from "@/actions/inAppNotifications";
 import { useNotifications } from "@/Context/NotificationContext";
 import ProductCard from "@/components/ProductCard";
 import toast, { Toaster } from "react-hot-toast";
@@ -11,15 +11,17 @@ import {
   CommandLineIcon, EyeIcon
 } from "@heroicons/react/24/outline";
 
-export default function ProductForm({ initialData, categoryStructure }) {
+export default function ProductForm({ initialData, categoryStructure = {} }) {
   const formRef = useRef(null);
-  const { addNotification } = useNotifications(); // 🟢 Used to update UI instantly
+  const { addNotification } = useNotifications();
 
   // --- STATE MANAGEMENT ---
   const [useVariants, setUseVariants] = useState(initialData?.hasVariants || false);
   const [variants, setVariants] = useState(initialData?.variants || []);
   const [isNewArrival, setIsNewArrival] = useState(initialData?.isNewArrival || false);
   const [mainPreview, setMainPreview] = useState(initialData?.imageUrl || null);
+  
+  // 🟢 Dynamic Category State
   const [mainCategory, setMainCategory] = useState(initialData?.category || "");
   const [subCategory, setSubCategory] = useState(initialData?.subCategory || "");
   
@@ -27,6 +29,10 @@ export default function ProductForm({ initialData, categoryStructure }) {
   const [previewPrice, setPreviewPrice] = useState(initialData?.price || 0);
 
   const [state, formAction, isPending] = useActionState(saveProduct, null);
+
+  // Logic to get sub-categories for the selected main category
+  // This now works with the dynamic object passed from your Page
+  const availableSubCategories = mainCategory ? (categoryStructure[mainCategory] || []) : [];
 
   const previewProduct = {
     _id: "preview",
@@ -40,35 +46,31 @@ export default function ProductForm({ initialData, categoryStructure }) {
 
   const handleCategoryChange = (e) => {
     setMainCategory(e.target.value);
-    setSubCategory(""); 
+    setSubCategory(""); // Reset sub-category when main changes
   };
 
-  // 🟢 SUCCESS LOGIC ENHANCED
+  // 🟢 SUCCESS LOGIC
   useEffect(() => {
     const handleSuccess = async () => {
       if (state?.success && state?.message) {
         toast.success(state.message);
 
-        // --- GLOBAL NOTIFICATION LOGIC ---
-        // Triggered only if isNewArrival is checked
         if (isNewArrival) {
           try {
             const res = await createInAppNotification({
               title: "New Arrival! 🔥",
               message: `${previewName || "A new treasure"} has been added to the shop.`,
               type: "arrival",
-              recipientId: "GLOBAL", // 🟢 Sent to everyone
+              recipientId: "GLOBAL",
               link: state.data?._id ? `/product/${state.data._id}` : "/products"
             });
             
-            // Instantly update the current admin's bell icon
             if (res.success) addNotification(res.data);
           } catch (err) { 
             console.error("Notification trigger failed:", err); 
           }
         }
 
-        // Reset Form (only for new products)
         if (!initialData) {
           formRef.current?.reset();
           setVariants([]);
@@ -131,7 +133,6 @@ export default function ProductForm({ initialData, categoryStructure }) {
     formAction(formData);
   };
 
-  // UI CONSTANTS
   const inputClass = "w-full bg-gray-50 border-none p-3.5 md:p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-sm";
   const sectionClass = "bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-6";
 
@@ -142,7 +143,6 @@ export default function ProductForm({ initialData, categoryStructure }) {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           
           <div className="space-y-6 lg:col-span-2">
-            {/* ESSENCE SECTION */}
             <section className={sectionClass}>
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-pink-50 rounded-xl text-[#EA638C]"><TagIcon className="w-5 h-5" /></div>
@@ -152,20 +152,31 @@ export default function ProductForm({ initialData, categoryStructure }) {
                 <input type="text" name="name" value={previewName} onChange={(e) => setPreviewName(e.target.value)} required className={inputClass} placeholder="Product Name" />
                 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {/* 🟢 DYNAMIC MAIN CATEGORY */}
                   <select value={mainCategory} onChange={handleCategoryChange} className={inputClass}>
-                    <option value="">Category</option>
-                    {Object.keys(categoryStructure).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    <option value="">Select Category</option>
+                    {Object.keys(categoryStructure).map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
-                  <select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className={inputClass} disabled={!mainCategory}>
-                    <option value="">Sub-Category</option>
-                    {(mainCategory ? categoryStructure[mainCategory] : []).map(sub => <option key={sub} value={sub}>{sub}</option>)}
+
+                  {/* 🟢 DYNAMIC SUB CATEGORY */}
+                  <select 
+                    value={subCategory} 
+                    onChange={(e) => setSubCategory(e.target.value)} 
+                    className={inputClass} 
+                    disabled={!mainCategory || availableSubCategories.length === 0}
+                  >
+                    <option value="">Select Sub-Category</option>
+                    {availableSubCategories.map(sub => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
                   </select>
                 </div>
                 <textarea name="description" defaultValue={initialData?.description} rows="3" className={`${inputClass} resize-none`} placeholder="Description..." />
               </div>
             </section>
 
-            {/* INVENTORY & VARIANTS */}
             <section className={sectionClass}>
               <div className="flex flex-col justify-between gap-4 mb-8 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-3">
@@ -232,7 +243,6 @@ export default function ProductForm({ initialData, categoryStructure }) {
             </section>
           </div>
 
-          {/* RIGHT SIDEBAR */}
           <div className="space-y-6">
             <div className="lg:sticky lg:top-6">
               <div className="hidden sm:block">
@@ -240,7 +250,7 @@ export default function ProductForm({ initialData, categoryStructure }) {
                     <EyeIcon className="w-4 h-4 text-[#EA638C]" />
                     <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Shop Preview</span>
                 </div>
-                <div className="origin-top scale-95 pointer-events-none mb-6">
+                <div className="mb-6 origin-top scale-95 pointer-events-none">
                     <ProductCard product={previewProduct} />
                 </div>
               </div>
