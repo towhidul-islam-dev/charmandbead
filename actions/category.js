@@ -117,3 +117,22 @@ export async function saveCategoryAction(formData) {
     return { success: false, message: error.message || "Failed to create category" };
   }
 }
+
+export async function getCategories() {
+  try {
+    await dbConnect();
+    const categories = await Category.find().lean();
+    
+    // We transform the data so it doesn't break the "Client Component" serialization
+    return categories.map(cat => ({
+      ...cat,
+      _id: cat._id.toString(),
+      parentId: cat.parentId ? cat.parentId.toString() : null, // 🟢 Handle the ObjectId
+      createdAt: cat.createdAt?.toISOString(),
+      updatedAt: cat.updatedAt?.toISOString(),
+    }));
+  } catch (error) {
+    console.error("Fetch Error:", error);
+    return [];
+  }
+}

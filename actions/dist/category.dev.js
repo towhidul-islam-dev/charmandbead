@@ -7,6 +7,7 @@ Object.defineProperty(exports, "__esModule", {
 exports.getDynamicCategoryStructure = getDynamicCategoryStructure;
 exports.deleteCategoryAction = deleteCategoryAction;
 exports.saveCategoryAction = saveCategoryAction;
+exports.getCategories = getCategories;
 
 var _Category = _interopRequireDefault(require("@/models/Category"));
 
@@ -17,6 +18,12 @@ var _Product = _interopRequireDefault(require("@/models/Product"));
 var _cache = require("next/cache");
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "default": obj }; }
+
+function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); if (enumerableOnly) symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; }); keys.push.apply(keys, symbols); } return keys; }
+
+function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i] != null ? arguments[i] : {}; if (i % 2) { ownKeys(source, true).forEach(function (key) { _defineProperty(target, key, source[key]); }); } else if (Object.getOwnPropertyDescriptors) { Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)); } else { ownKeys(source).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } } return target; }
+
+function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 
 /**
  * Fetches both the nested structure and the flat array of categories.
@@ -230,4 +237,49 @@ function saveCategoryAction(formData) {
       }
     }
   }, null, null, [[0, 17]]);
+}
+
+function getCategories() {
+  var categories, products;
+  return regeneratorRuntime.async(function getCategories$(_context4) {
+    while (1) {
+      switch (_context4.prev = _context4.next) {
+        case 0:
+          _context4.prev = 0;
+          _context4.next = 3;
+          return regeneratorRuntime.awrap((0, _mongodb["default"])());
+
+        case 3:
+          _context4.next = 5;
+          return regeneratorRuntime.awrap(_Category["default"].find().lean());
+
+        case 5:
+          categories = _context4.sent;
+          _context4.next = 8;
+          return regeneratorRuntime.awrap(_Product["default"].find({}, 'category subCategory').lean());
+
+        case 8:
+          products = _context4.sent;
+          return _context4.abrupt("return", categories.map(function (cat) {
+            return _objectSpread({}, cat, {
+              _id: cat._id.toString(),
+              parentId: cat.parentId ? cat.parentId.toString() : null,
+              productCount: products.filter(function (p) {
+                return p.category === cat.name || p.subCategory === cat.name;
+              }).length
+            });
+          }));
+
+        case 12:
+          _context4.prev = 12;
+          _context4.t0 = _context4["catch"](0);
+          console.error("Failed to fetch categories:", _context4.t0);
+          return _context4.abrupt("return", []);
+
+        case 16:
+        case "end":
+          return _context4.stop();
+      }
+    }
+  }, null, null, [[0, 12]]);
 }

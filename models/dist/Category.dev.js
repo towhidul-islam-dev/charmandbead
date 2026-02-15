@@ -35,7 +35,8 @@ var CategorySchema = new _mongoose["default"].Schema({
 }); // 🟢 Pre-save middleware to auto-generate slug from name
 
 CategorySchema.pre('validate', function (next) {
-  if (this.name && !this.slug) {
+  if (this.isModified('name')) {
+    // 🟢 Trigger whenever the name changes
     this.slug = this.name.toLowerCase().replace(/[^\w ]+/g, '').replace(/ +/g, '-');
   }
 

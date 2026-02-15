@@ -22,7 +22,7 @@ const CategorySchema = new mongoose.Schema({
 
 // 🟢 Pre-save middleware to auto-generate slug from name
 CategorySchema.pre('validate', function(next) {
-  if (this.name && !this.slug) {
+  if (this.isModified('name')) { // 🟢 Trigger whenever the name changes
     this.slug = this.name
       .toLowerCase()
       .replace(/[^\w ]+/g, '')
@@ -30,5 +30,4 @@ CategorySchema.pre('validate', function(next) {
   }
   next();
 });
-
 export default mongoose.models.Category || mongoose.model("Category", CategorySchema);
