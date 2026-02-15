@@ -4,7 +4,7 @@ import { saveProduct } from "@/actions/product";
 import { createInAppNotification } from "@/actions/inAppNotifications";
 import { useNotifications } from "@/Context/NotificationContext";
 import ProductCard from "@/components/ProductCard";
-import CategoryManager from "@/components/CategoryManager"; // 🟢 Import the manager
+import CategoryManager from "@/components/CategoryManager"; 
 import toast, { Toaster } from "react-hot-toast";
 import { 
   PhotoIcon, SparklesIcon, XMarkIcon, 
@@ -21,13 +21,10 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
   const [variants, setVariants] = useState(initialData?.variants || []);
   const [isNewArrival, setIsNewArrival] = useState(initialData?.isNewArrival || false);
   const [mainPreview, setMainPreview] = useState(initialData?.imageUrl || null);
-  
-  // 🟢 NEW: Category Modal Toggle
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   
   const [mainCategory, setMainCategory] = useState(initialData?.category || "");
   const [subCategory, setSubCategory] = useState(initialData?.subCategory || "");
-  
   const [previewName, setPreviewName] = useState(initialData?.name || "");
   const [previewPrice, setPreviewPrice] = useState(initialData?.price || 0);
 
@@ -52,8 +49,8 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
 
   useEffect(() => {
     const handleSuccess = async () => {
-      if (state?.success && state?.message) {
-        toast.success(state.message);
+      if (state?.success) {
+        toast.success(state.message || "Success!");
         if (isNewArrival) {
           try {
             const res = await createInAppNotification({
@@ -76,8 +73,8 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
           setPreviewName("");
           setPreviewPrice(0);
         }
-      } else if (state?.message) {
-        toast.error(state.message);
+      } else if (state?.success === false) {
+        toast.error(state.message || "An error occurred");
       }
     };
     if (state) handleSuccess();
@@ -107,6 +104,7 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
     size: "", color: "", price: "", stock: "", sku: "", minOrderQuantity: 1, preview: null 
   }]);
 
+  // 🟢 FIXED: Cleaned up the parentheses logic to fix the build error
   const handleSubmit = async (formData) => {
     formData.set("id", initialData?._id || "");
     formData.set("hasVariants", useVariants.toString());
@@ -117,14 +115,16 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
     formData.set("price", Number(previewPrice) || 0);
 
     if (useVariants) {
-      formData.set("variantsJson", JSON.stringify(variants.map(({ preview, ...rest }) => ({
+      const variantsData = variants.map(({ preview, ...rest }) => ({
         ...rest,
         name: `${rest.color} ${rest.size}`.trim() || "Default", 
         minOrderQuantity: Number(rest.minOrderQuantity) || 1,
         price: Number(rest.price) || 0,
         stock: Number(rest.stock) || 0
-      })))));
+      }));
+      formData.set("variantsJson", JSON.stringify(variantsData));
     }
+    
     formAction(formData);
   };
 
@@ -135,7 +135,6 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
     <>
       <Toaster position="top-right" />
       
-      {/* 🟢 CATEGORY QUICK ADD MODAL */}
       {isAddingCategory && (
         <CategoryManager 
           categories={rawCategories} 
@@ -164,7 +163,6 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
                         <option key={cat} value={cat}>{cat}</option>
                       ))}
                     </select>
-                    {/* 🟢 QUICK ADD BUTTON */}
                     <button 
                       type="button"
                       onClick={() => setIsAddingCategory(true)}

@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getProductById } from '@/lib/data';
-import { getCategoryStructure } from '@/actions/category'; // 🟢 Fetch your real DB categories
+// 🟢 FIXED: Match the function name in your category actions file
+import { getDynamicCategoryStructure } from '@/actions/category'; 
 import ProductCreateForm from '@/components/ProductCreateForm';
 import DeleteProductBtn from '@/components/DeleteProductBtn';
 import { ChevronLeftIcon } from "@heroicons/react/24/outline";
@@ -12,7 +13,11 @@ export default async function EditProductPage({ params }) {
 
     // Fetch product and real category structure from DB
     const { product, success } = await getProductById(id);
-    const { structure, raw } = await getCategoryStructure(); 
+    
+    // 🟢 FIXED: Call the correct dynamic function name
+    const categoryData = await getDynamicCategoryStructure(); 
+    const structure = categoryData?.structure || {};
+    const raw = categoryData?.raw || [];
 
     if (!success || !product) {
         notFound();
@@ -49,8 +54,8 @@ export default async function EditProductPage({ params }) {
             <div className="mx-auto max-w-7xl">
                 <ProductCreateForm 
                     initialData={serializedProduct} 
-                    categoryStructure={structure || {}} 
-                    rawCategories={raw || []} // 🟢 Passes data to your Quick Add modal
+                    categoryStructure={structure} 
+                    rawCategories={raw} 
                 /> 
             </div>
 
