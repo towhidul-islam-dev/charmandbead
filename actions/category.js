@@ -72,50 +72,35 @@ export async function deleteCategoryAction(id) {
   }
 }
 
+// actions/category.js
+// actions/category.js
 export async function saveCategoryAction(formData) {
-  try {
-    await dbConnect();
-    const name = formData.get("name");
-    let parentId = formData.get("parentId");
+    try {
+        await dbConnect();
+        const name = formData.get("name");
+        let parentId = formData.get("parentId");
 
-    if (!name) return { success: false, message: "Name is required" };
+        // 🟢 FIX: Mongoose needs null, not an empty string for ObjectIDs
+        const cleanParentId = (parentId === "" || parentId === "null" || !parentId) 
+            ? null 
+            : parentId;
 
-    // Clean up parentId
-    if (!parentId || parentId === "" || parentId === "none") {
-      parentId = null;
+        const newCategory = await Category.create({
+            name: name.trim(),
+            parentId: cleanParentId,
+        });
+
+        revalidatePath("/admin/categories");
+        
+        // Return a plain object so the Client Component doesn't crash
+        return { 
+            success: true, 
+            data: JSON.parse(JSON.stringify(newCategory)) 
+        };
+    } catch (error) {
+        console.error("Save Error:", error);
+        return { success: false, error: error.message };
     }
-
-    // 🟢 Manual Slug Generation for extra safety
-    const slug = name
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w ]+/g, '')
-      .replace(/ +/g, '-');
-
-    const newCategory = await Category.create({ 
-      name: name.trim(), 
-      slug: slug, // Explicitly passing slug helps avoid validation errors
-      parentId 
-    });
-
-    // Revalidate the paths so the UI updates immediately
-    revalidatePath("/admin/products");
-    revalidatePath("/admin/products/create");
-    
-    return { 
-      success: true, 
-      data: JSON.parse(JSON.stringify(newCategory)) 
-    };
-  } catch (error) {
-    console.error("Save Category Error:", error);
-    
-    // 🟢 Handle Duplicate Slugs (Error code 11000)
-    if (error.code === 11000) {
-      return { success: false, message: "A category with this name already exists!" };
-    }
-    
-    return { success: false, message: error.message || "Failed to create category" };
-  }
 }
 
 export async function getCategories() {

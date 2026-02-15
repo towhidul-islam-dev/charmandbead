@@ -14,15 +14,16 @@ export default function CategoryManager({
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState("");
 
-  // 1. Filter for Top-Level Categories
-  const parentCategories = useMemo(() => {
-    if (!Array.isArray(categories)) return [];
-    return categories.filter((c) => !c.parentId);
-  }, [categories]);
+const parentCategories = useMemo(() => {
+  if (!Array.isArray(categories)) return [];
+  // Ensure we check for both null and undefined
+  return categories.filter((c) => c.parentId === null || c.parentId === undefined);
+}, [categories]);
 
-  // 2. Helper to find children for the list view
-  const getChildren = (pid) => categories.filter((c) => c.parentId === pid);
-
+const getChildren = (pid) => {
+  // Convert IDs to strings to ensure the comparison (===) works
+  return categories.filter((c) => String(c.parentId) === String(pid));
+};
   const handleSubmit = async (e) => {
     e.preventDefault();
     e.stopPropagation(); // Prevents the parent product form from triggering
