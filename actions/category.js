@@ -6,88 +6,104 @@ import { revalidatePath } from "next/cache";
 
 /**
  * Fetches both the nested structure and the flat array of categories.
- * Useful for both the Product Form dropdowns and the Category Manager.
  */
 export async function getDynamicCategoryStructure() {
-  await dbConnect();
-  
-  // Fetch all categories and convert to plain objects
-  const allCategories = await Category.find().lean();
-  const serializedCategories = JSON.parse(JSON.stringify(allCategories));
+  try {
+    await dbConnect();
+    
+    // Fetch all categories and convert to plain objects
+    const allCategories = await Category.find().lean();
+    const serializedCategories = JSON.parse(JSON.stringify(allCategories));
 
-  const structure = {};
+    const structure = {};
 
-  // 1. Find all parent categories (those with no parentId)
-  const parents = serializedCategories.filter(cat => !cat.parentId);
+    // 1. Find all parent categories
+    // 🟢 FIXED: Check for null, undefined, or empty string to be safe
+    const parents = serializedCategories.filter(cat => !cat.parentId || cat.parentId === "" || cat.parentId === null);
 
-  // 2. Map their children
-  parents.forEach(parent => {
-    structure[parent.name] = serializedCategories
-      .filter(child => String(child.parentId) === String(parent._id))
-      .map(child => child.name);
-  });
+    // 2. Map their children
+    parents.forEach(parent => {
+      structure[parent.name] = serializedCategories
+        .filter(child => child.parentId && String(child.parentId) === String(parent._id))
+        .map(child => child.name);
+    });
 
-  return {
-    structure, // e.g., { "Beads": ["Crystal", "Glass"], "Charms": [...] }
-    raw: serializedCategories // Full flat list for the CategoryManager modal
-  };
+    return {
+      structure,
+      raw: serializedCategories // Full flat list for the CategoryManager modal
+    };
+  } catch (error) {
+    console.error("Fetch Error:", error);
+    return { structure: {}, raw: [] };
+  }
 }
 
 export async function deleteCategoryAction(id) {
   try {
     await dbConnect();
 
-    // 1. Check if it has sub-categories
     const hasChildren = await Category.findOne({ parentId: id });
     if (hasChildren) {
       return { 
         success: false, 
-        message: "Hierarchy Protection: This category has sub-categories that must be removed first." 
+        message: "Hierarchy Protection: This category has sub-categories." 
       };
     }
 
-    // 2. Check if products are still assigned to it
+    // 🟢 NOTE: Since Product stores category names (strings) usually, 
+    // ensure this query matches your Product schema field types
     const hasProducts = await Product.findOne({ 
       $or: [{ category: id }, { subCategory: id }] 
     });
+    
     if (hasProducts) {
       return { 
         success: false, 
-        message: "Inventory Protection: Products are still assigned to this category." 
+        message: "Inventory Protection: Products are still assigned here." 
       };
     }
 
     await Category.findByIdAndDelete(id);
     
-    revalidatePath("/admin/categories");
+    revalidatePath("/admin/products");
     return { success: true };
   } catch (error) {
-    console.error("Delete Error:", error);
     return { success: false, message: "Sync Error: Could not delete category." };
   }
 }
 
 /**
- * New helper to save/update categories
+ * Save/Update categories
  */
 export async function saveCategoryAction(formData) {
   try {
     await dbConnect();
     const name = formData.get("name");
-    const parentId = formData.get("parentId") || null;
+    let parentId = formData.get("parentId");
+
+    // 🟢 FIXED: Ensure "none" or empty string is truly null in the DB
+    if (!parentId || parentId === "" || parentId === "none") {
+      parentId = null;
+    }
 
     if (!name) return { success: false, message: "Name is required" };
 
-    const newCategory = await Category.create({ name, parentId });
+    const newCategory = await Category.create({ 
+      name: name.trim(), 
+      parentId 
+    });
 
-    revalidatePath("/admin/categories");
-    revalidatePath("/admin/products/create"); // Revalidate where the dropdowns live
+    // Revalidate multiple paths to ensure the UI updates everywhere
+    revalidatePath("/admin/products");
+    revalidatePath("/admin/products/create");
+    revalidatePath("/admin/products/edit/[id]", "page"); 
     
     return { 
       success: true, 
       data: JSON.parse(JSON.stringify(newCategory)) 
     };
   } catch (error) {
-    return { success: false, message: "Failed to create category" };
+    console.error("Save Category Error:", error);
+    return { success: false, message: error.message || "Failed to create category" };
   }
 }

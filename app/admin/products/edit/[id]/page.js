@@ -1,29 +1,29 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getProductById } from '@/lib/data';
-// 🟢 FIXED: Match the function name in your category actions file
 import { getDynamicCategoryStructure } from '@/actions/category'; 
 import ProductCreateForm from '@/components/ProductCreateForm';
 import DeleteProductBtn from '@/components/DeleteProductBtn';
 import { ChevronLeftIcon } from "@heroicons/react/24/outline";
 
 export default async function EditProductPage({ params }) {
-    const resolvedParams = await params;
-    const id = resolvedParams.id;
+    const { id } = await params;
 
-    // Fetch product and real category structure from DB
-    const { product, success } = await getProductById(id);
-    
-    // 🟢 FIXED: Call the correct dynamic function name
-    const categoryData = await getDynamicCategoryStructure(); 
-    const structure = categoryData?.structure || {};
-    const raw = categoryData?.raw || [];
+    // 1. Fetch data in parallel for better performance
+    const [productRes, categoryData] = await Promise.all([
+        getProductById(id),
+        getDynamicCategoryStructure()
+    ]);
 
-    if (!success || !product) {
+    if (!productRes.success || !productRes.product) {
         notFound();
     }
 
-    const serializedProduct = JSON.parse(JSON.stringify(product));
+    // 2. Deeply serialize data to remove MongoDB Buffer/Object types
+    // This ensures 'rawCategories' is a plain array for the CategoryManager filter
+    const serializedProduct = JSON.parse(JSON.stringify(productRes.product));
+    const structure = categoryData?.structure || {};
+    const rawCategories = JSON.parse(JSON.stringify(categoryData?.raw || []));
 
     return (
         <div className="min-h-screen py-10 bg-gray-50/50">
@@ -55,7 +55,7 @@ export default async function EditProductPage({ params }) {
                 <ProductCreateForm 
                     initialData={serializedProduct} 
                     categoryStructure={structure} 
-                    rawCategories={raw} 
+                    rawCategories={rawCategories} 
                 /> 
             </div>
 

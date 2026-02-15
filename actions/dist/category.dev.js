@@ -20,7 +20,6 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "d
 
 /**
  * Fetches both the nested structure and the flat array of categories.
- * Useful for both the Product Form dropdowns and the Category Manager.
  */
 function getDynamicCategoryStructure() {
   var allCategories, serializedCategories, structure, parents;
@@ -28,42 +27,52 @@ function getDynamicCategoryStructure() {
     while (1) {
       switch (_context.prev = _context.next) {
         case 0:
-          _context.next = 2;
+          _context.prev = 0;
+          _context.next = 3;
           return regeneratorRuntime.awrap((0, _mongodb["default"])());
 
-        case 2:
-          _context.next = 4;
+        case 3:
+          _context.next = 5;
           return regeneratorRuntime.awrap(_Category["default"].find().lean());
 
-        case 4:
+        case 5:
           allCategories = _context.sent;
           serializedCategories = JSON.parse(JSON.stringify(allCategories));
-          structure = {}; // 1. Find all parent categories (those with no parentId)
+          structure = {}; // 1. Find all parent categories
+          // 🟢 FIXED: Check for null, undefined, or empty string to be safe
 
           parents = serializedCategories.filter(function (cat) {
-            return !cat.parentId;
+            return !cat.parentId || cat.parentId === "" || cat.parentId === null;
           }); // 2. Map their children
 
           parents.forEach(function (parent) {
             structure[parent.name] = serializedCategories.filter(function (child) {
-              return String(child.parentId) === String(parent._id);
+              return child.parentId && String(child.parentId) === String(parent._id);
             }).map(function (child) {
               return child.name;
             });
           });
           return _context.abrupt("return", {
             structure: structure,
-            // e.g., { "Beads": ["Crystal", "Glass"], "Charms": [...] }
             raw: serializedCategories // Full flat list for the CategoryManager modal
 
           });
 
-        case 10:
+        case 13:
+          _context.prev = 13;
+          _context.t0 = _context["catch"](0);
+          console.error("Fetch Error:", _context.t0);
+          return _context.abrupt("return", {
+            structure: {},
+            raw: []
+          });
+
+        case 17:
         case "end":
           return _context.stop();
       }
     }
-  });
+  }, null, null, [[0, 13]]);
 }
 
 function deleteCategoryAction(id) {
@@ -92,7 +101,7 @@ function deleteCategoryAction(id) {
 
           return _context2.abrupt("return", {
             success: false,
-            message: "Hierarchy Protection: This category has sub-categories that must be removed first."
+            message: "Hierarchy Protection: This category has sub-categories."
           });
 
         case 8:
@@ -115,7 +124,7 @@ function deleteCategoryAction(id) {
 
           return _context2.abrupt("return", {
             success: false,
-            message: "Inventory Protection: Products are still assigned to this category."
+            message: "Inventory Protection: Products are still assigned here."
           });
 
         case 13:
@@ -123,7 +132,7 @@ function deleteCategoryAction(id) {
           return regeneratorRuntime.awrap(_Category["default"].findByIdAndDelete(id));
 
         case 15:
-          (0, _cache.revalidatePath)("/admin/categories");
+          (0, _cache.revalidatePath)("/admin/products");
           return _context2.abrupt("return", {
             success: true
           });
@@ -131,13 +140,12 @@ function deleteCategoryAction(id) {
         case 19:
           _context2.prev = 19;
           _context2.t0 = _context2["catch"](0);
-          console.error("Delete Error:", _context2.t0);
           return _context2.abrupt("return", {
             success: false,
             message: "Sync Error: Could not delete category."
           });
 
-        case 23:
+        case 22:
         case "end":
           return _context2.stop();
       }
@@ -145,7 +153,7 @@ function deleteCategoryAction(id) {
   }, null, null, [[0, 19]]);
 }
 /**
- * New helper to save/update categories
+ * Save/Update categories
  */
 
 
@@ -161,10 +169,14 @@ function saveCategoryAction(formData) {
 
         case 3:
           name = formData.get("name");
-          parentId = formData.get("parentId") || null;
+          parentId = formData.get("parentId"); // 🟢 FIXED: Ensure "none" or empty string is truly null in the DB
+
+          if (!parentId || parentId === "" || parentId === "none") {
+            parentId = null;
+          }
 
           if (name) {
-            _context3.next = 7;
+            _context3.next = 8;
             break;
           }
 
@@ -173,35 +185,37 @@ function saveCategoryAction(formData) {
             message: "Name is required"
           });
 
-        case 7:
-          _context3.next = 9;
+        case 8:
+          _context3.next = 10;
           return regeneratorRuntime.awrap(_Category["default"].create({
-            name: name,
+            name: name.trim(),
             parentId: parentId
           }));
 
-        case 9:
+        case 10:
           newCategory = _context3.sent;
-          (0, _cache.revalidatePath)("/admin/categories");
-          (0, _cache.revalidatePath)("/admin/products/create"); // Revalidate where the dropdowns live
-
+          // Revalidate multiple paths to ensure the UI updates everywhere
+          (0, _cache.revalidatePath)("/admin/products");
+          (0, _cache.revalidatePath)("/admin/products/create");
+          (0, _cache.revalidatePath)("/admin/products/edit/[id]", "page");
           return _context3.abrupt("return", {
             success: true,
             data: JSON.parse(JSON.stringify(newCategory))
           });
 
-        case 15:
-          _context3.prev = 15;
+        case 17:
+          _context3.prev = 17;
           _context3.t0 = _context3["catch"](0);
+          console.error("Save Category Error:", _context3.t0);
           return _context3.abrupt("return", {
             success: false,
-            message: "Failed to create category"
+            message: _context3.t0.message || "Failed to create category"
           });
 
-        case 18:
+        case 21:
         case "end":
           return _context3.stop();
       }
     }
-  }, null, null, [[0, 15]]);
+  }, null, null, [[0, 17]]);
 }
