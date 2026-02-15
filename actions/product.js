@@ -49,10 +49,11 @@ export async function saveProduct(prevState, formData) {
     await mongodb();
 
     const rawId = formData.get("id");
+    // Ensure "undefined" strings from the client don't break MongoDB lookup
     const id = rawId && rawId !== "undefined" && rawId !== "" ? rawId : null;
     const hasVariants = formData.get("hasVariants") === "true";
 
-    // 1. Image Handling (Keep your existing logic)
+    // 1. Image Handling
     let imageUrl = formData.get("existingImage") || "";
     const mainImageFile = formData.get("imageFile");
     if (mainImageFile && mainImageFile instanceof File && mainImageFile.size > 0) {
@@ -62,7 +63,7 @@ export async function saveProduct(prevState, formData) {
 
     // 2. Base Product Data
     let productData = {
-      name: formData.get("name"),
+      name: formData.get("name")?.trim(),
       description: formData.get("description"),
       category: formData.get("category"),
       subCategory: formData.get("subCategory"),
@@ -75,26 +76,25 @@ export async function saveProduct(prevState, formData) {
     // 3. Variant & SKU Processing
     if (hasVariants) {
       const rawVariants = JSON.parse(formData.get("variantsJson") || "[]");
-      
-      // 🟢 THE FIX: Manually track total stock for the parent product
       let totalCalculatedStock = 0;
 
       const processedVariants = await Promise.all(
         rawVariants.map(async (v, index) => {
           let vImageUrl = v.imageUrl || "";
+          
+          // Check for individual variant image uploads
           const variantFile = formData.get(`variantImage_${index}`);
-
           if (variantFile && variantFile instanceof File && variantFile.size > 0) {
             const uploadedVUrl = await uploadToCloudinary(variantFile);
             if (uploadedVUrl) vImageUrl = uploadedVUrl;
           }
 
           const vStock = Number(v.stock) || 0;
-          totalCalculatedStock += vStock; // Summing up
+          totalCalculatedStock += vStock;
 
           return {
             ...v,
-            sku: v.sku || "",
+            sku: v.sku || "", // Model pre-save hook will fill this if empty
             price: Number(v.price) || 0,
             stock: vStock,
             minOrderQuantity: Number(v.minOrderQuantity) || 1,
@@ -104,13 +104,17 @@ export async function saveProduct(prevState, formData) {
       );
 
       productData.variants = processedVariants;
-      productData.stock = totalCalculatedStock; // 🟢 Set the parent total here
+      productData.stock = totalCalculatedStock;
 
+      // 🟢 SAFETY FIX: Sync top-level fields with variant data
       const validPrices = processedVariants.map((v) => v.price).filter((p) => p > 0);
-      productData.price = validPrices.length > 0 ? Math.min(...validPrices) : 0;
-      productData.minOrderQuantity = processedVariants[0]?.minOrderQuantity || 1;
+      // Main price becomes the lowest variant price
+      productData.price = validPrices.length > 0 ? Math.min(...validPrices) : (Number(formData.get("price")) || 0);
+      // Main MOQ reflects the first variant's requirement
+      productData.minOrderQuantity = processedVariants[0]?.minOrderQuantity || (Number(formData.get("minOrderQuantity")) || 1);
       productData.sku = processedVariants[0]?.sku || formData.get("sku") || "";
     } else {
+      // Standard Product Logic
       productData.price = Number(formData.get("price")) || 0;
       productData.stock = Number(formData.get("stock")) || 0;
       productData.minOrderQuantity = Number(formData.get("minOrderQuantity")) || 1;
@@ -118,31 +122,43 @@ export async function saveProduct(prevState, formData) {
       productData.variants = [];
     }
 
-    // 4. Save Logic
+    // 4. Save Logic using .save() to trigger your Model Pre-Save hooks
+    let finalProduct;
     if (id) {
       const product = await Product.findById(id);
       if (!product) throw new Error("Product not found");
-
+      
+      // Update fields
       Object.assign(product, productData);
-      // Middleware in Product.js now only handles SKU generation, not stock math.
-      await product.save(); 
+      finalProduct = await product.save(); 
     } else {
       const newProduct = new Product(productData);
-      await newProduct.save();
+      finalProduct = await newProduct.save();
     }
 
-    revalidatePath("/admin/products");
-    revalidatePath("/products");
-    revalidatePath("/");
+    revalidatePaths(); // Ensure your helper clears the cache for /admin and /shop
 
-    return { success: true, message: "Product saved successfully!" };
+    return { 
+      success: true, 
+      message: id ? "Treasure updated successfully! ✨" : "New treasure added to the collection! 🌸",
+      data: JSON.parse(JSON.stringify(finalProduct)) // Return serialized data for use in Toast/Notifications
+    };
+
   } catch (error) {
     console.error("Save Error:", error);
-    return {
-      success: false,
-      message: error.message || "An unexpected error occurred",
+    return { 
+      success: false, 
+      message: error.name === 'ValidationError' ? "Please check your input values." : (error.message || "An unexpected error occurred") 
     };
   }
+}
+
+// 🟢 Helper to keep code DRY (Don't Repeat Yourself)
+function revalidatePaths() {
+  revalidatePath("/admin/products");
+  revalidatePath("/admin/new-arrivals");
+  revalidatePath("/products");
+  revalidatePath("/");
 }
 
 // 🟢 Dedicated Action for the Admin Table Button

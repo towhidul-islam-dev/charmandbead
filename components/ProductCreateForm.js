@@ -4,6 +4,7 @@ import { saveProduct } from "@/actions/product";
 import { createInAppNotification } from "@/actions/inAppNotifications";
 import { useNotifications } from "@/Context/NotificationContext";
 import ProductCard from "@/components/ProductCard";
+import CategoryManager from "@/components/CategoryManager"; // 🟢 Import the manager
 import toast, { Toaster } from "react-hot-toast";
 import { 
   PhotoIcon, SparklesIcon, XMarkIcon, 
@@ -11,7 +12,7 @@ import {
   CommandLineIcon, EyeIcon
 } from "@heroicons/react/24/outline";
 
-export default function ProductForm({ initialData, categoryStructure = {} }) {
+export default function ProductForm({ initialData, categoryStructure = {}, rawCategories = [] }) {
   const formRef = useRef(null);
   const { addNotification } = useNotifications();
 
@@ -21,7 +22,9 @@ export default function ProductForm({ initialData, categoryStructure = {} }) {
   const [isNewArrival, setIsNewArrival] = useState(initialData?.isNewArrival || false);
   const [mainPreview, setMainPreview] = useState(initialData?.imageUrl || null);
   
-  // 🟢 Dynamic Category State
+  // 🟢 NEW: Category Modal Toggle
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  
   const [mainCategory, setMainCategory] = useState(initialData?.category || "");
   const [subCategory, setSubCategory] = useState(initialData?.subCategory || "");
   
@@ -30,8 +33,6 @@ export default function ProductForm({ initialData, categoryStructure = {} }) {
 
   const [state, formAction, isPending] = useActionState(saveProduct, null);
 
-  // Logic to get sub-categories for the selected main category
-  // This now works with the dynamic object passed from your Page
   const availableSubCategories = mainCategory ? (categoryStructure[mainCategory] || []) : [];
 
   const previewProduct = {
@@ -46,15 +47,13 @@ export default function ProductForm({ initialData, categoryStructure = {} }) {
 
   const handleCategoryChange = (e) => {
     setMainCategory(e.target.value);
-    setSubCategory(""); // Reset sub-category when main changes
+    setSubCategory(""); 
   };
 
-  // 🟢 SUCCESS LOGIC
   useEffect(() => {
     const handleSuccess = async () => {
       if (state?.success && state?.message) {
         toast.success(state.message);
-
         if (isNewArrival) {
           try {
             const res = await createInAppNotification({
@@ -64,13 +63,9 @@ export default function ProductForm({ initialData, categoryStructure = {} }) {
               recipientId: "GLOBAL",
               link: state.data?._id ? `/product/${state.data._id}` : "/products"
             });
-            
             if (res.success) addNotification(res.data);
-          } catch (err) { 
-            console.error("Notification trigger failed:", err); 
-          }
+          } catch (err) { console.error("Notification trigger failed:", err); }
         }
-
         if (!initialData) {
           formRef.current?.reset();
           setVariants([]);
@@ -128,7 +123,7 @@ export default function ProductForm({ initialData, categoryStructure = {} }) {
         minOrderQuantity: Number(rest.minOrderQuantity) || 1,
         price: Number(rest.price) || 0,
         stock: Number(rest.stock) || 0
-      }))));
+      })))));
     }
     formAction(formData);
   };
@@ -139,6 +134,16 @@ export default function ProductForm({ initialData, categoryStructure = {} }) {
   return (
     <>
       <Toaster position="top-right" />
+      
+      {/* 🟢 CATEGORY QUICK ADD MODAL */}
+      {isAddingCategory && (
+        <CategoryManager 
+          categories={rawCategories} 
+          mode="modal" 
+          onClose={() => setIsAddingCategory(false)} 
+        />
+      )}
+
       <form ref={formRef} action={handleSubmit} className="px-4 py-6 mx-auto max-w-7xl">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           
@@ -152,15 +157,23 @@ export default function ProductForm({ initialData, categoryStructure = {} }) {
                 <input type="text" name="name" value={previewName} onChange={(e) => setPreviewName(e.target.value)} required className={inputClass} placeholder="Product Name" />
                 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {/* 🟢 DYNAMIC MAIN CATEGORY */}
-                  <select value={mainCategory} onChange={handleCategoryChange} className={inputClass}>
-                    <option value="">Select Category</option>
-                    {Object.keys(categoryStructure).map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                  <div className="relative group">
+                    <select value={mainCategory} onChange={handleCategoryChange} className={inputClass}>
+                      <option value="">Select Category</option>
+                      {Object.keys(categoryStructure).map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                    {/* 🟢 QUICK ADD BUTTON */}
+                    <button 
+                      type="button"
+                      onClick={() => setIsAddingCategory(true)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-[#EA638C] text-white rounded-xl hover:scale-110 active:scale-95 transition-all shadow-md"
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                    </button>
+                  </div>
 
-                  {/* 🟢 DYNAMIC SUB CATEGORY */}
                   <select 
                     value={subCategory} 
                     onChange={(e) => setSubCategory(e.target.value)} 

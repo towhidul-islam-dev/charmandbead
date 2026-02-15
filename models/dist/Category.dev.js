@@ -12,21 +12,34 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "d
 var CategorySchema = new _mongoose["default"].Schema({
   name: {
     type: String,
-    required: true
+    required: [true, "Category name is required"],
+    trim: true
   },
   slug: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    lowercase: true
   },
   parentId: {
     type: _mongoose["default"].Schema.Types.ObjectId,
     ref: 'Category',
     "default": null
-  } // Null means it's a top-level category (e.g., "Beads")
+  },
+  image: {
+    type: String
+  } // Added this so your Category Manager can display icons/images
 
 }, {
   timestamps: true
+}); // 🟢 Pre-save middleware to auto-generate slug from name
+
+CategorySchema.pre('validate', function (next) {
+  if (this.name && !this.slug) {
+    this.slug = this.name.toLowerCase().replace(/[^\w ]+/g, '').replace(/ +/g, '-');
+  }
+
+  next();
 });
 
 var _default = _mongoose["default"].models.Category || _mongoose["default"].model("Category", CategorySchema);
