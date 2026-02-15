@@ -1,6 +1,6 @@
 "use server";
 import Category from "@/models/Category";
-import dbConnect from "@/lib/dbConnect";
+import dbConnect from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { revalidatePath } from "next/cache";
 

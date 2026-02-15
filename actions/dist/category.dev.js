@@ -9,7 +9,7 @@ exports.deleteCategoryAction = deleteCategoryAction;
 
 var _Category = _interopRequireDefault(require("@/models/Category"));
 
-var _dbConnect = _interopRequireDefault(require("@/lib/dbConnect"));
+var _mongodb = _interopRequireDefault(require("@/lib/mongodb"));
 
 var _Product = _interopRequireDefault(require("@/models/Product"));
 
@@ -24,7 +24,7 @@ function getDynamicCategoryStructure() {
       switch (_context.prev = _context.next) {
         case 0:
           _context.next = 2;
-          return regeneratorRuntime.awrap((0, _dbConnect["default"])());
+          return regeneratorRuntime.awrap((0, _mongodb["default"])());
 
         case 2:
           _context.next = 4;
@@ -63,7 +63,7 @@ function deleteCategoryAction(id) {
         case 0:
           _context2.prev = 0;
           _context2.next = 3;
-          return regeneratorRuntime.awrap((0, _dbConnect["default"])());
+          return regeneratorRuntime.awrap((0, _mongodb["default"])());
 
         case 3:
           _context2.next = 5;
