@@ -75,32 +75,36 @@ export async function deleteCategoryAction(id) {
 // actions/category.js
 // actions/category.js
 export async function saveCategoryAction(formData) {
-    try {
-        await dbConnect();
-        const name = formData.get("name");
-        let parentId = formData.get("parentId");
+  try {
+    await dbConnect();
+    
+    const name = formData.get("name")?.trim();
+    let parentId = formData.get("parentId");
 
-        // 🟢 FIX: Mongoose needs null, not an empty string for ObjectIDs
-        const cleanParentId = (parentId === "" || parentId === "null" || !parentId) 
-            ? null 
-            : parentId;
+    // 🟢 Ensure parentId is strictly null if not a valid ID
+    const finalParentId = (parentId && parentId !== "none" && parentId !== "") 
+      ? parentId 
+      : null;
 
-        const newCategory = await Category.create({
-            name: name.trim(),
-            parentId: cleanParentId,
-        });
+    if (!name) throw new Error("Name is missing from form data");
 
-        revalidatePath("/admin/categories");
-        
-        // Return a plain object so the Client Component doesn't crash
-        return { 
-            success: true, 
-            data: JSON.parse(JSON.stringify(newCategory)) 
-        };
-    } catch (error) {
-        console.error("Save Error:", error);
-        return { success: false, error: error.message };
-    }
+    console.log("Attempting to save:", { name, finalParentId });
+
+    const newCategory = await Category.create({
+      name,
+      parentId: finalParentId,
+    });
+
+    console.log("Save successful:", newCategory._id);
+
+    revalidatePath("/admin/categories");
+    return { success: true, data: JSON.parse(JSON.stringify(newCategory)) };
+    
+  } catch (error) {
+    // 🟢 This will show the EXACT Mongoose error in your terminal
+    console.error("DATABASE SAVE ERROR:", error.message);
+    return { success: false, error: error.message };
+  }
 }
 
 export async function getCategories() {

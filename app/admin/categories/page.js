@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 import { getCategories } from "@/actions/category";
 import CategoryManager from "@/components/admin/CategoryManager";
 import CategoryStatCard from "@/components/admin/CategoryStatCard";
