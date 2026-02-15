@@ -4,7 +4,7 @@ import { saveProduct } from "@/actions/product";
 import { createInAppNotification } from "@/actions/inAppNotifications";
 import { useNotifications } from "@/Context/NotificationContext";
 import ProductCard from "@/components/ProductCard";
-import CategoryManager from "@/components/CategoryManager"; 
+import CategoryManager from "@/components/admin/CategoryManager"; 
 import toast, { Toaster } from "react-hot-toast";
 import { 
   PhotoIcon, SparklesIcon, XMarkIcon, 
