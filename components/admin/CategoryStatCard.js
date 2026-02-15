@@ -1,23 +1,30 @@
 // components/admin/CategoryStatCard.jsx
 export default function CategoryStatCard({ name, count, isParent }) {
   return (
-    <div className={`p-5 rounded-[2rem] transition-all border ${
+    <div className={`group p-4 rounded-[1.8rem] transition-all duration-300 border ${
       isParent 
-        ? "bg-[#3E442B] text-white border-transparent shadow-xl" 
-        : "bg-white text-[#3E442B] border-gray-100 shadow-sm"
+        ? "bg-[#3E442B] text-white border-transparent shadow-lg hover:shadow-xl" 
+        : "bg-white text-[#3E442B] border-gray-100 shadow-sm hover:border-[#FBB6E6]"
     }`}>
-      <div className="flex items-center justify-between">
-        <div>
-          <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">
-            {isParent ? "Main Collection" : "Sub-Category"}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0"> {/* min-w-0 prevents text overflow in small containers */}
+          <h4 className={`text-[8px] font-black uppercase tracking-[0.2em] mb-1.5 ${
+            isParent ? "text-[#FBB6E6]" : "text-[#EA638C]"
+          }`}>
+            {isParent ? "Collection" : "Sub-Level"}
           </h4>
-          <p className="text-lg font-black italic uppercase leading-none">{name}</p>
+          <p className="text-sm font-black italic uppercase truncate">
+            {name}
+          </p>
         </div>
-        <div className={`flex flex-col items-center justify-center h-12 w-12 rounded-2xl ${
-          isParent ? "bg-[#EA638C] text-white" : "bg-pink-50 text-[#EA638C]"
+
+        <div className={`shrink-0 flex flex-col items-center justify-center h-11 w-11 rounded-2xl transition-transform group-hover:scale-110 ${
+          isParent 
+            ? "bg-[#EA638C] text-white shadow-md shadow-black/20" 
+            : "bg-pink-50 text-[#EA638C]"
         }`}>
-          <span className="text-xl font-black leading-none">{count}</span>
-          <span className="text-[7px] font-black uppercase">Items</span>
+          <span className="text-base font-black leading-none">{count}</span>
+          <span className="text-[6px] font-black uppercase tracking-tighter">Qty</span>
         </div>
       </div>
     </div>
