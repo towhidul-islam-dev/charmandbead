@@ -1,5 +1,5 @@
 "use client";
-import { useState, useActionState, useEffect, useRef } from "react"; 
+import { useState, useActionState, useEffect, useRef, useMemo } from "react"; 
 import { saveProduct } from "@/actions/product";
 import { createInAppNotification } from "@/actions/inAppNotifications";
 import { useNotifications } from "@/Context/NotificationContext";
@@ -9,7 +9,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { 
   PhotoIcon, SparklesIcon, XMarkIcon, 
   PlusIcon, TagIcon, CubeIcon, CameraIcon,
-  CommandLineIcon, EyeIcon
+  CommandLineIcon, EyeIcon, ChevronDownIcon
 } from "@heroicons/react/24/outline";
 
 export default function ProductForm({ initialData, categoryStructure = {}, rawCategories = [] }) {
@@ -30,7 +30,23 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
 
   const [state, formAction, isPending] = useActionState(saveProduct, null);
 
-  const availableSubCategories = mainCategory ? (categoryStructure[mainCategory] || []) : [];
+  // 🟢 Dynamic logic for filtering sub-categories based on main selection
+  // We use useMemo to ensure it updates when rawCategories (from server) or mainCategory changes
+  const availableSubCategories = useMemo(() => {
+    if (!mainCategory) return [];
+    
+    // First check the passed categoryStructure
+    if (categoryStructure[mainCategory]) return categoryStructure[mainCategory];
+    
+    // Fallback: Check rawCategories for newly added children
+    const parent = rawCategories.find(c => c.name === mainCategory);
+    if (parent) {
+      return rawCategories
+        .filter(c => c.parentId === parent._id)
+        .map(c => c.name);
+    }
+    return [];
+  }, [mainCategory, categoryStructure, rawCategories]);
 
   const previewProduct = {
     _id: "preview",
@@ -61,7 +77,7 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
               link: state.data?._id ? `/product/${state.data._id}` : "/products"
             });
             if (res.success) addNotification(res.data);
-          } catch (err) { console.error("Notification trigger failed:", err); }
+          } catch (err) { console.error("Notification failed:", err); }
         }
         if (!initialData) {
           formRef.current?.reset();
@@ -78,7 +94,7 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
       }
     };
     if (state) handleSuccess();
-  }, [state]);
+  }, [state, initialData, isNewArrival, previewName, addNotification]);
 
   const generateAutoSKUs = () => {
     const prefix = previewName.replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase() || "PROD";
@@ -104,7 +120,6 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
     size: "", color: "", price: "", stock: "", sku: "", minOrderQuantity: 1, preview: null 
   }]);
 
-  // 🟢 FIXED: Cleaned up the parentheses logic to fix the build error
   const handleSubmit = async (formData) => {
     formData.set("id", initialData?._id || "");
     formData.set("hasVariants", useVariants.toString());
@@ -128,18 +143,39 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
     formAction(formData);
   };
 
-  const inputClass = "w-full bg-gray-50 border-none p-3.5 md:p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-sm";
+  const inputClass = "w-full bg-gray-50 border-none p-3.5 md:p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-sm appearance-none";
   const sectionClass = "bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-6";
 
   return (
     <>
       <Toaster position="top-right" />
       
+      {/* 🟢 MODAL INTEGRATION: Fully updated with Auto-Select logic */}
       {isAddingCategory && (
         <CategoryManager 
           categories={rawCategories} 
           mode="modal" 
-          onClose={() => setIsAddingCategory(false)} 
+          onClose={(newCategory) => {
+            setIsAddingCategory(false);
+            
+            // 🟢 The "Auto-Select" Magic
+            if (newCategory?.name) {
+              if (!newCategory.parentId) {
+                // It's a Top-Level Category
+                setMainCategory(newCategory.name);
+                setSubCategory(""); // Clear sub if we just made a new main
+              } else {
+                // It's a Sub-Category
+                // We need the parent's name to set the first dropdown correctly
+                const parent = rawCategories.find(c => c._id === newCategory.parentId);
+                if (parent) {
+                  setMainCategory(parent.name);
+                  // Setting subCategory here will match the newly added item
+                  setSubCategory(newCategory.name);
+                }
+              }
+            }
+          }} 
         />
       )}
 
@@ -159,35 +195,48 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
                   <div className="relative group">
                     <select value={mainCategory} onChange={handleCategoryChange} className={inputClass}>
                       <option value="">Select Category</option>
-                      {Object.keys(categoryStructure).map(cat => (
+                      {/* We combine static categoryStructure with any new additions from rawCategories */}
+                      {Array.from(new Set([
+                        ...Object.keys(categoryStructure),
+                        ...rawCategories.filter(c => !c.parentId).map(c => c.name)
+                      ])).map(cat => (
                         <option key={cat} value={cat}>{cat}</option>
                       ))}
                     </select>
+                    <div className="absolute right-12 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                        <ChevronDownIcon className="w-4 h-4" />
+                    </div>
                     <button 
                       type="button"
                       onClick={() => setIsAddingCategory(true)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-[#EA638C] text-white rounded-xl hover:scale-110 active:scale-95 transition-all shadow-md"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-[#EA638C] text-white rounded-xl hover:scale-110 active:scale-95 transition-all shadow-md z-10"
                     >
-                      <PlusIcon className="w-4 h-4" />
+                      <PlusIcon className="w-4 h-4 stroke-[3px]" />
                     </button>
                   </div>
 
-                  <select 
-                    value={subCategory} 
-                    onChange={(e) => setSubCategory(e.target.value)} 
-                    className={inputClass} 
-                    disabled={!mainCategory || availableSubCategories.length === 0}
-                  >
-                    <option value="">Select Sub-Category</option>
-                    {availableSubCategories.map(sub => (
-                      <option key={sub} value={sub}>{sub}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select 
+                        value={subCategory} 
+                        onChange={(e) => setSubCategory(e.target.value)} 
+                        className={inputClass} 
+                        disabled={!mainCategory || availableSubCategories.length === 0}
+                    >
+                        <option value="">Select Sub-Category</option>
+                        {availableSubCategories.map(sub => (
+                        <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                        <ChevronDownIcon className="w-4 h-4" />
+                    </div>
+                  </div>
                 </div>
                 <textarea name="description" defaultValue={initialData?.description} rows="3" className={`${inputClass} resize-none`} placeholder="Description..." />
               </div>
             </section>
 
+            {/* Inventory & Variants Section */}
             <section className={sectionClass}>
               <div className="flex flex-col justify-between gap-4 mb-8 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-3">
@@ -212,7 +261,7 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
                     <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100 group transition-all">
                         <div className="flex items-center gap-4 mb-5">
                             <div onClick={() => document.getElementById(`v-img-${i}`).click()} className="relative flex items-center justify-center w-16 h-16 overflow-hidden bg-white border-2 border-gray-200 border-dashed cursor-pointer rounded-2xl shrink-0">
-                                {v.preview || v.imageUrl ? <img src={v.preview || v.imageUrl} className="object-cover w-full h-full" /> : <CameraIcon className="w-6 h-6 text-gray-300" />}
+                                {v.preview || v.imageUrl ? <img src={v.preview || v.imageUrl} className="object-cover w-full h-full" alt="variant preview" /> : <CameraIcon className="w-6 h-6 text-gray-300" />}
                             </div>
                             <div className="flex-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 block mb-1">Stock Keeping Unit</span>
@@ -222,7 +271,6 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
                                 <XMarkIcon className="w-5 h-5" />
                             </button>
                         </div>
-
                         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                             <div className="space-y-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 ml-2">Size</span>
@@ -269,7 +317,7 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
               <section className={sectionClass}>
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Main Image</h3>
                 <div className="w-full h-64 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative" onClick={() => document.getElementById('main-img').click()}>
-                  {mainPreview ? <img src={mainPreview} className="object-cover w-full h-full transition-all group-hover:scale-105" /> : <PhotoIcon className="w-12 h-12 text-gray-200" />}
+                  {mainPreview ? <img src={mainPreview} className="object-cover w-full h-full transition-all group-hover:scale-105" alt="main preview" /> : <PhotoIcon className="w-12 h-12 text-gray-200" />}
                 </div>
                 <input id="main-img" name="imageFile" type="file" className="hidden" onChange={(e) => handlePreview(e.target.files[0], setMainPreview)} />
               </section>

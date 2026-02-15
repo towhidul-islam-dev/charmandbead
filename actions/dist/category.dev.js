@@ -152,13 +152,9 @@ function deleteCategoryAction(id) {
     }
   }, null, null, [[0, 19]]);
 }
-/**
- * Save/Update categories
- */
-
 
 function saveCategoryAction(formData) {
-  var name, parentId, newCategory;
+  var name, parentId, slug, newCategory;
   return regeneratorRuntime.async(function saveCategoryAction$(_context3) {
     while (1) {
       switch (_context3.prev = _context3.next) {
@@ -169,14 +165,10 @@ function saveCategoryAction(formData) {
 
         case 3:
           name = formData.get("name");
-          parentId = formData.get("parentId"); // 🟢 FIXED: Ensure "none" or empty string is truly null in the DB
-
-          if (!parentId || parentId === "" || parentId === "none") {
-            parentId = null;
-          }
+          parentId = formData.get("parentId");
 
           if (name) {
-            _context3.next = 8;
+            _context3.next = 7;
             break;
           }
 
@@ -185,19 +177,27 @@ function saveCategoryAction(formData) {
             message: "Name is required"
           });
 
-        case 8:
-          _context3.next = 10;
+        case 7:
+          // Clean up parentId
+          if (!parentId || parentId === "" || parentId === "none") {
+            parentId = null;
+          } // 🟢 Manual Slug Generation for extra safety
+
+
+          slug = name.toLowerCase().trim().replace(/[^\w ]+/g, '').replace(/ +/g, '-');
+          _context3.next = 11;
           return regeneratorRuntime.awrap(_Category["default"].create({
             name: name.trim(),
+            slug: slug,
+            // Explicitly passing slug helps avoid validation errors
             parentId: parentId
           }));
 
-        case 10:
+        case 11:
           newCategory = _context3.sent;
-          // Revalidate multiple paths to ensure the UI updates everywhere
+          // Revalidate the paths so the UI updates immediately
           (0, _cache.revalidatePath)("/admin/products");
           (0, _cache.revalidatePath)("/admin/products/create");
-          (0, _cache.revalidatePath)("/admin/products/edit/[id]", "page");
           return _context3.abrupt("return", {
             success: true,
             data: JSON.parse(JSON.stringify(newCategory))
@@ -206,13 +206,25 @@ function saveCategoryAction(formData) {
         case 17:
           _context3.prev = 17;
           _context3.t0 = _context3["catch"](0);
-          console.error("Save Category Error:", _context3.t0);
+          console.error("Save Category Error:", _context3.t0); // 🟢 Handle Duplicate Slugs (Error code 11000)
+
+          if (!(_context3.t0.code === 11000)) {
+            _context3.next = 22;
+            break;
+          }
+
+          return _context3.abrupt("return", {
+            success: false,
+            message: "A category with this name already exists!"
+          });
+
+        case 22:
           return _context3.abrupt("return", {
             success: false,
             message: _context3.t0.message || "Failed to create category"
           });
 
-        case 21:
+        case 23:
         case "end":
           return _context3.stop();
       }

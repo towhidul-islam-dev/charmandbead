@@ -72,31 +72,35 @@ export async function deleteCategoryAction(id) {
   }
 }
 
-/**
- * Save/Update categories
- */
 export async function saveCategoryAction(formData) {
   try {
     await dbConnect();
     const name = formData.get("name");
     let parentId = formData.get("parentId");
 
-    // 🟢 FIXED: Ensure "none" or empty string is truly null in the DB
+    if (!name) return { success: false, message: "Name is required" };
+
+    // Clean up parentId
     if (!parentId || parentId === "" || parentId === "none") {
       parentId = null;
     }
 
-    if (!name) return { success: false, message: "Name is required" };
+    // 🟢 Manual Slug Generation for extra safety
+    const slug = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w ]+/g, '')
+      .replace(/ +/g, '-');
 
     const newCategory = await Category.create({ 
       name: name.trim(), 
+      slug: slug, // Explicitly passing slug helps avoid validation errors
       parentId 
     });
 
-    // Revalidate multiple paths to ensure the UI updates everywhere
+    // Revalidate the paths so the UI updates immediately
     revalidatePath("/admin/products");
     revalidatePath("/admin/products/create");
-    revalidatePath("/admin/products/edit/[id]", "page"); 
     
     return { 
       success: true, 
@@ -104,6 +108,12 @@ export async function saveCategoryAction(formData) {
     };
   } catch (error) {
     console.error("Save Category Error:", error);
+    
+    // 🟢 Handle Duplicate Slugs (Error code 11000)
+    if (error.code === 11000) {
+      return { success: false, message: "A category with this name already exists!" };
+    }
+    
     return { success: false, message: error.message || "Failed to create category" };
   }
 }
