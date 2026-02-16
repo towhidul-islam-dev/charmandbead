@@ -15,13 +15,16 @@ const ProductCard = ({ product, index = 0 }) => {
   const isOutOfStock = product?.stock <= 0;
   const isLowStock = product?.stock > 0 && product?.stock <= 5;
 
-  const moqValue = product?.variants?.[0]?.minOrderQuantity || 0;
+  // 🟢 LOGIC UPDATE: Check both top-level MOQ and Variant-level MOQ
+  const moqValue = product?.minOrderQuantity || product?.variants?.[0]?.minOrderQuantity || 0;
 
+  // 🟢 LOGIC UPDATE: Handle the "isNewArrival" flag from your form
   const isRecentlyCreated = product?.createdAt 
     ? (new Date() - new Date(product.createdAt)) < (48 * 60 * 60 * 1000) 
     : false;
   
-  const showNewBadge = (product?.isNewArrival || isRecentlyCreated) && !isOutOfStock;
+  // Use the explicit flag OR the date logic
+  const showNewBadge = (product?.isNewArrival === true || product?.isNewArrival === "true" || isRecentlyCreated) && !isOutOfStock;
 
   const handleShare = (e) => {
     e.preventDefault();
@@ -64,7 +67,7 @@ const ProductCard = ({ product, index = 0 }) => {
             priority={index < 4} 
           />
 
-          {/* MOQ BADGE */}
+          {/* MOQ BADGE - Styled with your #3E442B and #FBB6E6 */}
           {moqValue > 0 && !isOutOfStock && (
             <div className="absolute z-20 transition-all duration-500 transform translate-y-2 opacity-0 bottom-3 left-3 group-hover:translate-y-0 group-hover:opacity-100">
               <div className="bg-[#3E442B] border-2 border-[#FBB6E6]/40 px-3 py-1.5 rounded-xl shadow-2xl flex items-center gap-2">
@@ -97,7 +100,6 @@ const ProductCard = ({ product, index = 0 }) => {
         {/* FLOATING ACTIONS */}
         {user && (
           <div className="absolute z-30 flex flex-col gap-2 transition-all duration-300 translate-x-12 opacity-0 top-3 right-3 group-hover:translate-x-0 group-hover:opacity-100">
-            {/* 🟢 ADDED ARIA-LABEL FOR WISHLIST */}
             <button 
               onClick={handleWishlistClick} 
               aria-label={isFavorite ? "Remove from wishlist" : "Add to wishlist"}
@@ -106,7 +108,6 @@ const ProductCard = ({ product, index = 0 }) => {
               <Heart size={16} className={isFavorite ? "fill-[#EA638C] text-[#EA638C]" : "text-gray-400 group-hover/heart:text-white"} />
             </button>
             
-            {/* 🟢 ADDED ARIA-LABEL FOR SHARE */}
             <button 
               onClick={handleShare} 
               aria-label="Share product link"

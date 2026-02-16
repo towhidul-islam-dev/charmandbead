@@ -1,30 +1,29 @@
 import Link from 'next/link';
 import ProductCreateForm from '@/components/ProductCreateForm';
 
-/** * 🟢 HARDCODED DNA STRUCTURE 
- * This includes both Main Categories (parentId: null) 
- * and Sub-Categories (parentId: matching a main ID).
+/** * 🟢 FIXED DNA STRUCTURE 
+ * Replaced "cat_resin" with 24-character Hex IDs to satisfy MongoDB ObjectId requirements.
  */
 const CATEGORY_DNA = [
-  // MAIN CATEGORIES
-  { _id: "cat_resin", name: "Resin Art", slug: "resin-art", parentId: null },
-  { _id: "cat_jewelry", name: "Jewelry Making", slug: "jewelry-making", parentId: null },
-  { _id: "cat_packaging", name: "Packaging", slug: "packaging", parentId: null },
+  // MAIN CATEGORIES (Note: 24-character hex strings)
+  { _id: "65cd1234567890abcdef0001", name: "Resin Art", slug: "resin-art", parentId: null },
+  { _id: "65cd1234567890abcdef0002", name: "Jewelry Making", slug: "jewelry-making", parentId: null },
+  { _id: "65cd1234567890abcdef0003", name: "Packaging", slug: "packaging", parentId: null },
 
-  // SUB-CATEGORIES FOR RESIN ART
-  { _id: "sub_epoxy", name: "Epoxy Resin", slug: "epoxy-resin", parentId: "cat_resin" },
-  { _id: "sub_uv", name: "UV Resin", slug: "uv-resin", parentId: "cat_resin" },
-  { _id: "sub_molds", name: "Silicone Molds", slug: "silicone-molds", parentId: "cat_resin" },
+  // SUB-CATEGORIES FOR RESIN ART (Matching parentId to 0001)
+  { _id: "65cd1234567890abcdef0004", name: "Epoxy Resin", slug: "epoxy-resin", parentId: "65cd1234567890abcdef0001" },
+  { _id: "65cd1234567890abcdef0005", name: "UV Resin", slug: "uv-resin", parentId: "65cd1234567890abcdef0001" },
+  { _id: "65cd1234567890abcdef0006", name: "Silicone Molds", slug: "silicone-molds", parentId: "65cd1234567890abcdef0001" },
 
-  // SUB-CATEGORIES FOR JEWELRY
-  { _id: "sub_charms", name: "Charms & Pendants", slug: "charms", parentId: "cat_jewelry" },
-  { _id: "sub_tools", name: "Tools & Pliers", slug: "tools", parentId: "cat_jewelry" },
-  { _id: "sub_wires", name: "Beading Wires", slug: "beading-wires", parentId: "cat_jewelry" },
+  // SUB-CATEGORIES FOR JEWELRY (Matching parentId to 0002)
+  { _id: "65cd1234567890abcdef0007", name: "Charms & Pendants", slug: "charms", parentId: "65cd1234567890abcdef0002" },
+  { _id: "65cd1234567890abcdef0008", name: "Tools & Pliers", slug: "tools", parentId: "65cd1234567890abcdef0002" },
+  { _id: "65cd1234567890abcdef0009", name: "Beading Wires", slug: "beading-wires", parentId: "65cd1234567890abcdef0002" },
 ];
 
 export default async function CreateProductPage() {
     return (
-        <div className="min-h-screen p-6 bg-[#FBB6E6]/5">
+        <div className="min-h-screen p-6 bg-[#FBB6E6]/10"> {/* Tinted with your brand lightPink */}
             <div className="flex items-center justify-between max-w-5xl pb-5 mx-auto mb-8 border-b border-[#3E442B]/10">
                 <div>
                   <h1 className="text-3xl font-black text-[#3E442B] uppercase italic tracking-tighter">Add New Product</h1>
@@ -39,13 +38,6 @@ export default async function CreateProductPage() {
             </div>
             
             <div className="max-w-5xl mx-auto">
-                {/* 🟢 Implementation Check:
-                   We pass CATEGORY_DNA as 'rawCategories'.
-                   The form will now:
-                   1. Show only parentId: null in the first dropdown.
-                   2. Unlock the second dropdown only when a Category is chosen.
-                   3. Show only Sub-Categories that match the parentId of the chosen Category.
-                */}
                 <ProductCreateForm rawCategories={CATEGORY_DNA} /> 
             </div>
         </div>

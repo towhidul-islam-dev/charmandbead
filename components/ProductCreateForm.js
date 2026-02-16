@@ -58,17 +58,29 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
   };
 
   const clientAction = async (formData) => {
-    // Inject custom states into formData
+    // 1. Inject Identity and Flags
     formData.set("id", initialData?._id || "");
     formData.set("hasVariants", useVariants.toString());
     formData.set("isNewArrival", isNewArrival.toString());
     formData.set("existingImage", initialData?.imageUrl || "");
-    formData.set("category", mainCategory);
-    formData.set("subCategory", subCategory);
     
-    // Ensure numeric values are valid
+    // 2. Strict Category Handling (Prevents "Cast to ObjectId" errors)
+    if (mainCategory) {
+      formData.set("category", mainCategory);
+    } else {
+      formData.delete("category");
+    }
+
+    if (subCategory) {
+      formData.set("subCategory", subCategory);
+    } else {
+      formData.delete("subCategory");
+    }
+    
+    // 3. Ensure numeric values
     formData.set("price", Number(previewPrice) || 0);
 
+    // 4. Variant Processing
     if (useVariants) {
       const variantsData = variants.map(({ preview, ...rest }) => ({
         ...rest,
@@ -95,7 +107,7 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
         }).then(res => res.success && addNotification(res.data));
       }
       if (!initialData) {
-        formRef.current?.reset();
+        // Reset local states
         setVariants([]);
         setMainPreview(null);
         setMainCategory("");
@@ -105,7 +117,7 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
         setPreviewPrice(0);
       }
     } else if (state?.success === false) {
-      toast.error(state.message || "Check your input values");
+      toast.error(state.message || "Sync failed. Check IDs.");
     }
   }, [state, initialData, isNewArrival, previewName, addNotification]);
 
@@ -154,7 +166,7 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
                 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="relative">
-                    <select value={mainCategory} onChange={handleCategoryChange} className={inputClass}>
+                    <select value={mainCategory} onChange={handleCategoryChange} className={inputClass} required>
                       <option value="">Select Category</option>
                       {rawCategories.filter(c => !c.parentId).map(cat => (
                         <option key={cat._id} value={cat._id}>{cat.name}</option>
