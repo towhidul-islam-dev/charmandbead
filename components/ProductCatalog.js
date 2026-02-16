@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation'; // 🟢 Added for URL logic
+import { useRouter, useSearchParams } from 'next/navigation';
 import ProductCard from './ProductCard';
 import {
   MagnifyingGlassIcon,
@@ -14,7 +14,7 @@ export default function ProductCatalog({ initialProducts }) {
     const router = useRouter();
     const searchParams = useSearchParams();
     
-    // 🟢 SEO LOGIC: Read category ID from URL on first load
+    // 🟢 SEO/URL LOGIC: Read category ID from URL on first load
     const categoryFromUrl = searchParams.get('category') || 'All';
 
     const [selectedCategory, setSelectedCategory] = useState(categoryFromUrl);
@@ -22,7 +22,7 @@ export default function ProductCatalog({ initialProducts }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
 
-    // 🟢 URL SYNC: Push the selected category ID to the URL without refreshing
+    // 🟢 URL SYNC: Sync state with browser URL
     useEffect(() => {
         const params = new URLSearchParams(searchParams.toString());
         if (selectedCategory !== 'All') {
@@ -30,10 +30,10 @@ export default function ProductCatalog({ initialProducts }) {
         } else {
             params.delete('category');
         }
-        // scroll: false keeps the user at the same scroll position for a boutique feel
         router.push(`?${params.toString()}`, { scroll: false });
     }, [selectedCategory, router, searchParams]);
 
+    // Debounce search for performance
     useEffect(() => {
         const handler = setTimeout(() => {
             setDebouncedSearch(searchQuery);
@@ -41,11 +41,13 @@ export default function ProductCatalog({ initialProducts }) {
         return () => clearTimeout(handler);
     }, [searchQuery]);
 
+    // 🟢 Extract Unique Category IDs
     const mainCategories = useMemo(() => {
         const unique = Array.from(new Set(initialProducts.map(p => p.category).filter(Boolean)));
         return ['All', ...unique];
     }, [initialProducts]);
 
+    // 🟢 Extract Unique Sub-Category IDs based on selected Main Category
     const subCategories = useMemo(() => {
         if (selectedCategory === 'All') return [];
         const filtered = initialProducts.filter(p => p.category === selectedCategory);
@@ -53,6 +55,7 @@ export default function ProductCatalog({ initialProducts }) {
         return ['All', ...uniqueSub];
     }, [initialProducts, selectedCategory]);
 
+    // 🟢 Filtering Logic
     const filteredProducts = useMemo(() => {
         return initialProducts.filter(p => {
             const matchesMain = selectedCategory === 'All' || p.category === selectedCategory;
@@ -62,7 +65,7 @@ export default function ProductCatalog({ initialProducts }) {
         });
     }, [initialProducts, selectedCategory, selectedSubCategory, debouncedSearch]);
 
-    // UI Styles preserved exactly from your original
+    // UI Styles (Preserved)
     const inputClass = "w-full appearance-none bg-gray-50 border border-transparent hover:border-gray-200 text-[#3E442B] px-4 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer transition-all";
     const subInputClass = "w-full appearance-none bg-pink-50/50 border border-transparent hover:border-pink-100 text-[#EA638C] px-4 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer transition-all";
 
@@ -70,7 +73,7 @@ export default function ProductCatalog({ initialProducts }) {
         <div className="min-h-screen px-4 py-8 mx-auto max-w-7xl md:py-16">
             <Toaster position="bottom-center" />
 
-            {/* SEARCH & FILTER BOX (UI Unchanged) */}
+            {/* SEARCH & FILTER BOX */}
             <div className="sticky z-30 pt-4 mb-12 top-20">
                 <div className="flex flex-col items-stretch max-w-4xl gap-2 p-2 mx-auto bg-white border border-gray-100 shadow-2xl rounded-3xl lg:flex-row">
                     
@@ -104,8 +107,9 @@ export default function ProductCatalog({ initialProducts }) {
                             >
                                 <option value="All">All Categories</option>
                                 {mainCategories.filter(cat => cat !== 'All').map(catId => {
-                                    // Maps ID to Name for the UI
-                                    const catName = initialProducts.find(p => p.category === catId)?.categoryName || "Collection";
+                                    // 🟢 LOOKUP: Find the Name from the product data so the ID stays hidden
+                                    const catObject = initialProducts.find(p => p.category === catId);
+                                    const catName = catObject?.categoryName || "Collection";
                                     return <option key={catId} value={catId}>{catName}</option>;
                                 })}
                             </select>
@@ -121,7 +125,9 @@ export default function ProductCatalog({ initialProducts }) {
                             >
                                 <option value="All">All Types</option>
                                 {subCategories.filter(s => s !== 'All').map(subId => {
-                                    const subName = initialProducts.find(p => p.subCategory === subId)?.subCategoryName || "Type";
+                                    // 🟢 LOOKUP: Find the Sub-Category Name
+                                    const subObject = initialProducts.find(p => p.subCategory === subId);
+                                    const subName = subObject?.subCategoryName || "Type";
                                     return <option key={subId} value={subId}>{subName}</option>;
                                 })}
                             </select>

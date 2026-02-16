@@ -15,15 +15,14 @@ const ProductCard = ({ product, index = 0 }) => {
   const isOutOfStock = product?.stock <= 0;
   const isLowStock = product?.stock > 0 && product?.stock <= 5;
 
-  // 🟢 LOGIC UPDATE: Check both top-level MOQ and Variant-level MOQ
+  // 🟢 Logic for MOQ
   const moqValue = product?.minOrderQuantity || product?.variants?.[0]?.minOrderQuantity || 0;
 
-  // 🟢 LOGIC UPDATE: Handle the "isNewArrival" flag from your form
+  // 🟢 Logic for New Badge
   const isRecentlyCreated = product?.createdAt 
     ? (new Date() - new Date(product.createdAt)) < (48 * 60 * 60 * 1000) 
     : false;
   
-  // Use the explicit flag OR the date logic
   const showNewBadge = (product?.isNewArrival === true || product?.isNewArrival === "true" || isRecentlyCreated) && !isOutOfStock;
 
   const handleShare = (e) => {
@@ -67,7 +66,7 @@ const ProductCard = ({ product, index = 0 }) => {
             priority={index < 4} 
           />
 
-          {/* MOQ BADGE - Styled with your #3E442B and #FBB6E6 */}
+          {/* MOQ BADGE */}
           {moqValue > 0 && !isOutOfStock && (
             <div className="absolute z-20 transition-all duration-500 transform translate-y-2 opacity-0 bottom-3 left-3 group-hover:translate-y-0 group-hover:opacity-100">
               <div className="bg-[#3E442B] border-2 border-[#FBB6E6]/40 px-3 py-1.5 rounded-xl shadow-2xl flex items-center gap-2">
@@ -124,7 +123,10 @@ const ProductCard = ({ product, index = 0 }) => {
         <div className="mb-3">
           <div className="flex items-start justify-between">
             <div className="flex flex-col">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate">{product.category}</p>
+              {/* 🟢 CHANGED: product.category -> product.categoryName */}
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate">
+                {product.categoryName || "Collection"}
+              </p>
               
               {moqValue > 0 && (
                 <div className="flex items-center gap-1 mt-1 md:hidden">

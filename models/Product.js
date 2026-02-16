@@ -14,6 +14,7 @@ const VariantSchema = new mongoose.Schema({
 const ProductSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   description: { type: String, required: true },
+  // 🟢 IDs for Relationships
   category: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Category', 
@@ -26,6 +27,10 @@ const ProductSchema = new mongoose.Schema({
     index: true,
     default: null 
   },
+  // 🟢 NAMES for UI (So ProductCard can show them easily)
+  categoryName: { type: String, trim: true },
+  subCategoryName: { type: String, trim: true },
+
   sku: { type: String, sparse: true }, 
   imageUrl: String,
   price: { type: Number, default: 0 },
