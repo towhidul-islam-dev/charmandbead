@@ -7,13 +7,23 @@ import toast from "react-hot-toast";
 export default function CategoryManager({
   categories = [],
   mode = "full",
-  onClose = () => {}, // Default empty function
+  onClose, // We will handle the default inside the component for better safety
 }) {
   const [isAdding, setIsAdding] = useState(mode === "modal");
   const [isPending, setIsPending] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState("");
+
+  // 🟢 SAFETY GUARD: Define a safe caller
+  const safeOnClose = (data) => {
+    if (typeof onClose === "function") {
+      onClose(data);
+    } else {
+      console.warn("CategoryManager: onClose is not a function. Check parent component props.");
+      setIsAdding(false); // Fallback behavior
+    }
+  };
 
   const parentCategories = useMemo(() => {
     if (!Array.isArray(categories)) return [];
@@ -43,11 +53,9 @@ export default function CategoryManager({
         setName("");
         setParentId("");
 
-        // 🟢 FIX: Bulletproof function check
+        // 🟢 FIXED: Use the safe caller instead of calling onClose directly
         if (mode === "modal") {
-          if (typeof onClose === "function") {
-            onClose(result.data);
-          }
+          safeOnClose(result.data);
         } else {
           setIsAdding(false);
         }
@@ -79,8 +87,8 @@ export default function CategoryManager({
       <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl border border-gray-100 relative">
         <button
           type="button" 
-          // 🟢 FIX: Use optional chaining to prevent "a is not a function"
-          onClick={() => (mode === "modal" ? onClose?.() : setIsAdding(false))}
+          // 🟢 FIXED: Use the safe caller for the close button too
+          onClick={() => (mode === "modal" ? safeOnClose() : setIsAdding(false))}
           className="absolute p-2 text-gray-400 transition-colors top-6 right-6 hover:text-red-500"
         >
           <X size={20} />
@@ -155,44 +163,33 @@ export default function CategoryManager({
       {isAdding && modalUI}
 
       <div className="relative z-10 space-y-4">
-        {parentCategories.length === 0 && !isAdding && (
-          <div className="py-12 text-center border-2 border-dashed border-gray-50 rounded-[2rem]">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">No architecture defined yet.</p>
-          </div>
-        )}
-
         {parentCategories.map((parent) => {
           const children = getChildren(parent._id);
           return (
-            <div key={parent._id} className="space-y-2 animate-in fade-in slide-in-from-bottom-2">
-              <div className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-transparent hover:border-[#FBB6E6] hover:bg-white group transition-all duration-300">
+            <div key={parent._id} className="space-y-2">
+              <div className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl group transition-all">
                 <div className="flex items-center gap-3">
                   <Tag size={14} className="text-[#EA638C]" />
                   <span className="font-black text-[#3E442B] uppercase text-[11px] tracking-wider">{parent.name}</span>
                 </div>
                 <button
                   onClick={() => handleDelete(parent._id)}
-                  disabled={deletingId === parent._id}
-                  className="p-2 text-red-400 transition-all opacity-0 group-hover:opacity-100 hover:bg-red-50 rounded-xl disabled:opacity-50"
+                  className="p-2 text-red-400 transition-all opacity-0 group-hover:opacity-100 hover:bg-red-50 rounded-xl"
                 >
-                  {deletingId === parent._id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  <Trash2 size={14} />
                 </button>
               </div>
 
               {children.length > 0 && (
                 <div className="ml-8 space-y-2 border-l-2 border-[#FBB6E6]/30 pl-4">
                   {children.map((child) => (
-                    <div key={child._id} className="flex items-center justify-between p-3 transition-all bg-white border border-gray-100 rounded-xl group/child hover:shadow-sm">
+                    <div key={child._id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl group/child">
                       <div className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#EA638C]/30" />
-                        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-tight">{child.name}</span>
+                        <span className="text-[11px] font-bold text-gray-500 uppercase">{child.name}</span>
                       </div>
-                      <button
-                        onClick={() => handleDelete(child._id)}
-                        disabled={deletingId === child._id}
-                        className="text-red-300 transition-all opacity-0 group-hover/child:opacity-100 hover:text-red-500"
-                      >
-                        {deletingId === child._id ? <Loader2 size={12} className="animate-spin" /> : <X size={14} />}
+                      <button onClick={() => handleDelete(child._id)} className="text-red-300 opacity-0 group-hover/child:opacity-100 hover:text-red-500">
+                        <X size={14} />
                       </button>
                     </div>
                   ))}
