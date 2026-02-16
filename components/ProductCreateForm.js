@@ -9,7 +9,8 @@ import toast, { Toaster } from "react-hot-toast";
 import { 
   PhotoIcon, SparklesIcon, XMarkIcon, 
   PlusIcon, TagIcon, CubeIcon, CameraIcon,
-  CommandLineIcon, EyeIcon, ChevronDownIcon
+  CommandLineIcon, EyeIcon, ChevronDownIcon,
+  ShoppingBagIcon // Added for MOQ visual
 } from "@heroicons/react/24/outline";
 
 export default function ProductForm({ initialData, rawCategories = [] }) {
@@ -23,7 +24,6 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
   const [mainPreview, setMainPreview] = useState(initialData?.imageUrl || null);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   
-  // 🟢 LOGIC UPDATE: Storing IDs
   const [mainCategory, setMainCategory] = useState(initialData?.category || "");
   const [subCategory, setSubCategory] = useState(initialData?.subCategory || "");
   
@@ -32,12 +32,10 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
 
   const [state, formAction, isPending] = useActionState(saveProduct, null);
 
-  // 🟢 UI HELPER: Get Category Name from ID for the Preview Card
   const getCategoryDisplayName = (id) => {
     return rawCategories.find(c => String(c._id) === String(id))?.name || "";
   };
 
-  // 🟢 HIERARCHY LOGIC: Filter sub-categories by parent ObjectId
   const availableSubCategories = useMemo(() => {
     if (!mainCategory) return [];
     return rawCategories.filter(c => String(c.parentId) === String(mainCategory));
@@ -116,11 +114,8 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
     formData.set("hasVariants", useVariants.toString());
     formData.set("isNewArrival", isNewArrival.toString());
     formData.set("existingImage", initialData?.imageUrl || "");
-    
-    // 🟢 SEO FLOW UPDATE: Sending ObjectIds
     formData.set("category", mainCategory);
     formData.set("subCategory", subCategory);
-    
     formData.set("price", Number(previewPrice) || 0);
 
     if (useVariants) {
@@ -229,9 +224,18 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
 
               {!useVariants ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <input name="price" type="number" step="0.01" value={previewPrice} onChange={(e) => setPreviewPrice(e.target.value)} className={inputClass} placeholder="Price" />
-                  <input name="stock" type="number" defaultValue={initialData?.stock} className={inputClass} placeholder="Stock" />
-                  <input name="minOrderQuantity" type="number" defaultValue={initialData?.minOrderQuantity || 1} className={`${inputClass} text-[#EA638C] bg-pink-50/50`} placeholder="MOQ" />
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black uppercase text-gray-400 ml-2">Unit Price</span>
+                    <input name="price" type="number" step="0.01" value={previewPrice} onChange={(e) => setPreviewPrice(e.target.value)} className={inputClass} placeholder="Price" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black uppercase text-gray-400 ml-2">Total Stock</span>
+                    <input name="stock" type="number" defaultValue={initialData?.stock} className={inputClass} placeholder="Stock" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black uppercase text-[#EA638C] ml-2">Min. Order (MOQ)</span>
+                    <input name="minOrderQuantity" type="number" defaultValue={initialData?.minOrderQuantity || 1} className={`${inputClass} text-[#EA638C] bg-pink-50/50 ring-1 ring-inset ring-[#EA638C]/10`} placeholder="MOQ" />
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -267,8 +271,8 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
                                 <input placeholder="0" type="number" value={v.stock} onChange={e => { const n = [...variants]; n[i].stock = e.target.value; setVariants(n); }} className="w-full bg-white p-3 rounded-xl text-[11px] font-bold outline-none" />
                             </div>
                             <div className="col-span-2 space-y-1 lg:col-span-1">
-                                <span className="text-[8px] font-black uppercase text-[#EA638C] ml-2">MOQ</span>
-                                <input placeholder="1" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className="w-full bg-pink-50 p-3 rounded-xl text-[11px] font-bold text-[#EA638C] outline-none" />
+                                <span className="text-[8px] font-black uppercase text-[#EA638C] ml-2">Min. Order (MOQ)</span>
+                                <input placeholder="1" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className="w-full bg-pink-50 p-3 rounded-xl text-[11px] font-bold text-[#EA638C] outline-none ring-1 ring-inset ring-[#EA638C]/10" />
                             </div>
                         </div>
                         <input type="file" id={`v-img-${i}`} className="hidden" onChange={(e) => handlePreview(e.target.files[0], null, i)} />
@@ -303,15 +307,15 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
               <section className="bg-[#3E442B] p-8 rounded-[3rem] shadow-xl text-white">
                 <div className="flex items-center justify-between mb-8">
                   <div className="flex items-center gap-3">
-                    <SparklesIcon className={`w-6 h-6 ${isNewArrival ? 'text-[#EA638C]' : 'text-gray-600'}`} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">New Arrival</span>
+                    <SparklesIcon className={`w-6 h-6 transition-colors ${isNewArrival ? 'text-[#EA638C]' : 'text-gray-600'}`} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Mark as New Arrival</span>
                   </div>
                   <button type="button" onClick={() => setIsNewArrival(!isNewArrival)} className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${isNewArrival ? 'bg-[#EA638C]' : 'bg-gray-700'}`}>
                     <div className={`w-4 h-4 bg-white rounded-full transition-transform ${isNewArrival ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
                 </div>
-                <button type="submit" disabled={isPending} className="w-full py-5 bg-[#EA638C] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">
-                  {isPending ? "Saving..." : "Save Product"}
+                <button type="submit" disabled={isPending} className="w-full py-5 bg-[#EA638C] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl hover:shadow-pink-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">
+                  {isPending ? "Syncing DNA..." : (initialData ? "Update Product" : "Save Product")}
                 </button>
               </section>
             </div>
