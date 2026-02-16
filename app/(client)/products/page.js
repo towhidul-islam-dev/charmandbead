@@ -58,17 +58,45 @@ async function ProductDataWrapper({ categorySlug }) {
 
     let filterId = null;
 
-    // 🟢 Convert Slug back to ID for Database Query
+    // 1. Get all categories once to have a name-to-ID map
+    const allCategories = await Category.find({}).lean();
+
+    // 2. Convert Slug back to ID for Database Query
     if (categorySlug) {
-        const foundCategory = await Category.findOne({ slug: categorySlug }).lean();
+        const foundCategory = allCategories.find(c => c.slug === categorySlug);
         if (foundCategory) {
             filterId = foundCategory._id.toString();
         }
     }
 
-    // Update your getProducts to accept a categoryId filter
+    // 3. Get raw products
     const { products: rawProducts, success } = await getProducts(false, filterId);
-    const products = success && rawProducts ? JSON.parse(JSON.stringify(rawProducts)) : [];
+    
+    // 4. THE FIX: Manually inject names into the product objects
+    let products = [];
+    if (success && rawProducts) {
+        // Convert Mongoose documents to plain objects
+        const plainProducts = JSON.parse(JSON.stringify(rawProducts));
+        
+        products = plainProducts.map(p => {
+            // Find the parent category object
+            const matchedCat = allCategories.find(c => 
+                String(c._id) === String(p.category)
+            );
+
+            // Find the specific subcategory name from the parent's subCategories array
+            const matchedSub = matchedCat?.subCategories?.find(s => 
+                String(s._id) === String(p.subCategory)
+            );
+
+            return {
+                ...p,
+                // Ensure these fields exist so ProductCard can see them
+                categoryName: p.categoryName || matchedCat?.name || "Collection",
+                subCategoryName: p.subCategoryName || matchedSub?.name || ""
+            };
+        });
+    }
 
     if (products.length === 0) {
         return (

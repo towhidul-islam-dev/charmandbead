@@ -68,6 +68,7 @@ export default function AdminProductsClient({ initialProducts }) {
         );
         toast.success(
           result.newState ? "Product Archived" : "Product Published",
+          { style: { background: '#3E442B', color: '#fff' } }
         );
       }
     } catch (err) {
@@ -84,8 +85,8 @@ export default function AdminProductsClient({ initialProducts }) {
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
       
-      // 🟢 Filter by categoryName string
-      const pCat = product.categoryName || "Uncategorized";
+      // 🟢 Logic: Check categoryName first, then fallback to subCategoryName
+      const pCat = product.categoryName || product.subCategoryName || "Uncategorized";
       const matchesCategory =
         activeCategory === "All" || pCat === activeCategory;
       return matchesSearch && matchesCategory;
@@ -93,9 +94,10 @@ export default function AdminProductsClient({ initialProducts }) {
   }, [products, searchTerm, activeCategory]);
 
   const categories = useMemo(() => {
-    // 🟢 Generate unique list of category names
+    // 🟢 Generate unique list of category names from the available product data
     const names = products.map((p) => p.categoryName || "Uncategorized");
-    return ["All", ...new Set(names)];
+    const uniqueNames = Array.from(new Set(names)).filter(n => n !== "Uncategorized");
+    return ["All", ...uniqueNames, "Uncategorized"];
   }, [products]);
 
   return (
@@ -181,7 +183,7 @@ export default function AdminProductsClient({ initialProducts }) {
         </select>
       </div>
 
-      {/* --- 📱 MOBILE CARD LAYOUT (< 768px) --- */}
+      {/* --- 📱 MOBILE CARD LAYOUT --- */}
       <div className="grid grid-cols-1 gap-6 md:hidden">
         {filteredProducts.map((product) => {
           const totalStock = product.hasVariants
@@ -198,6 +200,7 @@ export default function AdminProductsClient({ initialProducts }) {
                   <Image src={product.imageUrl || "/placeholder.png"} alt="" fill className="object-cover" unoptimized />
                 </div>
                 <div className="flex flex-col">
+                  {/* 🟢 Mobile Category Name Display */}
                   <span className="px-2 py-0.5 bg-gray-100 text-[8px] font-black uppercase text-gray-500 rounded-md w-fit mb-1">
                     {product.categoryName || "Uncategorized"}
                   </span>
@@ -247,14 +250,14 @@ export default function AdminProductsClient({ initialProducts }) {
         })}
       </div>
 
-      {/* --- 💻 DESKTOP TABLE LAYOUT (>= 768px) --- */}
+      {/* --- 💻 DESKTOP TABLE LAYOUT --- */}
       <div className="hidden md:block overflow-hidden bg-white rounded-[2.5rem] shadow-2xl border border-gray-50">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-50">
             <thead className="bg-gray-50/50">
               <tr className="text-[9px] font-black uppercase tracking-widest text-gray-400">
                 <th className="px-6 py-5 text-left">Listing Details</th>
-                <th className="px-6 py-5 text-left">Category</th>
+                <th className="px-6 py-5 text-left">Category & Type</th>
                 <th className="px-6 py-5 text-left text-[#EA638C]">Stock Level</th>
                 <th className="px-6 py-5 text-left">Pricing</th>
                 <th className="px-6 py-5 text-left">Last Updated</th>
@@ -282,6 +285,7 @@ export default function AdminProductsClient({ initialProducts }) {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
+                        {/* 🟢 FIXED: Displaying the categoryName string */}
                         <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-gray-100 text-gray-600 w-fit">
                           {product.categoryName || "Uncategorized"}
                         </span>
