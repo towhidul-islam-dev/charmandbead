@@ -15,26 +15,28 @@ export default async function CategoriesPage() {
   const totalSub = categories.filter(c => c.parentId).length;
 
   return (
-    <div className="min-h-screen bg-[#FDFCFD] p-4 md:p-10 ml-0 md:ml-64 transition-all">
-      <div className="max-w-6xl mx-auto">
+    // Updated: ml-0 on mobile, ml-64 on desktop. Width set to fill remaining space.
+    <div className="min-h-screen bg-[#FDFCFD] p-4 md:p-10 ml-0 md:ml-64 transition-all w-full md:w-[calc(100%-16rem)]">
+      <div className="w-full">
         
-        {/* Header Section */}
-        <header className="flex flex-col justify-between gap-6 pb-8 mb-12 border-b border-gray-100 md:flex-row md:items-end">
+        {/* Header Section - Kept your original style but added wrap for mobile */}
+        <header className="flex flex-col justify-between gap-6 pb-8 mb-12 border-b border-gray-100 lg:flex-row lg:items-end">
           <div className="flex items-center gap-5">
-            <div className="p-5 bg-[#3E442B] rounded-[2.5rem] text-white shadow-2xl shadow-[#3E442B]/20">
+            <div className="p-5 bg-[#3E442B] rounded-[2.5rem] text-white shadow-2xl shadow-[#3E442B]/20 shrink-0">
               <FolderIcon className="w-10 h-10" />
             </div>
             <div>
               <p className="text-[#EA638C] font-black text-[10px] uppercase tracking-[0.3em] mb-1">
                 Store Architecture
               </p>
-              <h1 className="text-4xl font-black text-[#3E442B] uppercase italic tracking-tighter leading-none">
+              <h1 className="text-3xl md:text-4xl font-black text-[#3E442B] uppercase italic tracking-tighter leading-none">
                 Inventory <span className="text-[#EA638C]">DNA</span>
               </h1>
             </div>
           </div>
 
-          <div className="flex gap-2">
+          {/* Stats - Grid layout for mobile, row for desktop */}
+          <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-row">
             <div className="flex items-center gap-3 px-6 py-3 bg-white border border-gray-100 rounded-full shadow-sm">
               <span className="w-2 h-2 rounded-full bg-[#3E442B]"></span>
               <p className="text-[10px] font-black text-[#3E442B] uppercase tracking-widest">{totalMain} Main</p>
@@ -46,13 +48,13 @@ export default async function CategoriesPage() {
           </div>
         </header>
 
-        {/* Main Content Grid */}
+        {/* Main Content Grid - Kept 4/8 split but ensured it fills width */}
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-12">
           
           {/* Left Column: Stats & Tools */}
-          <div className="space-y-8 lg:col-span-4">
+          <div className="order-2 space-y-8 lg:col-span-4 lg:order-1">
             
-            {/* 🟢 NEW: Sync Tool Section */}
+            {/* Sync Tool Section */}
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <BoltIcon className="w-4 h-4 text-[#EA638C]" />
@@ -97,12 +99,12 @@ export default async function CategoriesPage() {
             </div>
           </div>
 
-          {/* Right Column: Management */}
-          <div className="lg:col-span-8">
-            <section className="bg-white p-2 md:p-4 rounded-[3.5rem] border border-gray-100 shadow-sm relative overflow-hidden">
+          {/* Right Column: Management - This now expands to fill the screen */}
+          <div className="order-1 lg:col-span-8 lg:order-2">
+            <section className="bg-white p-2 md:p-4 rounded-[2.5rem] md:rounded-[3.5rem] border border-gray-100 shadow-sm relative overflow-hidden h-full">
                <div className="absolute top-0 right-0 w-32 h-32 bg-[#FBB6E6]/10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
                
-               <div className="relative p-6 md:p-8">
+               <div className="relative p-4 md:p-8">
                 <div className="flex items-center gap-3 mb-8">
                     <ChartBarIcon className="w-5 h-5 text-[#EA638C]" />
                     <h2 className="text-[11px] font-black uppercase tracking-widest text-[#3E442B]">
@@ -110,7 +112,10 @@ export default async function CategoriesPage() {
                     </h2>
                 </div>
                 
-                <CategoryManager categories={categories} mode="full" />
+                {/* Wrap in overflow-x-auto to prevent layout break on mobile trees */}
+                <div className="w-full overflow-x-auto">
+                  <CategoryManager categories={categories} mode="full" />
+                </div>
                </div>
             </section>
           </div>
