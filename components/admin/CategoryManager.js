@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 export default function CategoryManager({
   categories = [],
   mode = "full",
-  // 🟢 FIX 1: Default to an empty function so calling 'onClose' never fails
+  // 🟢 FIXED: Defaulting to an empty function prevents "a is not a function"
   onClose = () => {}, 
 }) {
   const [isAdding, setIsAdding] = useState(mode === "modal");
@@ -44,7 +44,7 @@ export default function CategoryManager({
         setName("");
         setParentId("");
         
-        // 🟢 FIX 2: Ensure we only call onClose in modal mode
+        // 🟢 FIXED: Only call onClose if we are actually in a modal context
         if (mode === "modal") {
           onClose(result.data); 
         } else {
@@ -77,7 +77,7 @@ export default function CategoryManager({
     <div className={mode === "modal" ? "fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#3E442B]/40 backdrop-blur-sm" : "mb-8 animate-in zoom-in-95 duration-200"}>
       <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl border border-gray-100 relative">
         <button 
-          type="button" // 🟢 FIX 3: Explicitly set type button so it doesn't trigger form submit
+          type="button" // 🟢 FIXED: type="button" prevents accidental form submission
           onClick={() => mode === "modal" ? onClose() : setIsAdding(false)}
           className="absolute p-2 text-gray-400 transition-colors top-6 right-6 hover:text-red-500"
         >
