@@ -53,36 +53,65 @@ export async function saveCategoryAction(formData) {
   try {
     await dbConnect();
     
+    // 1. Extract and sanitize inputs
     const name = formData.get("name")?.trim();
     const parentId = formData.get("parentId");
-    const imageUrl = formData.get("imageUrl"); 
+    const imageUrl = formData.get("imageUrl") || ""; 
+    
+    // 🟢 New Arrival & MOQ Logic
+    const isNewArrival = formData.get("isNewArrival") === "true";
+    const moq = parseInt(formData.get("moq")) || 1;
 
     if (!name) return { success: false, error: "Category name is required" };
 
-    let finalParentId = null;
-    // Improved check for various "empty" states
+    // 2. Prepare the data object
+    const categoryData = {
+      name,
+      image: imageUrl,
+      isNewArrival,
+      moq,
+      parentId: null
+    };
+
+    // 3. Handle Parent ID validation
     if (parentId && !["", "none", "null", "undefined"].includes(String(parentId))) {
-      finalParentId = new mongoose.Types.ObjectId(String(parentId));
+      if (mongoose.Types.ObjectId.isValid(parentId)) {
+        categoryData.parentId = new mongoose.Types.ObjectId(String(parentId));
+      } else {
+        console.warn("Invalid Parent ID format received:", parentId);
+      }
     }
 
-    const newCategory = await Category.create({
-      name,
-      parentId: finalParentId,
-      image: imageUrl || "",
-    });
+    // 4. Create the category
+    // This triggers the pre('validate') middleware in your Category model
+    const newCategory = await Category.create(categoryData);
 
+    // 5. Sync the UI
     revalidatePath("/admin/categories");
+    
     return { 
       success: true, 
       data: JSON.parse(JSON.stringify(newCategory)) 
     };
     
   } catch (error) {
-    console.error("❌ DATABASE SAVE ERROR:", error.message);
-    const errorMsg = error.code === 11000 
-      ? "A category with this name already exists (Duplicate Slug)." 
-      : error.message;
-    return { success: false, error: errorMsg };
+    console.error("❌ SERVER ERROR:", error); 
+    
+    // Handle Duplicate Slugs (MongoDB error code 11000)
+    if (error.code === 11000) {
+      return { 
+        success: false, 
+        error: "A category with this name (or slug) already exists." 
+      };
+    }
+    
+    // Handle Mongoose Validation Errors specifically
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return { success: false, error: messages.join(", ") };
+    }
+    
+    return { success: false, error: error.message || "Internal Server Error" };
   }
 }
 

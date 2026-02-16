@@ -17,7 +17,20 @@ const CategorySchema = new mongoose.Schema({
     ref: 'Category', 
     default: null 
   },
-  image: { type: String } // Added this so your Category Manager can display icons/images
+  image: { 
+    type: String,
+    default: "" 
+  },
+  // 🟢 NEW FIELDS ADDED
+  isNewArrival: {
+    type: Boolean,
+    default: false
+  },
+  moq: {
+    type: Number,
+    default: 1,
+    min: [1, "MOQ cannot be less than 1"]
+  }
 }, { timestamps: true });
 
 // 🟢 Pre-save middleware to auto-generate slug from name
@@ -26,9 +39,11 @@ CategorySchema.pre('validate', function(next) {
     this.slug = this.name
       .toLowerCase()
       .trim()
-      .replace(/[^\w ]+/g, '')
-      .replace(/ +/g, '-');
+      .replace(/[^\w\s-]/g, '') // Remove special characters except hyphens/spaces
+      .replace(/[\s_-]+/g, '-')  // Replace spaces and underscores with a single hyphen
+      .replace(/^-+|-+$/g, '');  // Trim hyphens from start and end
   }
   next();
 });
+
 export default mongoose.models.Category || mongoose.model("Category", CategorySchema);
