@@ -5,12 +5,11 @@ import dbConnect from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { revalidatePath } from "next/cache";
 import mongoose from "mongoose";
-import { categories as staticCategories } from "@/lib/constants"; // 🟢 Import your static list
+import { categories as staticCategories } from "@/lib/constants"; 
 
 /**
- * 🟢 NEW: seedCategories
+ * 🟢 seedCategories
  * Syncs the static categories file with the Database.
- * This is the bridge we discussed to ensure SEO slugs match ObjectIDs.
  */
 export async function seedCategories() {
   try {
@@ -24,8 +23,8 @@ export async function seedCategories() {
         { upsert: true, new: true }
       );
 
-      // 2. Process Subcategories
-      if (staticCat.subcategories) {
+      // 🟢 Logic Update: Using lowercase 'subcategories' to match your constants.js
+      if (staticCat.subcategories && Array.isArray(staticCat.subcategories)) {
         for (const sub of staticCat.subcategories) {
           await Category.findOneAndUpdate(
             { slug: sub.slug },
@@ -48,8 +47,7 @@ export async function seedCategories() {
 }
 
 /**
- * Saves a new category.
- * Updated: Handles image fields if you decide to add icons to categories later.
+ * Saves a new category manually via UI.
  */
 export async function saveCategoryAction(formData) {
   try {
@@ -57,16 +55,16 @@ export async function saveCategoryAction(formData) {
     
     const name = formData.get("name")?.trim();
     const parentId = formData.get("parentId");
-    const imageUrl = formData.get("imageUrl"); // 🟢 Added image support
+    const imageUrl = formData.get("imageUrl"); 
 
     if (!name) return { success: false, error: "Category name is required" };
 
     let finalParentId = null;
-    if (parentId && parentId !== "" && parentId !== "none" && parentId !== "null") {
-      finalParentId = new mongoose.Types.ObjectId(parentId);
+    // Improved check for various "empty" states
+    if (parentId && !["", "none", "null", "undefined"].includes(String(parentId))) {
+      finalParentId = new mongoose.Types.ObjectId(String(parentId));
     }
 
-    // .create() will trigger the 'pre-save' hook in your model to generate the slug
     const newCategory = await Category.create({
       name,
       parentId: finalParentId,
@@ -89,7 +87,7 @@ export async function saveCategoryAction(formData) {
 }
 
 /**
- * Fetches all categories with product counts for the Stat Cards.
+ * Fetches all categories with product counts.
  */
 export async function getCategories() {
   try {
@@ -103,8 +101,9 @@ export async function getCategories() {
     return categories.map(cat => {
       const catId = cat._id.toString();
       
+      // Count products that belong to this category OR sub-category
       const productCount = products.filter(p => 
-        p.category?.toString() === catId || p.subCategory?.toString() === catId
+        String(p.category) === catId || String(p.subCategory) === catId
       ).length;
 
       return {
@@ -129,11 +128,13 @@ export async function deleteCategoryAction(id) {
   try {
     await dbConnect();
 
+    // 1. Check for children
     const hasChildren = await Category.findOne({ parentId: id });
     if (hasChildren) {
       return { success: false, message: "Protection: Please delete sub-categories first." };
     }
 
+    // 2. Check for products
     const hasProducts = await Product.findOne({ 
       $or: [{ category: id }, { subCategory: id }] 
     });
@@ -147,6 +148,7 @@ export async function deleteCategoryAction(id) {
     revalidatePath("/admin/categories");
     return { success: true };
   } catch (error) {
+    console.error("Delete Error:", error);
     return { success: false, message: "Sync Error: Could not remove category." };
   }
 }
