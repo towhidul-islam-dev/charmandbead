@@ -15,15 +15,15 @@ export default async function CategoriesPage() {
   const totalSub = categories.filter(c => c.parentId).length;
 
   return (
-    // 🟢 The Fix: Remove 'max-w-6xl' and 'mx-auto'. 
-    // This ensures the page fills the screen starting from the sidebar edge.
-    <div className="min-h-screen bg-[#FDFCFD] p-4 md:p-10 ml-0 md:ml-64 transition-all">
-      <div className="w-full"> {/* Now takes 100% width of the remaining space */}
+    // 🟢 REMOVED: md:ml-64 and p-10 (because layout.js already provides them)
+    // 🟢 ADDED: w-full to ensure it uses the space provided by the layout
+    <div className="w-full transition-all">
+      <div className="w-full"> 
         
-        {/* Header Section - Original UI Preserved */}
+        {/* Header Section - UI remains exactly as it was */}
         <header className="flex flex-col justify-between gap-6 pb-8 mb-12 border-b border-gray-100 md:flex-row md:items-end">
           <div className="flex items-center gap-5">
-            <div className="p-5 bg-[#3E442B] rounded-[2.5rem] text-white shadow-2xl shadow-[#3E442B]/20">
+            <div className="p-5 bg-[#3E442B] rounded-[2.5rem] text-white shadow-2xl shadow-[#3E442B]/20 shrink-0">
               <FolderIcon className="w-10 h-10" />
             </div>
             <div>
@@ -48,13 +48,11 @@ export default async function CategoriesPage() {
           </div>
         </header>
 
-        {/* Main Content Grid - Original UI Preserved */}
+        {/* Main Content Grid */}
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-12">
           
           {/* Left Column: Stats & Tools */}
           <div className="space-y-8 lg:col-span-4">
-            
-            {/* Sync Tool Section */}
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <BoltIcon className="w-4 h-4 text-[#EA638C]" />
@@ -63,7 +61,6 @@ export default async function CategoriesPage() {
               <CategorySyncTool />
             </div>
 
-            {/* Insights Section */}
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Squares2X2Icon className="w-4 h-4 text-[#EA638C]" />
@@ -90,18 +87,17 @@ export default async function CategoriesPage() {
               )}
             </div>
             
-            {/* Admin Tip box */}
             <div className="p-8 bg-[#3E442B] rounded-[2.5rem] text-white/80 shadow-xl shadow-[#3E442B]/10">
                 <p className="text-[10px] font-bold uppercase tracking-widest mb-2 opacity-50">Admin Tip</p>
-                <p className="text-xs italic font-medium leading-relaxed">
-                  "Syncing ensures your shop filters match your SEO configuration file perfectly."
+                <p className="text-xs italic font-medium leading-relaxed text-white">
+                  "Hierarchy changes directly impact how customers filter through your beads and charms."
                 </p>
             </div>
           </div>
 
           {/* Right Column: Management */}
           <div className="lg:col-span-8">
-            <section className="bg-white p-2 md:p-4 rounded-[3.5rem] border border-gray-100 shadow-sm relative overflow-hidden">
+            <section className="bg-white p-2 md:p-4 rounded-[3.5rem] border border-gray-100 shadow-sm relative overflow-hidden h-full">
                <div className="absolute top-0 right-0 w-32 h-32 bg-[#FBB6E6]/10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
                
                <div className="relative p-6 md:p-8">
@@ -112,10 +108,7 @@ export default async function CategoriesPage() {
                     </h2>
                 </div>
                 
-                {/* 🟢 Added overflow wrapper to handle wide architecture trees on smaller screens */}
-                <div className="w-full overflow-hidden">
-                  <CategoryManager categories={categories} mode="full" />
-                </div>
+                <CategoryManager categories={categories} mode="full" />
                </div>
             </section>
           </div>
