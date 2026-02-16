@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import mongodb from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { v2 as cloudinary } from "cloudinary";
-import { CATEGORY_DNA } from "@/lib/categoryData";
+import { CATEGORY_DNA } from "@/lib/categoryDNA"; // 🧬 Updated to your new DNA file
 
 cloudinary.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
@@ -54,18 +54,21 @@ export async function saveProduct(prevState, formData) {
       imageUrl = await uploadToCloudinary(mainImageFile);
     }
 
-    const categoryId = formData.get("category");
-    const subCategoryId = formData.get("subCategory");
+    // 🧬 Read IDs from the form
+    const categoryId = formData.get("categoryId");
+    const subCategoryId = formData.get("subCategoryId");
 
-    // Lookup Category Names for UI display
-    const mainCat = CATEGORY_DNA.find(c => c._id === categoryId);
-    const subCat = CATEGORY_DNA.find(c => c._id === subCategoryId);
+    // 🧬 Snapshot Names from DNA
+    const mainCat = CATEGORY_DNA.find(c => String(c._id) === String(categoryId));
+    const subCat = CATEGORY_DNA.find(c => String(c._id) === String(subCategoryId));
 
     let productData = {
       name: formData.get("name")?.trim(),
       description: formData.get("description"),
-      category: categoryId || null,
-      subCategory: subCategoryId || null,
+      // Store IDs for relationships
+      categoryId: categoryId || null,
+      subCategoryId: subCategoryId || null,
+      // 🧬 Store Names for instant UI display
       categoryName: mainCat ? mainCat.name : "Uncategorized",
       subCategoryName: subCat ? subCat.name : "",
       isNewArrival: formData.get("isNewArrival") === "true",
@@ -109,7 +112,7 @@ export async function saveProduct(prevState, formData) {
     revalidatePath("/products");
     revalidatePath("/");
 
-    return { success: true, message: "Product saved! ✨", data: JSON.parse(JSON.stringify(finalProduct)) };
+    return { success: true, message: "Treasure Saved! ✨", data: JSON.parse(JSON.stringify(finalProduct)) };
   } catch (error) {
     return { success: false, message: error.message };
   }

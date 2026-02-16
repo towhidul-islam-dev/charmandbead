@@ -2,7 +2,7 @@
 import { useState, useMemo } from "react";
 import { Plus, Trash2, X, FolderTree, Tag, ChevronDown, Star, Box } from "lucide-react";
 import toast from "react-hot-toast";
-import { CATEGORY_DNA } from "@/lib/categoryData";
+import { CATEGORY_DNA } from "@/lib/categoryDNA";
 
 export default function CategoryManager({ mode = "full", onClose }) {
   // Use local state initialized with hardcoded data

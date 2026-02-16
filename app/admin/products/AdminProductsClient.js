@@ -35,14 +35,14 @@ export default function AdminProductsClient({ initialProducts }) {
           acc +
           Number(p.price) *
             (p.hasVariants
-              ? p.variants.reduce((a, v) => a + Number(v.stock), 0)
-              : Number(p.stock)),
+              ? p.variants.reduce((a, v) => a + (Number(v.stock) || 0), 0)
+              : Number(p.stock) || 0),
         0,
       ),
       lowStockCount: products.filter((p) => {
         const stock = p.hasVariants
-          ? p.variants.reduce((a, v) => a + Number(v.stock), 0)
-          : Number(p.stock);
+          ? p.variants.reduce((a, v) => a + (Number(v.stock) || 0), 0)
+          : Number(p.stock) || 0;
         return stock <= 5;
       }).length,
     };
@@ -85,8 +85,8 @@ export default function AdminProductsClient({ initialProducts }) {
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
       
-      // 🟢 Logic: Check categoryName first, then fallback to subCategoryName
-      const pCat = product.categoryName || product.subCategoryName || "Uncategorized";
+      // 🧬 DNA Logic: Use the snapshot names for filtering
+      const pCat = product.categoryName || "Uncategorized";
       const matchesCategory =
         activeCategory === "All" || pCat === activeCategory;
       return matchesSearch && matchesCategory;
@@ -94,14 +94,14 @@ export default function AdminProductsClient({ initialProducts }) {
   }, [products, searchTerm, activeCategory]);
 
   const categories = useMemo(() => {
-    // 🟢 Generate unique list of category names from the available product data
+    // 🧬 Generate unique filter list from snapshot category names
     const names = products.map((p) => p.categoryName || "Uncategorized");
     const uniqueNames = Array.from(new Set(names)).filter(n => n !== "Uncategorized");
-    return ["All", ...uniqueNames, "Uncategorized"];
+    return ["All", ...uniqueNames.sort(), "Uncategorized"];
   }, [products]);
 
   return (
-    <div className="p-4 mx-auto md:p-8 max-w-7xl animate-in fade-in duration-500 overflow-x-hidden">
+    <div className="p-4 mx-auto overflow-x-hidden duration-500 md:p-8 max-w-7xl animate-in fade-in">
       <Toaster position="bottom-right" />
 
       {activeRestockProduct && (
@@ -124,7 +124,7 @@ export default function AdminProductsClient({ initialProducts }) {
         </div>
         <Link
           href="/admin/products/create"
-          className="w-full md:w-auto text-center px-8 py-4 text-white bg-[#EA638C] font-black rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-[#EA638C]/20 hover:scale-105 transition-all"
+          className="w-full md:w-auto text-center px-8 py-4 text-white bg-[#EA638C] font-black rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-[#EA638C]/20 hover:scale-105 active:scale-95 transition-all"
         >
           + Add Product
         </Link>
@@ -133,7 +133,7 @@ export default function AdminProductsClient({ initialProducts }) {
       {/* --- Stats Cards --- */}
       <div className="grid grid-cols-1 gap-4 mb-8 sm:grid-cols-2 md:grid-cols-3">
         <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="p-3 text-blue-600 bg-blue-50 rounded-xl">
+          <div className="p-3 text-[#3E442B] bg-[#3E442B]/5 rounded-xl">
             <Database size={20} />
           </div>
           <div>
@@ -151,12 +151,12 @@ export default function AdminProductsClient({ initialProducts }) {
           </div>
         </div>
         <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex items-center gap-4 sm:col-span-2 md:col-span-1">
-          <div className="p-3 bg-amber-50 rounded-xl text-amber-600">
+          <div className="p-3 bg-pink-50 rounded-xl text-[#EA638C]">
             <AlertTriangle size={20} />
           </div>
           <div>
             <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Low Stock</p>
-            <p className="text-xl italic font-black text-amber-600">{stats.lowStockCount}</p>
+            <p className="text-xl italic font-black text-[#EA638C]">{stats.lowStockCount}</p>
           </div>
         </div>
       </div>
@@ -173,7 +173,7 @@ export default function AdminProductsClient({ initialProducts }) {
           />
         </div>
         <select
-          className="w-full md:w-48 px-4 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500 bg-white border border-gray-100 rounded-2xl shadow-sm cursor-pointer outline-none"
+          className="w-full md:w-48 px-4 py-4 text-[10px] font-black uppercase tracking-widest text-[#3E442B] bg-white border border-gray-100 rounded-2xl shadow-sm cursor-pointer outline-none focus:ring-2 focus:ring-[#EA638C]/20"
           onChange={(e) => setActiveCategory(e.target.value)}
           value={activeCategory}
         >
@@ -200,8 +200,8 @@ export default function AdminProductsClient({ initialProducts }) {
                   <Image src={product.imageUrl || "/placeholder.png"} alt="" fill className="object-cover" unoptimized />
                 </div>
                 <div className="flex flex-col">
-                  {/* 🟢 Mobile Category Name Display */}
-                  <span className="px-2 py-0.5 bg-gray-100 text-[8px] font-black uppercase text-gray-500 rounded-md w-fit mb-1">
+                  {/* 🧬 DNA Category Badge */}
+                  <span className="px-2 py-0.5 bg-[#3E442B]/5 text-[8px] font-black uppercase text-[#3E442B] rounded-md w-fit mb-1">
                     {product.categoryName || "Uncategorized"}
                   </span>
                   <h4 className="text-sm font-black text-[#3E442B] uppercase italic truncate leading-tight">
@@ -214,18 +214,18 @@ export default function AdminProductsClient({ initialProducts }) {
               <div className="grid grid-cols-2 gap-3 mb-6">
                 <div 
                   onClick={() => setActiveRestockProduct(product)}
-                  className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex flex-col items-center justify-center cursor-pointer active:scale-95 transition-transform"
+                  className="flex flex-col items-center justify-center p-4 transition-transform border border-gray-100 cursor-pointer bg-gray-50 rounded-2xl active:scale-95 group"
                 >
                   <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Stock Level</span>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-black ${totalStock <= 5 ? "text-[#EA638C]" : "text-[#3E442B]"}`}>
                       {totalStock} Units
                     </span>
-                    <Plus size={12} className="text-[#EA638C]" />
+                    <Plus size={12} className="text-[#EA638C] group-hover:scale-125 transition-transform" />
                   </div>
                 </div>
 
-                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex flex-col items-center justify-center">
+                <div className="flex flex-col items-center justify-center p-4 border border-gray-100 bg-gray-50 rounded-2xl">
                   <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Product ID</span>
                   <span className="text-[10px] font-black text-gray-500 uppercase">#{String(product._id).slice(-6)}</span>
                 </div>
@@ -235,11 +235,11 @@ export default function AdminProductsClient({ initialProducts }) {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleArchiveToggle(product._id)}
-                    className={`p-3 rounded-xl transition-all ${product.isArchived ? "bg-yellow-400 text-black" : "bg-gray-100 text-gray-400"}`}
+                    className={`p-3 rounded-xl transition-all ${product.isArchived ? "bg-[#3E442B] text-white" : "bg-gray-100 text-gray-400 hover:text-[#EA638C]"}`}
                   >
                     {loadingId === String(product._id) ? <Loader2 size={18} className="animate-spin" /> : product.isArchived ? <Eye size={18} /> : <EyeOff size={18} />}
                   </button>
-                  <Link href={`/admin/products/edit/${product._id}`} className="p-3 bg-gray-100 text-gray-400 rounded-xl">
+                  <Link href={`/admin/products/edit/${product._id}`} className="p-3 text-gray-400 bg-gray-100 rounded-xl hover:text-[#3E442B]">
                     <Package size={18} />
                   </Link>
                 </div>
@@ -285,8 +285,8 @@ export default function AdminProductsClient({ initialProducts }) {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        {/* 🟢 FIXED: Displaying the categoryName string */}
-                        <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-gray-100 text-gray-600 w-fit">
+                        {/* 🧬 DNA Category Snapshot */}
+                        <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-[#3E442B]/5 text-[#3E442B] w-fit">
                           {product.categoryName || "Uncategorized"}
                         </span>
                         {product.subCategoryName && (
@@ -312,7 +312,7 @@ export default function AdminProductsClient({ initialProducts }) {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => handleArchiveToggle(product._id)} disabled={loadingId === String(product._id)} className={`p-2 rounded-xl transition-all ${product.isArchived ? "bg-yellow-400 text-black shadow-lg shadow-yellow-100" : "bg-gray-100 text-gray-400 hover:bg-[#3E442B] hover:text-white"}`}>
+                        <button onClick={() => handleArchiveToggle(product._id)} disabled={loadingId === String(product._id)} className={`p-2 rounded-xl transition-all ${product.isArchived ? "bg-[#3E442B] text-white shadow-lg shadow-[#3E442B]/20" : "bg-gray-100 text-gray-400 hover:bg-[#EA638C] hover:text-white"}`}>
                           {loadingId === String(product._id) ? <Loader2 size={18} className="animate-spin" /> : product.isArchived ? <Eye size={18} /> : <EyeOff size={18} />}
                         </button>
                         <Link href={`/admin/products/edit/${product._id}`} className="p-2 text-gray-400 transition-all bg-gray-100 rounded-xl hover:bg-[#3E442B] hover:text-white">

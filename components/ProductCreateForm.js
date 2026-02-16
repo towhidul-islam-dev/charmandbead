@@ -5,13 +5,14 @@ import { createInAppNotification } from "@/actions/inAppNotifications";
 import { useNotifications } from "@/Context/NotificationContext";
 import ProductCard from "@/components/ProductCard";
 import toast, { Toaster } from "react-hot-toast";
+import { CATEGORY_DNA } from "@/lib/categoryDNA"; // 🧬 Integrated new DNA
 import { 
   PhotoIcon, SparklesIcon, XMarkIcon, 
   PlusIcon, TagIcon, CubeIcon, CameraIcon,
   CommandLineIcon, EyeIcon, ChevronDownIcon
 } from "@heroicons/react/24/outline";
 
-export default function ProductForm({ initialData, rawCategories = [] }) {
+export default function ProductForm({ initialData }) {
   const formRef = useRef(null);
   const { addNotification } = useNotifications();
 
@@ -21,28 +22,30 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
   const [isNewArrival, setIsNewArrival] = useState(initialData?.isNewArrival || false);
   const [mainPreview, setMainPreview] = useState(initialData?.imageUrl || null);
   
-  const [mainCategory, setMainCategory] = useState(initialData?.category || "");
-  const [subCategory, setSubCategory] = useState(initialData?.subCategory || "");
+  // 🧬 Linked to DNA IDs
+  const [mainCategory, setMainCategory] = useState(initialData?.categoryId || "");
+  const [subCategory, setSubCategory] = useState(initialData?.subCategoryId || "");
   
   const [previewName, setPreviewName] = useState(initialData?.name || "");
   const [previewPrice, setPreviewPrice] = useState(initialData?.price || 0);
 
   const [state, formAction, isPending] = useActionState(saveProduct, null);
 
-  // --- HIERARCHY LOGIC ---
+  // --- 🧬 DNA HIERARCHY LOGIC ---
   const getCategoryDisplayName = (id) => {
-    return rawCategories.find(c => String(c._id) === String(id))?.name || "";
+    return CATEGORY_DNA.find(c => String(c._id) === String(id))?.name || "";
   };
 
   const availableSubCategories = useMemo(() => {
     if (!mainCategory) return [];
-    return rawCategories.filter(c => String(c.parentId) === String(mainCategory));
-  }, [mainCategory, rawCategories]);
+    return CATEGORY_DNA.filter(c => String(c.parentId) === String(mainCategory));
+  }, [mainCategory]);
 
   const previewProduct = {
     _id: "preview",
     name: previewName || "Product Name",
-    category: subCategory 
+    // 🧬 Pulls actual names from DNA for the preview card
+    categoryName: subCategory 
         ? getCategoryDisplayName(subCategory) 
         : (mainCategory ? getCategoryDisplayName(mainCategory) : "Category"),
     price: useVariants ? (variants[0]?.price || previewPrice) : previewPrice,
@@ -64,17 +67,14 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
     formData.set("isNewArrival", isNewArrival.toString());
     formData.set("existingImage", initialData?.imageUrl || "");
     
-    // 2. Strict Category Handling (Prevents "Cast to ObjectId" errors)
+    // 🧬 2. Capture Names and IDs (Snapshotting for the database)
     if (mainCategory) {
-      formData.set("category", mainCategory);
-    } else {
-      formData.delete("category");
+      formData.set("categoryId", mainCategory);
+      formData.set("categoryName", getCategoryDisplayName(mainCategory));
     }
-
     if (subCategory) {
-      formData.set("subCategory", subCategory);
-    } else {
-      formData.delete("subCategory");
+      formData.set("subCategoryId", subCategory);
+      formData.set("subCategoryName", getCategoryDisplayName(subCategory));
     }
     
     // 3. Ensure numeric values
@@ -107,7 +107,6 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
         }).then(res => res.success && addNotification(res.data));
       }
       if (!initialData) {
-        // Reset local states
         setVariants([]);
         setMainPreview(null);
         setMainCategory("");
@@ -168,7 +167,8 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
                   <div className="relative">
                     <select value={mainCategory} onChange={handleCategoryChange} className={inputClass} required>
                       <option value="">Select Category</option>
-                      {rawCategories.filter(c => !c.parentId).map(cat => (
+                      {/* 🧬 Mapping Main Categories from DNA */}
+                      {CATEGORY_DNA.filter(c => !c.parentId).map(cat => (
                         <option key={cat._id} value={cat._id}>{cat.name}</option>
                       ))}
                     </select>
@@ -183,6 +183,7 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
                         disabled={!mainCategory || availableSubCategories.length === 0}
                     >
                         <option value="">Select Sub-Category</option>
+                        {/* 🧬 Mapping Sub-Categories from DNA */}
                         {availableSubCategories.map(sub => (
                         <option key={sub._id} value={sub._id}>{sub.name}</option>
                         ))}

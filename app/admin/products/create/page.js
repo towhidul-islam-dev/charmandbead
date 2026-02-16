@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import ProductCreateForm from '@/components/ProductCreateForm';
 // 🟢 Import the central DNA source
-import { CATEGORY_DNA } from '@/lib/categoryData'; 
+import { CATEGORY_DNA } from '@/lib/categoryDNA'; 
 
 export default async function CreateProductPage() {
     return (
