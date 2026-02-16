@@ -29,14 +29,17 @@ export async function silentInventoryHeal() {
   try {
     await mongodb();
     const products = await Product.find({ hasVariants: true });
-    
+
     for (const product of products) {
-      const actualSum = product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0);
-      
+      const actualSum = product.variants.reduce(
+        (acc, v) => acc + (Number(v.stock) || 0),
+        0,
+      );
+
       if (product.stock !== actualSum) {
         // Syncing the parent stock to match variant sum
         product.stock = actualSum;
-        await product.save(); 
+        await product.save();
         console.log(`[Auto-Heal] Fixed drift for: ${product.name}`);
       }
     }
@@ -44,52 +47,7 @@ export async function silentInventoryHeal() {
     console.error("Silent Heal failed:", error.message);
   }
 }
-"use server";
 
-import { revalidatePath } from "next/cache";
-import mongodb from "@/lib/mongodb";
-import Product from "@/models/Product";
-import { v2 as cloudinary } from "cloudinary";
-
-cloudinary.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-async function uploadToCloudinary(file) {
-  if (!file || file.size === 0 || typeof file === "string") return null;
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  return new Promise((resolve, reject) => {
-    cloudinary.uploader
-      .upload_stream({ folder: "ecom-products" }, (error, result) => {
-        if (error) reject(error);
-        else resolve(result.secure_url);
-      })
-      .end(buffer);
-  });
-}
-
-export async function silentInventoryHeal() {
-  try {
-    await mongodb();
-    const products = await Product.find({ hasVariants: true });
-    
-    for (const product of products) {
-      const actualSum = product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0);
-      
-      if (product.stock !== actualSum) {
-        // Syncing the parent stock to match variant sum
-        product.stock = actualSum;
-        await product.save(); 
-        console.log(`[Auto-Heal] Fixed drift for: ${product.name}`);
-      }
-    }
-  } catch (error) {
-    console.error("Silent Heal failed:", error.message);
-  }
-}
 export async function saveProduct(prevState, formData) {
   try {
     await mongodb();
@@ -98,7 +56,11 @@ export async function saveProduct(prevState, formData) {
 
     let imageUrl = formData.get("existingImage") || "";
     const mainImageFile = formData.get("imageFile");
-    if (mainImageFile && mainImageFile instanceof File && mainImageFile.size > 0) {
+    if (
+      mainImageFile &&
+      mainImageFile instanceof File &&
+      mainImageFile.size > 0
+    ) {
       imageUrl = await uploadToCloudinary(mainImageFile);
     }
 
@@ -120,51 +82,48 @@ export async function saveProduct(prevState, formData) {
 
     if (hasVariants) {
       const rawVariants = JSON.parse(formData.get("variantsJson") || "[]");
-      productData.variants = await Promise.all(rawVariants.map(async (v, i) => {
-        let vImg = v.imageUrl || "";
-        const vFile = formData.get(`variantImage_${i}`);
-        if (vFile && vFile instanceof File && vFile.size > 0) {
-          vImg = await uploadToCloudinary(vFile);
-        }
-        return { ...v, imageUrl: vImg, price: Number(v.price), stock: Number(v.stock), minOrderQuantity: Number(v.minOrderQuantity) };
-      }));
+      productData.variants = await Promise.all(
+        rawVariants.map(async (v, i) => {
+          let vImg = v.imageUrl || "";
+          const vFile = formData.get(`variantImage_${i}`);
+          if (vFile && vFile instanceof File && vFile.size > 0) {
+            vImg = await uploadToCloudinary(vFile);
+          }
+          return {
+            ...v,
+            imageUrl: vImg,
+            price: Number(v.price),
+            stock: Number(v.stock),
+            minOrderQuantity: Number(v.minOrderQuantity),
+          };
+        }),
+      );
     }
 
     let finalProduct;
     if (id && id !== "null" && id !== "") {
-      finalProduct = await Product.findByIdAndUpdate(id, productData, { new: true });
+      finalProduct = await Product.findByIdAndUpdate(id, productData, {
+        new: true,
+      });
     } else {
       finalProduct = await Product.create(productData);
     }
 
-   revalidatePath("/admin/products");
-  revalidatePath("/admin/new-arrivals");
-  revalidatePath("/products");
-  revalidatePath("/");
-    return { success: true, message: "Treasure saved successfully! ✨", data: JSON.parse(JSON.stringify(finalProduct)) };
+    revalidatePath("/admin/products");
+    revalidatePath("/admin/new-arrivals");
+    revalidatePath("/products");
+    revalidatePath("/");
+    return {
+      success: true,
+      message: "Treasure saved successfully! ✨",
+      data: JSON.parse(JSON.stringify(finalProduct)),
+    };
   } catch (error) {
     console.error("Save Error:", error);
-    return { success: false, message: error.message || "An unexpected error occurred" };
-  }
-}
-
-
-// 🟢 Dedicated Action for the Admin Table Button
-export async function toggleArchiveProduct(productId) {
-  try {
-    await mongodb();
-    const product = await Product.findById(productId);
-    if (!product) return { success: false, message: "Product not found" };
-
-    product.isArchived = !product.isArchived;
-    await product.save();
-
-    revalidatePath("/admin/products");
-    revalidatePath("/products");
-    return { success: true, newState: product.isArchived };
-  } catch (error) {
-    console.error("Archive Error:", error);
-    return { success: false, message: "Failed to toggle archive status" };
+    return {
+      success: false,
+      message: error.message || "An unexpected error occurred",
+    };
   }
 }
 
@@ -273,7 +232,6 @@ export async function reduceProductStock(
     throw new Error("Failed to update stock");
   }
 }
-
 
 // 🟢 Dedicated Action for the Admin Table Button
 export async function toggleArchiveProduct(productId) {
