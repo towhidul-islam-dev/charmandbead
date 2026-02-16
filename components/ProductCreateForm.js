@@ -12,7 +12,7 @@ import {
   CommandLineIcon, EyeIcon, ChevronDownIcon
 } from "@heroicons/react/24/outline";
 
-export default function ProductForm({ initialData, categoryStructure = {}, rawCategories = [] }) {
+export default function ProductForm({ initialData, rawCategories = [] }) {
   const formRef = useRef(null);
   const { addNotification } = useNotifications();
 
@@ -23,35 +23,32 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
   const [mainPreview, setMainPreview] = useState(initialData?.imageUrl || null);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   
+  // 🟢 LOGIC UPDATE: Storing IDs
   const [mainCategory, setMainCategory] = useState(initialData?.category || "");
   const [subCategory, setSubCategory] = useState(initialData?.subCategory || "");
+  
   const [previewName, setPreviewName] = useState(initialData?.name || "");
   const [previewPrice, setPreviewPrice] = useState(initialData?.price || 0);
 
   const [state, formAction, isPending] = useActionState(saveProduct, null);
 
-  // 🟢 Dynamic logic for filtering sub-categories based on main selection
-  // We use useMemo to ensure it updates when rawCategories (from server) or mainCategory changes
+  // 🟢 UI HELPER: Get Category Name from ID for the Preview Card
+  const getCategoryDisplayName = (id) => {
+    return rawCategories.find(c => String(c._id) === String(id))?.name || "";
+  };
+
+  // 🟢 HIERARCHY LOGIC: Filter sub-categories by parent ObjectId
   const availableSubCategories = useMemo(() => {
     if (!mainCategory) return [];
-    
-    // First check the passed categoryStructure
-    if (categoryStructure[mainCategory]) return categoryStructure[mainCategory];
-    
-    // Fallback: Check rawCategories for newly added children
-    const parent = rawCategories.find(c => c.name === mainCategory);
-    if (parent) {
-      return rawCategories
-        .filter(c => c.parentId === parent._id)
-        .map(c => c.name);
-    }
-    return [];
-  }, [mainCategory, categoryStructure, rawCategories]);
+    return rawCategories.filter(c => String(c.parentId) === String(mainCategory));
+  }, [mainCategory, rawCategories]);
 
   const previewProduct = {
     _id: "preview",
     name: previewName || "Product Name",
-    category: subCategory || mainCategory || "Category",
+    category: subCategory 
+        ? getCategoryDisplayName(subCategory) 
+        : (mainCategory ? getCategoryDisplayName(mainCategory) : "Category"),
     price: useVariants ? (variants[0]?.price || previewPrice) : previewPrice,
     imageUrl: mainPreview,
     isNewArrival: isNewArrival,
@@ -64,36 +61,30 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
   };
 
   useEffect(() => {
-    const handleSuccess = async () => {
-      if (state?.success) {
-        toast.success(state.message || "Success!");
-        if (isNewArrival) {
-          try {
-            const res = await createInAppNotification({
-              title: "New Arrival! 🔥",
-              message: `${previewName || "A new treasure"} has been added to the shop.`,
-              type: "arrival",
-              recipientId: "GLOBAL",
-              link: state.data?._id ? `/product/${state.data._id}` : "/products"
-            });
-            if (res.success) addNotification(res.data);
-          } catch (err) { console.error("Notification failed:", err); }
-        }
-        if (!initialData) {
-          formRef.current?.reset();
-          setVariants([]);
-          setMainPreview(null);
-          setMainCategory("");
-          setSubCategory("");
-          setIsNewArrival(false);
-          setPreviewName("");
-          setPreviewPrice(0);
-        }
-      } else if (state?.success === false) {
-        toast.error(state.message || "An error occurred");
+    if (state?.success) {
+      toast.success(state.message || "Success!");
+      if (isNewArrival) {
+        createInAppNotification({
+          title: "New Arrival! 🔥",
+          message: `${previewName || "A new treasure"} has been added.`,
+          type: "arrival",
+          recipientId: "GLOBAL",
+          link: state.data?._id ? `/product/${state.data._id}` : "/products"
+        }).then(res => res.success && addNotification(res.data));
       }
-    };
-    if (state) handleSuccess();
+      if (!initialData) {
+        formRef.current?.reset();
+        setVariants([]);
+        setMainPreview(null);
+        setMainCategory("");
+        setSubCategory("");
+        setIsNewArrival(false);
+        setPreviewName("");
+        setPreviewPrice(0);
+      }
+    } else if (state?.success === false) {
+      toast.error(state.message || "An error occurred");
+    }
   }, [state, initialData, isNewArrival, previewName, addNotification]);
 
   const generateAutoSKUs = () => {
@@ -125,14 +116,16 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
     formData.set("hasVariants", useVariants.toString());
     formData.set("isNewArrival", isNewArrival.toString());
     formData.set("existingImage", initialData?.imageUrl || "");
+    
+    // 🟢 SEO FLOW UPDATE: Sending ObjectIds
     formData.set("category", mainCategory);
     formData.set("subCategory", subCategory);
+    
     formData.set("price", Number(previewPrice) || 0);
 
     if (useVariants) {
       const variantsData = variants.map(({ preview, ...rest }) => ({
         ...rest,
-        name: `${rest.color} ${rest.size}`.trim() || "Default", 
         minOrderQuantity: Number(rest.minOrderQuantity) || 1,
         price: Number(rest.price) || 0,
         stock: Number(rest.stock) || 0
@@ -150,29 +143,19 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
     <>
       <Toaster position="top-right" />
       
-      {/* 🟢 MODAL INTEGRATION: Fully updated with Auto-Select logic */}
       {isAddingCategory && (
         <CategoryManager 
           categories={rawCategories} 
           mode="modal" 
           onClose={(newCategory) => {
             setIsAddingCategory(false);
-            
-            // 🟢 The "Auto-Select" Magic
-            if (newCategory?.name) {
+            if (newCategory?._id) {
               if (!newCategory.parentId) {
-                // It's a Top-Level Category
-                setMainCategory(newCategory.name);
-                setSubCategory(""); // Clear sub if we just made a new main
+                setMainCategory(newCategory._id);
+                setSubCategory("");
               } else {
-                // It's a Sub-Category
-                // We need the parent's name to set the first dropdown correctly
-                const parent = rawCategories.find(c => c._id === newCategory.parentId);
-                if (parent) {
-                  setMainCategory(parent.name);
-                  // Setting subCategory here will match the newly added item
-                  setSubCategory(newCategory.name);
-                }
+                setMainCategory(newCategory.parentId);
+                setSubCategory(newCategory._id);
               }
             }
           }} 
@@ -195,15 +178,11 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
                   <div className="relative group">
                     <select value={mainCategory} onChange={handleCategoryChange} className={inputClass}>
                       <option value="">Select Category</option>
-                      {/* We combine static categoryStructure with any new additions from rawCategories */}
-                      {Array.from(new Set([
-                        ...Object.keys(categoryStructure),
-                        ...rawCategories.filter(c => !c.parentId).map(c => c.name)
-                      ])).map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
+                      {rawCategories.filter(c => !c.parentId).map(cat => (
+                        <option key={cat._id} value={cat._id}>{cat.name}</option>
                       ))}
                     </select>
-                    <div className="absolute right-12 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                    <div className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-12 top-1/2">
                         <ChevronDownIcon className="w-4 h-4" />
                     </div>
                     <button 
@@ -224,10 +203,10 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
                     >
                         <option value="">Select Sub-Category</option>
                         {availableSubCategories.map(sub => (
-                        <option key={sub} value={sub}>{sub}</option>
+                        <option key={sub._id} value={sub._id}>{sub.name}</option>
                         ))}
                     </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                    <div className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2">
                         <ChevronDownIcon className="w-4 h-4" />
                     </div>
                   </div>
@@ -236,7 +215,6 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
               </div>
             </section>
 
-            {/* Inventory & Variants Section */}
             <section className={sectionClass}>
               <div className="flex flex-col justify-between gap-4 mb-8 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-3">
@@ -251,7 +229,7 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
 
               {!useVariants ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <input name="price" type="number" value={previewPrice} onChange={(e) => setPreviewPrice(e.target.value)} className={inputClass} placeholder="Price" />
+                  <input name="price" type="number" step="0.01" value={previewPrice} onChange={(e) => setPreviewPrice(e.target.value)} className={inputClass} placeholder="Price" />
                   <input name="stock" type="number" defaultValue={initialData?.stock} className={inputClass} placeholder="Stock" />
                   <input name="minOrderQuantity" type="number" defaultValue={initialData?.minOrderQuantity || 1} className={`${inputClass} text-[#EA638C] bg-pink-50/50`} placeholder="MOQ" />
                 </div>
@@ -261,28 +239,28 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
                     <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100 group transition-all">
                         <div className="flex items-center gap-4 mb-5">
                             <div onClick={() => document.getElementById(`v-img-${i}`).click()} className="relative flex items-center justify-center w-16 h-16 overflow-hidden bg-white border-2 border-gray-200 border-dashed cursor-pointer rounded-2xl shrink-0">
-                                {v.preview || v.imageUrl ? <img src={v.preview || v.imageUrl} className="object-cover w-full h-full" alt="variant preview" /> : <CameraIcon className="w-6 h-6 text-gray-300" />}
+                                {v.preview || v.imageUrl ? <img src={v.preview || v.imageUrl} className="object-cover w-full h-full" alt="variant" /> : <CameraIcon className="w-6 h-6 text-gray-300" />}
                             </div>
                             <div className="flex-1">
-                                <span className="text-[8px] font-black uppercase text-gray-400 block mb-1">Stock Keeping Unit</span>
+                                <span className="text-[8px] font-black uppercase text-gray-400 block mb-1">SKU</span>
                                 <input placeholder="SKU" value={v.sku} onChange={e => { const n = [...variants]; n[i].sku = e.target.value; setVariants(n); }} className="w-full bg-white px-3 py-2.5 rounded-xl text-[11px] font-bold outline-none border border-transparent focus:border-[#EA638C]/20" />
                             </div>
-                            <button type="button" onClick={() => setVariants(variants.filter((_, idx) => idx !== i))} className="p-2 text-red-400 transition-colors bg-white rounded-full shadow-sm hover:bg-red-50">
+                            <button type="button" onClick={() => setVariants(variants.filter((_, idx) => idx !== i))} className="p-2 text-red-400 bg-white rounded-full shadow-sm hover:bg-red-50">
                                 <XMarkIcon className="w-5 h-5" />
                             </button>
                         </div>
                         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                             <div className="space-y-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 ml-2">Size</span>
-                                <input placeholder="e.g. XL" value={v.size} onChange={e => { const n = [...variants]; n[i].size = e.target.value; setVariants(n); }} className="w-full bg-white p-3 rounded-xl text-[11px] font-bold outline-none" />
+                                <input placeholder="Size" value={v.size} onChange={e => { const n = [...variants]; n[i].size = e.target.value; setVariants(n); }} className="w-full bg-white p-3 rounded-xl text-[11px] font-bold outline-none" />
                             </div>
                             <div className="space-y-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 ml-2">Color</span>
-                                <input placeholder="e.g. Pink" value={v.color} onChange={e => { const n = [...variants]; n[i].color = e.target.value; setVariants(n); }} className="w-full bg-white p-3 rounded-xl text-[11px] font-bold outline-none" />
+                                <input placeholder="Color" value={v.color} onChange={e => { const n = [...variants]; n[i].color = e.target.value; setVariants(n); }} className="w-full bg-white p-3 rounded-xl text-[11px] font-bold outline-none" />
                             </div>
                             <div className="space-y-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 ml-2">Price</span>
-                                <input placeholder="0.00" type="number" value={v.price} onChange={e => { const n = [...variants]; n[i].price = e.target.value; setVariants(n); }} className="w-full bg-white p-3 rounded-xl text-[11px] font-bold outline-none" />
+                                <input placeholder="0.00" step="0.01" type="number" value={v.price} onChange={e => { const n = [...variants]; n[i].price = e.target.value; setVariants(n); }} className="w-full bg-white p-3 rounded-xl text-[11px] font-bold outline-none" />
                             </div>
                             <div className="space-y-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 ml-2">Stock</span>
@@ -317,7 +295,7 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
               <section className={sectionClass}>
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Main Image</h3>
                 <div className="w-full h-64 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative" onClick={() => document.getElementById('main-img').click()}>
-                  {mainPreview ? <img src={mainPreview} className="object-cover w-full h-full transition-all group-hover:scale-105" alt="main preview" /> : <PhotoIcon className="w-12 h-12 text-gray-200" />}
+                  {mainPreview ? <img src={mainPreview} className="object-cover w-full h-full transition-all group-hover:scale-105" alt="main" /> : <PhotoIcon className="w-12 h-12 text-gray-200" />}
                 </div>
                 <input id="main-img" name="imageFile" type="file" className="hidden" onChange={(e) => handlePreview(e.target.files[0], setMainPreview)} />
               </section>
@@ -338,7 +316,6 @@ export default function ProductForm({ initialData, categoryStructure = {}, rawCa
               </section>
             </div>
           </div>
-
         </div>
       </form>
     </>

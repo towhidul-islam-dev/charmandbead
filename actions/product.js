@@ -49,7 +49,6 @@ export async function saveProduct(prevState, formData) {
     await mongodb();
 
     const rawId = formData.get("id");
-    // Ensure "undefined" strings from the client don't break MongoDB lookup
     const id = rawId && rawId !== "undefined" && rawId !== "" ? rawId : null;
     const hasVariants = formData.get("hasVariants") === "true";
 
@@ -61,12 +60,17 @@ export async function saveProduct(prevState, formData) {
       if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
-    // 2. Base Product Data
+    // 🟢 2. SEO FLOW UPDATE: Category ObjectId Handling
+    // If a category/sub-category is an empty string, we set it to null 
+    // to prevent MongoDB from trying to cast "" to an ObjectId.
+    const categoryId = formData.get("category");
+    const subCategoryId = formData.get("subCategory");
+
     let productData = {
       name: formData.get("name")?.trim(),
       description: formData.get("description"),
-      category: formData.get("category"),
-      subCategory: formData.get("subCategory"),
+      category: categoryId && categoryId !== "" ? categoryId : null,
+      subCategory: subCategoryId && subCategoryId !== "" ? subCategoryId : null,
       isNewArrival: formData.get("isNewArrival") === "true",
       isArchived: formData.get("isArchived") === "true",
       hasVariants: hasVariants,
@@ -94,10 +98,10 @@ export async function saveProduct(prevState, formData) {
 
           return {
             ...v,
-            sku: v.sku || "", // Model pre-save hook will fill this if empty
+            sku: v.sku || "", 
             price: Number(v.price) || 0,
             stock: vStock,
-            minOrderQuantity: Number(v.minOrderQuantity) || 1,
+            minOrderQuantity: Number(v.minOrderQuantity) || 1, // Maintain MOQ
             imageUrl: vImageUrl,
           };
         }),
@@ -106,29 +110,25 @@ export async function saveProduct(prevState, formData) {
       productData.variants = processedVariants;
       productData.stock = totalCalculatedStock;
 
-      // 🟢 SAFETY FIX: Sync top-level fields with variant data
       const validPrices = processedVariants.map((v) => v.price).filter((p) => p > 0);
-      // Main price becomes the lowest variant price
       productData.price = validPrices.length > 0 ? Math.min(...validPrices) : (Number(formData.get("price")) || 0);
-      // Main MOQ reflects the first variant's requirement
       productData.minOrderQuantity = processedVariants[0]?.minOrderQuantity || (Number(formData.get("minOrderQuantity")) || 1);
       productData.sku = processedVariants[0]?.sku || formData.get("sku") || "";
     } else {
       // Standard Product Logic
       productData.price = Number(formData.get("price")) || 0;
       productData.stock = Number(formData.get("stock")) || 0;
-      productData.minOrderQuantity = Number(formData.get("minOrderQuantity")) || 1;
+      productData.minOrderQuantity = Number(formData.get("minOrderQuantity")) || 1; // Maintain MOQ
       productData.sku = formData.get("sku") || "";
       productData.variants = [];
     }
 
-    // 4. Save Logic using .save() to trigger your Model Pre-Save hooks
+    // 4. Save Logic
     let finalProduct;
     if (id) {
       const product = await Product.findById(id);
       if (!product) throw new Error("Product not found");
       
-      // Update fields
       Object.assign(product, productData);
       finalProduct = await product.save(); 
     } else {
@@ -136,12 +136,13 @@ export async function saveProduct(prevState, formData) {
       finalProduct = await newProduct.save();
     }
 
-    revalidatePaths(); // Ensure your helper clears the cache for /admin and /shop
+    // Ensure revalidatePaths is imported and clears /admin and /shop
+    revalidatePaths(); 
 
     return { 
       success: true, 
       message: id ? "Treasure updated successfully! ✨" : "New treasure added to the collection! 🌸",
-      data: JSON.parse(JSON.stringify(finalProduct)) // Return serialized data for use in Toast/Notifications
+      data: JSON.parse(JSON.stringify(finalProduct))
     };
 
   } catch (error) {

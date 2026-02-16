@@ -5,10 +5,51 @@ import dbConnect from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { revalidatePath } from "next/cache";
 import mongoose from "mongoose";
+import { categories as staticCategories } from "@/lib/constants"; // 🟢 Import your static list
+
+/**
+ * 🟢 NEW: seedCategories
+ * Syncs the static categories file with the Database.
+ * This is the bridge we discussed to ensure SEO slugs match ObjectIDs.
+ */
+export async function seedCategories() {
+  try {
+    await dbConnect();
+
+    for (const staticCat of staticCategories) {
+      // 1. Upsert Parent Category
+      const parent = await Category.findOneAndUpdate(
+        { slug: staticCat.slug },
+        { name: staticCat.name },
+        { upsert: true, new: true }
+      );
+
+      // 2. Process Subcategories
+      if (staticCat.subcategories) {
+        for (const sub of staticCat.subcategories) {
+          await Category.findOneAndUpdate(
+            { slug: sub.slug },
+            { 
+              name: sub.name, 
+              parentId: parent._id 
+            },
+            { upsert: true }
+          );
+        }
+      }
+    }
+
+    revalidatePath("/admin/categories");
+    return { success: true, message: "Treasures synced with database! ✨" };
+  } catch (error) {
+    console.error("Seed Error:", error);
+    return { success: false, error: "Sync failed." };
+  }
+}
 
 /**
  * Saves a new category.
- * Fixed: Explicitly handles parentId conversion to ObjectId or null.
+ * Updated: Handles image fields if you decide to add icons to categories later.
  */
 export async function saveCategoryAction(formData) {
   try {
@@ -16,21 +57,21 @@ export async function saveCategoryAction(formData) {
     
     const name = formData.get("name")?.trim();
     const parentId = formData.get("parentId");
+    const imageUrl = formData.get("imageUrl"); // 🟢 Added image support
 
     if (!name) return { success: false, error: "Category name is required" };
 
-    // 🟢 CRITICAL FIX: Ensure the ID is a valid Mongoose ObjectId or strictly null
     let finalParentId = null;
     if (parentId && parentId !== "" && parentId !== "none" && parentId !== "null") {
       finalParentId = new mongoose.Types.ObjectId(parentId);
     }
 
+    // .create() will trigger the 'pre-save' hook in your model to generate the slug
     const newCategory = await Category.create({
       name,
       parentId: finalParentId,
+      image: imageUrl || "",
     });
-
-    console.log("✅ Category Created:", newCategory.name);
 
     revalidatePath("/admin/categories");
     return { 
@@ -40,7 +81,6 @@ export async function saveCategoryAction(formData) {
     
   } catch (error) {
     console.error("❌ DATABASE SAVE ERROR:", error.message);
-    // If error.code is 11000, it's a duplicate slug error
     const errorMsg = error.code === 11000 
       ? "A category with this name already exists (Duplicate Slug)." 
       : error.message;
@@ -55,17 +95,14 @@ export async function getCategories() {
   try {
     await dbConnect();
     
-    // 1. Fetch Categories and Products
     const [categories, products] = await Promise.all([
-      Category.find().lean(),
+      Category.find().sort({ name: 1 }).lean(),
       Product.find({}, 'category subCategory').lean()
     ]);
     
-    // 2. Map and Calculate counts
     return categories.map(cat => {
       const catId = cat._id.toString();
       
-      // Count how many products belong to this category or subcategory
       const productCount = products.filter(p => 
         p.category?.toString() === catId || p.subCategory?.toString() === catId
       ).length;
@@ -92,13 +129,11 @@ export async function deleteCategoryAction(id) {
   try {
     await dbConnect();
 
-    // 1. Check for children
     const hasChildren = await Category.findOne({ parentId: id });
     if (hasChildren) {
       return { success: false, message: "Protection: Please delete sub-categories first." };
     }
 
-    // 2. Check for products
     const hasProducts = await Product.findOne({ 
       $or: [{ category: id }, { subCategory: id }] 
     });
@@ -117,7 +152,7 @@ export async function deleteCategoryAction(id) {
 }
 
 /**
- * Legacy fetcher for older components (keeping for compatibility)
+ * Legacy fetcher for older components
  */
 export async function getDynamicCategoryStructure() {
   const categories = await getCategories();
