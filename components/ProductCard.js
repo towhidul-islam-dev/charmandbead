@@ -122,10 +122,10 @@ const ProductCard = ({ product, index = 0 }) => {
       <div className="flex flex-col flex-grow p-4">
         <div className="mb-3">
           <div className="flex items-start justify-between">
-            <div className="flex flex-col">
-              {/* 🟢 CHANGED: product.category -> product.categoryName */}
+            <div className="flex flex-col min-w-0 flex-1">
+              {/* 🟢 CATEGORY NAME FIX */}
               <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate">
-                {product.categoryName || "Collection"}
+                {product.categoryName || product.subCategoryName || "Collection"}
               </p>
               
               {moqValue > 0 && (
@@ -135,7 +135,7 @@ const ProductCard = ({ product, index = 0 }) => {
                 </div>
               )}
             </div>
-            <span className="text-lg font-black text-[#3E442B]">৳{product.price}</span>
+            <span className="text-lg font-black text-[#3E442B] ml-2 shrink-0">৳{product.price}</span>
           </div>
           <h3 className="font-bold text-base text-[#3E442B] mt-1 truncate group-hover:text-[#EA638C] transition-colors leading-tight">
             {product.name}

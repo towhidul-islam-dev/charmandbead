@@ -14,7 +14,7 @@ export default function ProductCatalog({ initialProducts }) {
     const router = useRouter();
     const searchParams = useSearchParams();
     
-    // 🟢 SEO/URL LOGIC: Read category ID from URL on first load
+    // 🟢 Read category Name from URL
     const categoryFromUrl = searchParams.get('category') || 'All';
 
     const [selectedCategory, setSelectedCategory] = useState(categoryFromUrl);
@@ -22,7 +22,7 @@ export default function ProductCatalog({ initialProducts }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
 
-    // 🟢 URL SYNC: Sync state with browser URL
+    // 🟢 URL SYNC
     useEffect(() => {
         const params = new URLSearchParams(searchParams.toString());
         if (selectedCategory !== 'All') {
@@ -33,7 +33,7 @@ export default function ProductCatalog({ initialProducts }) {
         router.push(`?${params.toString()}`, { scroll: false });
     }, [selectedCategory, router, searchParams]);
 
-    // Debounce search for performance
+    // Debounce search
     useEffect(() => {
         const handler = setTimeout(() => {
             setDebouncedSearch(searchQuery);
@@ -41,31 +41,34 @@ export default function ProductCatalog({ initialProducts }) {
         return () => clearTimeout(handler);
     }, [searchQuery]);
 
-    // 🟢 Extract Unique Category IDs
+    // 🟢 Extract Unique Category NAMES (Directly from categoryName field)
     const mainCategories = useMemo(() => {
-        const unique = Array.from(new Set(initialProducts.map(p => p.category).filter(Boolean)));
-        return ['All', ...unique];
+        const names = initialProducts
+            .map(p => p.categoryName)
+            .filter(Boolean);
+        return ['All', ...new Set(names)];
     }, [initialProducts]);
 
-    // 🟢 Extract Unique Sub-Category IDs based on selected Main Category
+    // 🟢 Extract Unique Sub-Category NAMES based on selected Category Name
     const subCategories = useMemo(() => {
         if (selectedCategory === 'All') return [];
-        const filtered = initialProducts.filter(p => p.category === selectedCategory);
-        const uniqueSub = Array.from(new Set(filtered.map(p => p.subCategory).filter(Boolean)));
-        return ['All', ...uniqueSub];
+        const filtered = initialProducts.filter(p => p.categoryName === selectedCategory);
+        const names = filtered
+            .map(p => p.subCategoryName)
+            .filter(Boolean);
+        return ['All', ...new Set(names)];
     }, [initialProducts, selectedCategory]);
 
-    // 🟢 Filtering Logic
+    // 🟢 Filtering Logic (Comparing Strings now)
     const filteredProducts = useMemo(() => {
         return initialProducts.filter(p => {
-            const matchesMain = selectedCategory === 'All' || p.category === selectedCategory;
-            const matchesSub = selectedSubCategory === 'All' || p.subCategory === selectedSubCategory;
+            const matchesMain = selectedCategory === 'All' || p.categoryName === selectedCategory;
+            const matchesSub = selectedSubCategory === 'All' || p.subCategoryName === selectedSubCategory;
             const matchesText = !debouncedSearch || p.name.toLowerCase().includes(debouncedSearch.toLowerCase());
             return matchesMain && matchesSub && matchesText;
         });
     }, [initialProducts, selectedCategory, selectedSubCategory, debouncedSearch]);
 
-    // UI Styles (Preserved)
     const inputClass = "w-full appearance-none bg-gray-50 border border-transparent hover:border-gray-200 text-[#3E442B] px-4 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer transition-all";
     const subInputClass = "w-full appearance-none bg-pink-50/50 border border-transparent hover:border-pink-100 text-[#EA638C] px-4 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer transition-all";
 
@@ -77,7 +80,6 @@ export default function ProductCatalog({ initialProducts }) {
             <div className="sticky z-30 pt-4 mb-12 top-20">
                 <div className="flex flex-col items-stretch max-w-4xl gap-2 p-2 mx-auto bg-white border border-gray-100 shadow-2xl rounded-3xl lg:flex-row">
                     
-                    {/* Search Input */}
                     <div className="relative flex-1 group">
                         <MagnifyingGlassIcon className="absolute w-5 h-5 text-gray-400 -translate-y-1/2 left-4 top-1/2 group-focus-within:text-[#EA638C] transition-colors" />
                         <input
@@ -106,12 +108,9 @@ export default function ProductCatalog({ initialProducts }) {
                                 className={inputClass}
                             >
                                 <option value="All">All Categories</option>
-                                {mainCategories.filter(cat => cat !== 'All').map(catId => {
-                                    // 🟢 LOOKUP: Find the Name from the product data so the ID stays hidden
-                                    const catObject = initialProducts.find(p => p.category === catId);
-                                    const catName = catObject?.categoryName || "Collection";
-                                    return <option key={catId} value={catId}>{catName}</option>;
-                                })}
+                                {mainCategories.filter(cat => cat !== 'All').map(catName => (
+                                    <option key={catName} value={catName}>{catName}</option>
+                                ))}
                             </select>
                             <ChevronDownIcon className="absolute w-3 h-3 text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2" />
                         </div>
@@ -124,12 +123,9 @@ export default function ProductCatalog({ initialProducts }) {
                                 className={subInputClass}
                             >
                                 <option value="All">All Types</option>
-                                {subCategories.filter(s => s !== 'All').map(subId => {
-                                    // 🟢 LOOKUP: Find the Sub-Category Name
-                                    const subObject = initialProducts.find(p => p.subCategory === subId);
-                                    const subName = subObject?.subCategoryName || "Type";
-                                    return <option key={subId} value={subId}>{subName}</option>;
-                                })}
+                                {subCategories.filter(s => s !== 'All').map(subName => (
+                                    <option key={subName} value={subName}>{subName}</option>
+                                ))}
                             </select>
                             <ChevronDownIcon className="absolute w-3 h-3 text-[#EA638C]/50 pointer-events-none right-4 top-1/2 -translate-y-1/2" />
                         </div>

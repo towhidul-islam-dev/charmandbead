@@ -84,16 +84,18 @@ export default function AdminProductsClient({ initialProducts }) {
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
       
-      // 🟢 UPDATED LOGIC: Filter by categoryName instead of ID
+      // 🟢 Filter by categoryName string
+      const pCat = product.categoryName || "Uncategorized";
       const matchesCategory =
-        activeCategory === "All" || product.categoryName === activeCategory;
+        activeCategory === "All" || pCat === activeCategory;
       return matchesSearch && matchesCategory;
     });
   }, [products, searchTerm, activeCategory]);
 
   const categories = useMemo(() => {
-    // 🟢 UPDATED LOGIC: Map the unique category names for the dropdown
-    return ["All", ...new Set(products.map((p) => p.categoryName || "Uncategorized"))];
+    // 🟢 Generate unique list of category names
+    const names = products.map((p) => p.categoryName || "Uncategorized");
+    return ["All", ...new Set(names)];
   }, [products]);
 
   return (
@@ -195,10 +197,9 @@ export default function AdminProductsClient({ initialProducts }) {
                 <div className="relative w-20 h-20 overflow-hidden border-2 border-white shadow-lg shrink-0 rounded-2xl">
                   <Image src={product.imageUrl || "/placeholder.png"} alt="" fill className="object-cover" unoptimized />
                 </div>
-                <div className="flex flex-col min-w-0">
+                <div className="flex flex-col">
                   <span className="px-2 py-0.5 bg-gray-100 text-[8px] font-black uppercase text-gray-500 rounded-md w-fit mb-1">
-                    {/* 🟢 UI UPDATE: Show Name instead of ID */}
-                    {product.categoryName || "Collection"}
+                    {product.categoryName || "Uncategorized"}
                   </span>
                   <h4 className="text-sm font-black text-[#3E442B] uppercase italic truncate leading-tight">
                     {product.name}
@@ -280,10 +281,16 @@ export default function AdminProductsClient({ initialProducts }) {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {/* 🟢 UI UPDATE: Show Name instead of ID */}
-                      <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-gray-100 text-gray-600">
-                        {product.categoryName || "Collection"}
-                      </span>
+                      <div className="flex flex-col">
+                        <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-gray-100 text-gray-600 w-fit">
+                          {product.categoryName || "Uncategorized"}
+                        </span>
+                        {product.subCategoryName && (
+                          <span className="text-[8px] font-bold text-[#EA638C] mt-1 px-1 italic">
+                            {product.subCategoryName}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div onClick={() => setActiveRestockProduct(product)} className="flex flex-col gap-1.5 cursor-pointer group w-fit">
