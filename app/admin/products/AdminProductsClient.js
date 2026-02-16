@@ -13,7 +13,6 @@ import {
   Plus,
   Loader2,
   Package,
-  ChevronRight,
 } from "lucide-react";
 import DeleteButton from "@/components/DeleteButton";
 import RestockModal from "@/components/RestockModal";
@@ -84,14 +83,17 @@ export default function AdminProductsClient({ initialProducts }) {
       const matchesSearch = product.name
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
+      
+      // 🟢 UPDATED LOGIC: Filter by categoryName instead of ID
       const matchesCategory =
-        activeCategory === "All" || product.category === activeCategory;
+        activeCategory === "All" || product.categoryName === activeCategory;
       return matchesSearch && matchesCategory;
     });
   }, [products, searchTerm, activeCategory]);
 
   const categories = useMemo(() => {
-    return ["All", ...new Set(products.map((p) => p.category))];
+    // 🟢 UPDATED LOGIC: Map the unique category names for the dropdown
+    return ["All", ...new Set(products.map((p) => p.categoryName || "Uncategorized"))];
   }, [products]);
 
   return (
@@ -169,6 +171,7 @@ export default function AdminProductsClient({ initialProducts }) {
         <select
           className="w-full md:w-48 px-4 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500 bg-white border border-gray-100 rounded-2xl shadow-sm cursor-pointer outline-none"
           onChange={(e) => setActiveCategory(e.target.value)}
+          value={activeCategory}
         >
           {categories.map((cat) => (
             <option key={cat} value={cat}>{cat}</option>
@@ -194,7 +197,8 @@ export default function AdminProductsClient({ initialProducts }) {
                 </div>
                 <div className="flex flex-col min-w-0">
                   <span className="px-2 py-0.5 bg-gray-100 text-[8px] font-black uppercase text-gray-500 rounded-md w-fit mb-1">
-                    {product.category}
+                    {/* 🟢 UI UPDATE: Show Name instead of ID */}
+                    {product.categoryName || "Collection"}
                   </span>
                   <h4 className="text-sm font-black text-[#3E442B] uppercase italic truncate leading-tight">
                     {product.name}
@@ -204,7 +208,6 @@ export default function AdminProductsClient({ initialProducts }) {
               </div>
 
               <div className="grid grid-cols-2 gap-3 mb-6">
-                {/* Stock Control Box */}
                 <div 
                   onClick={() => setActiveRestockProduct(product)}
                   className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex flex-col items-center justify-center cursor-pointer active:scale-95 transition-transform"
@@ -218,7 +221,6 @@ export default function AdminProductsClient({ initialProducts }) {
                   </div>
                 </div>
 
-                {/* ID Box */}
                 <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex flex-col items-center justify-center">
                   <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Product ID</span>
                   <span className="text-[10px] font-black text-gray-500 uppercase">#{String(product._id).slice(-6)}</span>
@@ -278,7 +280,10 @@ export default function AdminProductsClient({ initialProducts }) {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-gray-100 text-gray-600">{product.category}</span>
+                      {/* 🟢 UI UPDATE: Show Name instead of ID */}
+                      <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-gray-100 text-gray-600">
+                        {product.categoryName || "Collection"}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       <div onClick={() => setActiveRestockProduct(product)} className="flex flex-col gap-1.5 cursor-pointer group w-fit">
