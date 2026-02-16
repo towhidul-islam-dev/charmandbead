@@ -1,11 +1,28 @@
 import Link from 'next/link';
 import ProductCreateForm from '@/components/ProductCreateForm';
-import { getDynamicCategoryStructure } from '@/actions/category';
+
+/** * 🟢 HARDCODED DNA STRUCTURE 
+ * This includes both Main Categories (parentId: null) 
+ * and Sub-Categories (parentId: matching a main ID).
+ */
+const CATEGORY_DNA = [
+  // MAIN CATEGORIES
+  { _id: "cat_resin", name: "Resin Art", slug: "resin-art", parentId: null },
+  { _id: "cat_jewelry", name: "Jewelry Making", slug: "jewelry-making", parentId: null },
+  { _id: "cat_packaging", name: "Packaging", slug: "packaging", parentId: null },
+
+  // SUB-CATEGORIES FOR RESIN ART
+  { _id: "sub_epoxy", name: "Epoxy Resin", slug: "epoxy-resin", parentId: "cat_resin" },
+  { _id: "sub_uv", name: "UV Resin", slug: "uv-resin", parentId: "cat_resin" },
+  { _id: "sub_molds", name: "Silicone Molds", slug: "silicone-molds", parentId: "cat_resin" },
+
+  // SUB-CATEGORIES FOR JEWELRY
+  { _id: "sub_charms", name: "Charms & Pendants", slug: "charms", parentId: "cat_jewelry" },
+  { _id: "sub_tools", name: "Tools & Pliers", slug: "tools", parentId: "cat_jewelry" },
+  { _id: "sub_wires", name: "Beading Wires", slug: "beading-wires", parentId: "cat_jewelry" },
+];
 
 export default async function CreateProductPage() {
-    // 1. Fetch the structure dynamically from MongoDB
-    const categoryStructure = await getDynamicCategoryStructure();
-
     return (
         <div className="min-h-screen p-6 bg-[#FBB6E6]/5">
             <div className="flex items-center justify-between max-w-5xl pb-5 mx-auto mb-8 border-b border-[#3E442B]/10">
@@ -21,9 +38,15 @@ export default async function CreateProductPage() {
                 </Link>
             </div>
             
-            <div className="max-w-5xl p-8 mx-auto bg-white border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] rounded-[2.5rem]">
-                {/* 2. Pass the dynamic structure */}
-                <ProductCreateForm categoryStructure={categoryStructure} /> 
+            <div className="max-w-5xl mx-auto">
+                {/* 🟢 Implementation Check:
+                   We pass CATEGORY_DNA as 'rawCategories'.
+                   The form will now:
+                   1. Show only parentId: null in the first dropdown.
+                   2. Unlock the second dropdown only when a Category is chosen.
+                   3. Show only Sub-Categories that match the parentId of the chosen Category.
+                */}
+                <ProductCreateForm rawCategories={CATEGORY_DNA} /> 
             </div>
         </div>
     );

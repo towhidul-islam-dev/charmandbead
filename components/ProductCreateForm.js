@@ -4,13 +4,11 @@ import { saveProduct } from "@/actions/product";
 import { createInAppNotification } from "@/actions/inAppNotifications";
 import { useNotifications } from "@/Context/NotificationContext";
 import ProductCard from "@/components/ProductCard";
-import CategoryManager from "@/components/admin/CategoryManager"; 
 import toast, { Toaster } from "react-hot-toast";
 import { 
   PhotoIcon, SparklesIcon, XMarkIcon, 
   PlusIcon, TagIcon, CubeIcon, CameraIcon,
-  CommandLineIcon, EyeIcon, ChevronDownIcon,
-  ShoppingBagIcon // Added for MOQ visual
+  CommandLineIcon, EyeIcon, ChevronDownIcon
 } from "@heroicons/react/24/outline";
 
 export default function ProductForm({ initialData, rawCategories = [] }) {
@@ -22,7 +20,6 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
   const [variants, setVariants] = useState(initialData?.variants || []);
   const [isNewArrival, setIsNewArrival] = useState(initialData?.isNewArrival || false);
   const [mainPreview, setMainPreview] = useState(initialData?.imageUrl || null);
-  const [isAddingCategory, setIsAddingCategory] = useState(false);
   
   const [mainCategory, setMainCategory] = useState(initialData?.category || "");
   const [subCategory, setSubCategory] = useState(initialData?.subCategory || "");
@@ -32,6 +29,7 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
 
   const [state, formAction, isPending] = useActionState(saveProduct, null);
 
+  // --- HIERARCHY LOGIC ---
   const getCategoryDisplayName = (id) => {
     return rawCategories.find(c => String(c._id) === String(id))?.name || "";
   };
@@ -138,25 +136,6 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
     <>
       <Toaster position="top-right" />
       
-      {isAddingCategory && (
-        <CategoryManager 
-          categories={rawCategories} 
-          mode="modal" 
-          onClose={(newCategory) => {
-            setIsAddingCategory(false);
-            if (newCategory?._id) {
-              if (!newCategory.parentId) {
-                setMainCategory(newCategory._id);
-                setSubCategory("");
-              } else {
-                setMainCategory(newCategory.parentId);
-                setSubCategory(newCategory._id);
-              }
-            }
-          }} 
-        />
-      )}
-
       <form ref={formRef} action={handleSubmit} className="px-4 py-6 mx-auto max-w-7xl">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           
@@ -170,23 +149,16 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
                 <input type="text" name="name" value={previewName} onChange={(e) => setPreviewName(e.target.value)} required className={inputClass} placeholder="Product Name" />
                 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="relative group">
+                  <div className="relative">
                     <select value={mainCategory} onChange={handleCategoryChange} className={inputClass}>
                       <option value="">Select Category</option>
                       {rawCategories.filter(c => !c.parentId).map(cat => (
                         <option key={cat._id} value={cat._id}>{cat.name}</option>
                       ))}
                     </select>
-                    <div className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-12 top-1/2">
+                    <div className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2">
                         <ChevronDownIcon className="w-4 h-4" />
                     </div>
-                    <button 
-                      type="button"
-                      onClick={() => setIsAddingCategory(true)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-[#EA638C] text-white rounded-xl hover:scale-110 active:scale-95 transition-all shadow-md z-10"
-                    >
-                      <PlusIcon className="w-4 h-4 stroke-[3px]" />
-                    </button>
                   </div>
 
                   <div className="relative">

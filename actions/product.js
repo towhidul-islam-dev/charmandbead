@@ -60,9 +60,7 @@ export async function saveProduct(prevState, formData) {
       if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
-    // 🟢 2. SEO FLOW UPDATE: Category ObjectId Handling
-    // If a category/sub-category is an empty string, we set it to null 
-    // to prevent MongoDB from trying to cast "" to an ObjectId.
+    // 2. Category & Hierarchy Handling
     const categoryId = formData.get("category");
     const subCategoryId = formData.get("subCategory");
 
@@ -77,7 +75,7 @@ export async function saveProduct(prevState, formData) {
       imageUrl: imageUrl,
     };
 
-    // 3. Variant & SKU Processing
+    // 3. Variant & MOQ Processing
     if (hasVariants) {
       const rawVariants = JSON.parse(formData.get("variantsJson") || "[]");
       let totalCalculatedStock = 0;
@@ -101,7 +99,8 @@ export async function saveProduct(prevState, formData) {
             sku: v.sku || "", 
             price: Number(v.price) || 0,
             stock: vStock,
-            minOrderQuantity: Number(v.minOrderQuantity) || 1, // Maintain MOQ
+            // 🟢 Crucial: Capture MOQ per variant
+            minOrderQuantity: Number(v.minOrderQuantity) || 1, 
             imageUrl: vImageUrl,
           };
         }),
@@ -110,15 +109,18 @@ export async function saveProduct(prevState, formData) {
       productData.variants = processedVariants;
       productData.stock = totalCalculatedStock;
 
+      // Set base price to the lowest variant price
       const validPrices = processedVariants.map((v) => v.price).filter((p) => p > 0);
-      productData.price = validPrices.length > 0 ? Math.min(...validPrices) : (Number(formData.get("price")) || 0);
-      productData.minOrderQuantity = processedVariants[0]?.minOrderQuantity || (Number(formData.get("minOrderQuantity")) || 1);
-      productData.sku = processedVariants[0]?.sku || formData.get("sku") || "";
+      productData.price = validPrices.length > 0 ? Math.min(...validPrices) : 0;
+      
+      // 🟢 Inherit global MOQ from the first variant for catalog display
+      productData.minOrderQuantity = processedVariants[0]?.minOrderQuantity || 1;
+      productData.sku = processedVariants[0]?.sku || "";
     } else {
       // Standard Product Logic
       productData.price = Number(formData.get("price")) || 0;
       productData.stock = Number(formData.get("stock")) || 0;
-      productData.minOrderQuantity = Number(formData.get("minOrderQuantity")) || 1; // Maintain MOQ
+      productData.minOrderQuantity = Number(formData.get("minOrderQuantity")) || 1;
       productData.sku = formData.get("sku") || "";
       productData.variants = [];
     }
@@ -126,18 +128,20 @@ export async function saveProduct(prevState, formData) {
     // 4. Save Logic
     let finalProduct;
     if (id) {
-      const product = await Product.findById(id);
-      if (!product) throw new Error("Product not found");
-      
-      Object.assign(product, productData);
-      finalProduct = await product.save(); 
+      finalProduct = await Product.findByIdAndUpdate(
+        id, 
+        { $set: productData }, 
+        { new: true, runValidators: true }
+      );
+      if (!finalProduct) throw new Error("Product not found");
     } else {
-      const newProduct = new Product(productData);
-      finalProduct = await newProduct.save();
+      finalProduct = await Product.create(productData);
     }
 
-    // Ensure revalidatePaths is imported and clears /admin and /shop
-    revalidatePaths(); 
+    // 5. Cache Invalidation
+    revalidatePath("/admin/products");
+    revalidatePath("/shop");
+    revalidatePath("/");
 
     return { 
       success: true, 
