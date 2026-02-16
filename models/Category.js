@@ -22,9 +22,10 @@ const CategorySchema = new mongoose.Schema({
 
 // 🟢 Pre-save middleware to auto-generate slug from name
 CategorySchema.pre('validate', function(next) {
-  if (this.isModified('name')) { // 🟢 Trigger whenever the name changes
+  if (this.name && (!this.slug || this.isModified('name'))) {
     this.slug = this.name
       .toLowerCase()
+      .trim()
       .replace(/[^\w ]+/g, '')
       .replace(/ +/g, '-');
   }
