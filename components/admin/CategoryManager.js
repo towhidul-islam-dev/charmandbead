@@ -7,8 +7,7 @@ import toast from "react-hot-toast";
 export default function CategoryManager({
   categories = [],
   mode = "full",
-  // 🟢 FIXED: Defaulting to an empty function prevents "a is not a function"
-  onClose = () => {}, 
+  onClose = () => {}, // Default empty function
 }) {
   const [isAdding, setIsAdding] = useState(mode === "modal");
   const [isPending, setIsPending] = useState(false);
@@ -43,10 +42,12 @@ export default function CategoryManager({
         toast.success("Architecture updated! ✨");
         setName("");
         setParentId("");
-        
-        // 🟢 FIXED: Only call onClose if we are actually in a modal context
+
+        // 🟢 FIX: Bulletproof function check
         if (mode === "modal") {
-          onClose(result.data); 
+          if (typeof onClose === "function") {
+            onClose(result.data);
+          }
         } else {
           setIsAdding(false);
         }
@@ -76,9 +77,10 @@ export default function CategoryManager({
   const modalUI = (
     <div className={mode === "modal" ? "fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#3E442B]/40 backdrop-blur-sm" : "mb-8 animate-in zoom-in-95 duration-200"}>
       <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl border border-gray-100 relative">
-        <button 
-          type="button" // 🟢 FIXED: type="button" prevents accidental form submission
-          onClick={() => mode === "modal" ? onClose() : setIsAdding(false)}
+        <button
+          type="button" 
+          // 🟢 FIX: Use optional chaining to prevent "a is not a function"
+          onClick={() => (mode === "modal" ? onClose?.() : setIsAdding(false))}
           className="absolute p-2 text-gray-400 transition-colors top-6 right-6 hover:text-red-500"
         >
           <X size={20} />
@@ -92,12 +94,12 @@ export default function CategoryManager({
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="text"
-            placeholder="Category Name (e.g. Resin Charms)"
+            placeholder="Category Name..."
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full bg-gray-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-[#3E442B]"
           />
-          
+
           <div className="relative">
             <select
               value={parentId}
@@ -115,7 +117,7 @@ export default function CategoryManager({
           <button
             type="submit"
             disabled={isPending}
-            className="w-full py-4 bg-[#EA638C] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-[#EA638C]/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+            className="w-full py-4 bg-[#EA638C] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-[#EA638C]/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {isPending ? <Loader2 className="animate-spin" size={16} /> : "Inject into DNA"}
           </button>
@@ -129,7 +131,7 @@ export default function CategoryManager({
   return (
     <div className="p-8 bg-white rounded-[3rem] border border-gray-100 shadow-sm relative overflow-hidden">
       <div className="absolute top-0 right-0 w-24 h-24 bg-[#FBB6E6]/5 rounded-full -mr-12 -mt-12" />
-      
+
       <div className="relative z-10 flex items-center justify-between mb-10">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-[#FBB6E6]/20 rounded-2xl text-[#EA638C]">
@@ -154,9 +156,9 @@ export default function CategoryManager({
 
       <div className="relative z-10 space-y-4">
         {parentCategories.length === 0 && !isAdding && (
-            <div className="py-12 text-center border-2 border-dashed border-gray-50 rounded-[2rem]">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">No architecture defined yet.</p>
-            </div>
+          <div className="py-12 text-center border-2 border-dashed border-gray-50 rounded-[2rem]">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">No architecture defined yet.</p>
+          </div>
         )}
 
         {parentCategories.map((parent) => {
@@ -177,23 +179,25 @@ export default function CategoryManager({
                 </button>
               </div>
 
-              <div className="ml-8 space-y-2 border-l-2 border-[#FBB6E6]/30 pl-4">
-                {children.map((child) => (
-                  <div key={child._id} className="flex items-center justify-between p-3 transition-all bg-white border border-gray-100 rounded-xl group/child hover:shadow-sm">
-                    <div className="flex items-center gap-2">
+              {children.length > 0 && (
+                <div className="ml-8 space-y-2 border-l-2 border-[#FBB6E6]/30 pl-4">
+                  {children.map((child) => (
+                    <div key={child._id} className="flex items-center justify-between p-3 transition-all bg-white border border-gray-100 rounded-xl group/child hover:shadow-sm">
+                      <div className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#EA638C]/30" />
                         <span className="text-[11px] font-bold text-gray-500 uppercase tracking-tight">{child.name}</span>
+                      </div>
+                      <button
+                        onClick={() => handleDelete(child._id)}
+                        disabled={deletingId === child._id}
+                        className="text-red-300 transition-all opacity-0 group-hover/child:opacity-100 hover:text-red-500"
+                      >
+                        {deletingId === child._id ? <Loader2 size={12} className="animate-spin" /> : <X size={14} />}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleDelete(child._id)}
-                      disabled={deletingId === child._id}
-                      className="text-red-300 transition-all opacity-0 group-hover/child:opacity-100 hover:text-red-500"
-                    >
-                      {deletingId === child._id ? <Loader2 size={12} className="animate-spin" /> : <X size={14} />}
-                    </button>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
