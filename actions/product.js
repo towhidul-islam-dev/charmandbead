@@ -47,20 +47,15 @@ export async function silentInventoryHeal() {
 export async function saveProduct(prevState, formData) {
   try {
     await mongodb();
-
-    const rawId = formData.get("id");
-    const id = rawId && rawId !== "undefined" && rawId !== "" ? rawId : null;
+    const id = formData.get("id");
     const hasVariants = formData.get("hasVariants") === "true";
 
-    // 1. Image Handling
     let imageUrl = formData.get("existingImage") || "";
     const mainImageFile = formData.get("imageFile");
     if (mainImageFile && mainImageFile instanceof File && mainImageFile.size > 0) {
-      const uploadedUrl = await uploadToCloudinary(mainImageFile);
-      if (uploadedUrl) imageUrl = uploadedUrl;
+      imageUrl = await uploadToCloudinary(mainImageFile);
     }
 
-    // 2. Category & Hierarchy Handling
     const categoryId = formData.get("category");
     const subCategoryId = formData.get("subCategory");
 
@@ -70,101 +65,43 @@ export async function saveProduct(prevState, formData) {
       category: categoryId && categoryId !== "" ? categoryId : null,
       subCategory: subCategoryId && subCategoryId !== "" ? subCategoryId : null,
       isNewArrival: formData.get("isNewArrival") === "true",
-      isArchived: formData.get("isArchived") === "true",
       hasVariants: hasVariants,
       imageUrl: imageUrl,
+      price: Number(formData.get("price")) || 0,
+      stock: Number(formData.get("stock")) || 0,
+      minOrderQuantity: Number(formData.get("minOrderQuantity")) || 1,
     };
 
-    // 3. Variant & MOQ Processing
     if (hasVariants) {
       const rawVariants = JSON.parse(formData.get("variantsJson") || "[]");
-      let totalCalculatedStock = 0;
-
-      const processedVariants = await Promise.all(
-        rawVariants.map(async (v, index) => {
-          let vImageUrl = v.imageUrl || "";
-          
-          // Check for individual variant image uploads
-          const variantFile = formData.get(`variantImage_${index}`);
-          if (variantFile && variantFile instanceof File && variantFile.size > 0) {
-            const uploadedVUrl = await uploadToCloudinary(variantFile);
-            if (uploadedVUrl) vImageUrl = uploadedVUrl;
-          }
-
-          const vStock = Number(v.stock) || 0;
-          totalCalculatedStock += vStock;
-
-          return {
-            ...v,
-            sku: v.sku || "", 
-            price: Number(v.price) || 0,
-            stock: vStock,
-            // 🟢 Crucial: Capture MOQ per variant
-            minOrderQuantity: Number(v.minOrderQuantity) || 1, 
-            imageUrl: vImageUrl,
-          };
-        }),
-      );
-
-      productData.variants = processedVariants;
-      productData.stock = totalCalculatedStock;
-
-      // Set base price to the lowest variant price
-      const validPrices = processedVariants.map((v) => v.price).filter((p) => p > 0);
-      productData.price = validPrices.length > 0 ? Math.min(...validPrices) : 0;
-      
-      // 🟢 Inherit global MOQ from the first variant for catalog display
-      productData.minOrderQuantity = processedVariants[0]?.minOrderQuantity || 1;
-      productData.sku = processedVariants[0]?.sku || "";
-    } else {
-      // Standard Product Logic
-      productData.price = Number(formData.get("price")) || 0;
-      productData.stock = Number(formData.get("stock")) || 0;
-      productData.minOrderQuantity = Number(formData.get("minOrderQuantity")) || 1;
-      productData.sku = formData.get("sku") || "";
-      productData.variants = [];
+      productData.variants = await Promise.all(rawVariants.map(async (v, i) => {
+        let vImg = v.imageUrl || "";
+        const vFile = formData.get(`variantImage_${i}`);
+        if (vFile && vFile instanceof File && vFile.size > 0) {
+          vImg = await uploadToCloudinary(vFile);
+        }
+        return { ...v, imageUrl: vImg, price: Number(v.price), stock: Number(v.stock), minOrderQuantity: Number(v.minOrderQuantity) };
+      }));
     }
 
-    // 4. Save Logic
     let finalProduct;
-    if (id) {
-      finalProduct = await Product.findByIdAndUpdate(
-        id, 
-        { $set: productData }, 
-        { new: true, runValidators: true }
-      );
-      if (!finalProduct) throw new Error("Product not found");
+    if (id && id !== "null" && id !== "") {
+      finalProduct = await Product.findByIdAndUpdate(id, productData, { new: true });
     } else {
       finalProduct = await Product.create(productData);
     }
 
-    // 5. Cache Invalidation
-    revalidatePath("/admin/products");
-    revalidatePath("/shop");
-    revalidatePath("/");
-
-    return { 
-      success: true, 
-      message: id ? "Treasure updated successfully! ✨" : "New treasure added to the collection! 🌸",
-      data: JSON.parse(JSON.stringify(finalProduct))
-    };
-
-  } catch (error) {
-    console.error("Save Error:", error);
-    return { 
-      success: false, 
-      message: error.name === 'ValidationError' ? "Please check your input values." : (error.message || "An unexpected error occurred") 
-    };
-  }
-}
-
-// 🟢 Helper to keep code DRY (Don't Repeat Yourself)
-function revalidatePaths() {
-  revalidatePath("/admin/products");
+   revalidatePath("/admin/products");
   revalidatePath("/admin/new-arrivals");
   revalidatePath("/products");
   revalidatePath("/");
+    return { success: true, message: "Treasure saved successfully! ✨", data: JSON.parse(JSON.stringify(finalProduct)) };
+  } catch (error) {
+    console.error("Save Error:", error);
+    return { success: false, message: error.message || "An unexpected error occurred" };
+  }
 }
+
 
 // 🟢 Dedicated Action for the Admin Table Button
 export async function toggleArchiveProduct(productId) {

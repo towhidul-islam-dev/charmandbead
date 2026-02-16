@@ -51,14 +51,40 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
     createdAt: new Date(),
   };
 
+  // --- HANDLERS ---
   const handleCategoryChange = (e) => {
     setMainCategory(e.target.value);
     setSubCategory(""); 
   };
 
+  const clientAction = async (formData) => {
+    // Inject custom states into formData
+    formData.set("id", initialData?._id || "");
+    formData.set("hasVariants", useVariants.toString());
+    formData.set("isNewArrival", isNewArrival.toString());
+    formData.set("existingImage", initialData?.imageUrl || "");
+    formData.set("category", mainCategory);
+    formData.set("subCategory", subCategory);
+    
+    // Ensure numeric values are valid
+    formData.set("price", Number(previewPrice) || 0);
+
+    if (useVariants) {
+      const variantsData = variants.map(({ preview, ...rest }) => ({
+        ...rest,
+        minOrderQuantity: Number(rest.minOrderQuantity) || 1,
+        price: Number(rest.price) || 0,
+        stock: Number(rest.stock) || 0
+      }));
+      formData.set("variantsJson", JSON.stringify(variantsData));
+    }
+    
+    formAction(formData);
+  };
+
   useEffect(() => {
     if (state?.success) {
-      toast.success(state.message || "Success!");
+      toast.success(state.message || "Treasure Saved! ✨");
       if (isNewArrival) {
         createInAppNotification({
           title: "New Arrival! 🔥",
@@ -79,12 +105,12 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
         setPreviewPrice(0);
       }
     } else if (state?.success === false) {
-      toast.error(state.message || "An error occurred");
+      toast.error(state.message || "Check your input values");
     }
   }, [state, initialData, isNewArrival, previewName, addNotification]);
 
   const generateAutoSKUs = () => {
-    const prefix = previewName.replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase() || "PROD";
+    const prefix = previewName.replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase() || "PRD";
     const newVariants = variants.map((v) => ({
       ...v, sku: v.sku || `${prefix}-${Math.floor(100 + Math.random() * 900)}`
     }));
@@ -107,28 +133,6 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
     size: "", color: "", price: "", stock: "", sku: "", minOrderQuantity: 1, preview: null 
   }]);
 
-  const handleSubmit = async (formData) => {
-    formData.set("id", initialData?._id || "");
-    formData.set("hasVariants", useVariants.toString());
-    formData.set("isNewArrival", isNewArrival.toString());
-    formData.set("existingImage", initialData?.imageUrl || "");
-    formData.set("category", mainCategory);
-    formData.set("subCategory", subCategory);
-    formData.set("price", Number(previewPrice) || 0);
-
-    if (useVariants) {
-      const variantsData = variants.map(({ preview, ...rest }) => ({
-        ...rest,
-        minOrderQuantity: Number(rest.minOrderQuantity) || 1,
-        price: Number(rest.price) || 0,
-        stock: Number(rest.stock) || 0
-      }));
-      formData.set("variantsJson", JSON.stringify(variantsData));
-    }
-    
-    formAction(formData);
-  };
-
   const inputClass = "w-full bg-gray-50 border-none p-3.5 md:p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-sm appearance-none";
   const sectionClass = "bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-6";
 
@@ -136,7 +140,7 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
     <>
       <Toaster position="top-right" />
       
-      <form ref={formRef} action={handleSubmit} className="px-4 py-6 mx-auto max-w-7xl">
+      <form ref={formRef} action={clientAction} className="px-4 py-6 mx-auto max-w-7xl">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           
           <div className="space-y-6 lg:col-span-2">
@@ -156,9 +160,7 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
                         <option key={cat._id} value={cat._id}>{cat.name}</option>
                       ))}
                     </select>
-                    <div className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2">
-                        <ChevronDownIcon className="w-4 h-4" />
-                    </div>
+                    <ChevronDownIcon className="absolute w-4 h-4 text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2" />
                   </div>
 
                   <div className="relative">
@@ -173,12 +175,10 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
                         <option key={sub._id} value={sub._id}>{sub.name}</option>
                         ))}
                     </select>
-                    <div className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2">
-                        <ChevronDownIcon className="w-4 h-4" />
-                    </div>
+                    <ChevronDownIcon className="absolute w-4 h-4 text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2" />
                   </div>
                 </div>
-                <textarea name="description" defaultValue={initialData?.description} rows="3" className={`${inputClass} resize-none`} placeholder="Description..." />
+                <textarea name="description" defaultValue={initialData?.description} rows="3" className={`${inputClass} resize-none`} placeholder="Description..." required />
               </div>
             </section>
 
@@ -186,7 +186,7 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
               <div className="flex flex-col justify-between gap-4 mb-8 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-3">
                     <CubeIcon className="w-5 h-5 text-[#3E442B]" />
-                    <h3 className="text-[11px] font-black tracking-widest text-[#3E442B] uppercase">Inventory</h3>
+                    <h3 className="text-[11px] font-black tracking-widest text-[#3E442B] uppercase">Inventory & MOQ</h3>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {useVariants && <button type="button" onClick={generateAutoSKUs} className="px-3 py-2 bg-gray-100 text-[#3E442B] rounded-xl text-[9px] font-black uppercase flex items-center gap-2 hover:bg-[#3E442B] hover:text-white transition-all"><CommandLineIcon className="w-3.5 h-3.5" /> Gen SKUs</button>}
@@ -198,15 +198,15 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div className="space-y-1">
                     <span className="text-[9px] font-black uppercase text-gray-400 ml-2">Unit Price</span>
-                    <input name="price" type="number" step="0.01" value={previewPrice} onChange={(e) => setPreviewPrice(e.target.value)} className={inputClass} placeholder="Price" />
+                    <input name="price" type="number" step="0.01" value={previewPrice} onChange={(e) => setPreviewPrice(e.target.value)} className={inputClass} placeholder="0.00" />
                   </div>
                   <div className="space-y-1">
                     <span className="text-[9px] font-black uppercase text-gray-400 ml-2">Total Stock</span>
-                    <input name="stock" type="number" defaultValue={initialData?.stock} className={inputClass} placeholder="Stock" />
+                    <input name="stock" type="number" defaultValue={initialData?.stock} className={inputClass} placeholder="0" />
                   </div>
                   <div className="space-y-1">
                     <span className="text-[9px] font-black uppercase text-[#EA638C] ml-2">Min. Order (MOQ)</span>
-                    <input name="minOrderQuantity" type="number" defaultValue={initialData?.minOrderQuantity || 1} className={`${inputClass} text-[#EA638C] bg-pink-50/50 ring-1 ring-inset ring-[#EA638C]/10`} placeholder="MOQ" />
+                    <input name="minOrderQuantity" type="number" defaultValue={initialData?.minOrderQuantity || 1} className={`${inputClass} text-[#EA638C] bg-pink-50/50 ring-1 ring-inset ring-[#EA638C]/10`} placeholder="1" />
                   </div>
                 </div>
               ) : (
@@ -243,11 +243,11 @@ export default function ProductForm({ initialData, rawCategories = [] }) {
                                 <input placeholder="0" type="number" value={v.stock} onChange={e => { const n = [...variants]; n[i].stock = e.target.value; setVariants(n); }} className="w-full bg-white p-3 rounded-xl text-[11px] font-bold outline-none" />
                             </div>
                             <div className="col-span-2 space-y-1 lg:col-span-1">
-                                <span className="text-[8px] font-black uppercase text-[#EA638C] ml-2">Min. Order (MOQ)</span>
+                                <span className="text-[8px] font-black uppercase text-[#EA638C] ml-2">MOQ</span>
                                 <input placeholder="1" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className="w-full bg-pink-50 p-3 rounded-xl text-[11px] font-bold text-[#EA638C] outline-none ring-1 ring-inset ring-[#EA638C]/10" />
                             </div>
                         </div>
-                        <input type="file" id={`v-img-${i}`} className="hidden" onChange={(e) => handlePreview(e.target.files[0], null, i)} />
+                        <input type="file" id={`v-img-${i}`} name={`variantImage_${i}`} className="hidden" onChange={(e) => handlePreview(e.target.files[0], null, i)} />
                     </div>
                   ))}
                   <button type="button" onClick={addVariant} className="w-full py-5 border-2 border-dashed border-gray-100 rounded-[2.5rem] text-[10px] font-black uppercase text-gray-400 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"><PlusIcon className="w-4 h-4" /> Add Variant Row</button>
