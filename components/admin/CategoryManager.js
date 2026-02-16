@@ -2,11 +2,11 @@
 import { useState, useMemo } from "react";
 import { Plus, Trash2, X, FolderTree, Tag, ChevronDown, Star, Box } from "lucide-react";
 import toast from "react-hot-toast";
-import { HARDCODED_CATEGORIES } from "@/lib/categoryData";
+import { CATEGORY_DNA } from "@/lib/categoryData";
 
 export default function CategoryManager({ mode = "full", onClose }) {
   // Use local state initialized with hardcoded data
-  const [localCategories, setLocalCategories] = useState(HARDCODED_CATEGORIES);
+  const [localCategories, setLocalCategories] = useState(CATEGORY_DNA);
   const [isAdding, setIsAdding] = useState(mode === "modal");
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState("");
