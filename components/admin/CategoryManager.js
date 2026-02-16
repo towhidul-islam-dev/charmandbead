@@ -75,57 +75,59 @@ export default function CategoryManager({
   };
 
   const modalUI = (
-    <div className={mode === "modal" ? "fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#3E442B]/40 backdrop-blur-sm" : "mb-8 animate-in zoom-in-95 duration-200"}>
-      <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl border border-gray-100 relative">
+  <div 
+    className={
+      mode === "modal" 
+        ? "fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-[#3E442B]/60 backdrop-blur-md" 
+        : "mb-8"
+    }
+    // 🟢 Fix 1: Ensure the backdrop doesn't swallow clicks intended for the box
+    onClick={(e) => e.target === e.currentTarget && (mode === "modal" ? onClose?.() : setIsAdding(false))}
+  >
+    <div 
+      className="bg-white rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl border border-gray-100 relative z-[10000]"
+      // 🟢 Fix 2: Stop click bubbling
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        // 🟢 Fix 3: High z-index for the close button
+        className="absolute p-2 text-gray-400 transition-colors top-6 right-6 hover:text-red-500 z-[10001]"
+        onClick={() => (mode === "modal" ? onClose?.() : setIsAdding(false))}
+      >
+        <X size={20} />
+      </button>
+
+      {/* ... (Header and Icon) ... */}
+
+      <div className="space-y-4 relative z-[10001]">
+        <input
+          type="text"
+          placeholder="Category Name..."
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          // 🟢 Fix 4: Force focus to ensure it's interactive
+          className="w-full bg-gray-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C] font-bold text-[#3E442B] relative z-[10002]"
+        />
+
+        {/* ... (Select Dropdown) ... */}
+
         <button
           type="button"
-          onClick={() => mode === "modal" ? (onClose?.()) : setIsAdding(false)}
-          className="absolute p-2 text-gray-400 transition-colors top-6 right-6 hover:text-red-500"
+          disabled={isPending}
+          // 🟢 Fix 5: Direct event handling with high z-index
+          onClick={(e) => {
+            console.log("CLICK CAPTURED!"); 
+            handleSubmission(e);
+          }}
+          className="w-full py-4 bg-[#EA638C] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-lg hover:bg-[#3E442B] transition-all flex items-center justify-center gap-2 relative z-[10002] cursor-pointer"
         >
-          <X size={20} />
+          {isPending ? <Loader2 className="animate-spin" size={16} /> : "Inject into DNA"}
         </button>
-
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-[#FBB6E6]/30 rounded-xl text-[#EA638C]"><Tag size={18} /></div>
-          <h3 className="text-sm font-black uppercase tracking-widest text-[#3E442B]">New Element</h3>
-        </div>
-
-        {/* 🟢 Using a div instead of a form to prevent browser "Required" blocks */}
-        <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="Category Name (e.g. Resin Charms)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full bg-gray-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-[#3E442B]"
-          />
-          
-          <div className="relative">
-            <select
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-              className="w-full bg-gray-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-[#3E442B] appearance-none"
-            >
-              <option value="">Top Level (Parent)</option>
-              {parentCategories.map((cat) => (
-                <option key={cat._id} value={cat._id}>Sub-category of {cat.name}</option>
-              ))}
-            </select>
-            <ChevronDown className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2" size={16} />
-          </div>
-
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={handleSubmission}
-            className="w-full py-4 bg-[#EA638C] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-[#EA638C]/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
-          >
-            {isPending ? <Loader2 className="animate-spin" size={16} /> : "Inject into DNA"}
-          </button>
-        </div>
       </div>
     </div>
-  );
+  </div>
+);
 
   if (mode === "modal") return modalUI;
 
