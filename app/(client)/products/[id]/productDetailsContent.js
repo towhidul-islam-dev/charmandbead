@@ -10,7 +10,24 @@ export default function ProductDetailsContent({ product }) {
   const router = useRouter();
   const { cart } = useCart(); 
   const [copied, setCopied] = useState(false);
-  const [isMounted, setIsMounted] = useState(false); // 🟢 Fixes Hydration Error
+  const [isMounted, setIsMounted] = useState(false); 
+
+  // --- ZOOM STATE LOGIC ---
+  const [zoomStyle, setZoomStyle] = useState({ display: "none" });
+
+  const handleMouseMove = (e) => {
+    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+    const x = ((e.pageX - left - window.scrollX) / width) * 100;
+    const y = ((e.pageY - top - window.scrollY) / height) * 100;
+    setZoomStyle({
+      display: "block",
+      backgroundPosition: `${x}% ${y}%`,
+      backgroundImage: `url(${mainImage})`,
+      backgroundSize: "250%",
+    });
+  };
+
+  const handleMouseLeave = () => setZoomStyle({ display: "none" });
 
   // Handle Mounting
   useEffect(() => {
@@ -19,20 +36,17 @@ export default function ProductDetailsContent({ product }) {
 
   if (!product) return null;
 
-  // --- RECENTLY VIEWED TRACKING LOGIC (Preserved) ---
+  // --- RECENTLY VIEWED TRACKING LOGIC ---
   useEffect(() => {
-  if (product && product._id) {
-    const history = JSON.parse(localStorage.getItem("recentlyViewed") || "[]");
-    const filteredHistory = history.filter((item) => item._id !== product._id);
-    const newHistory = [product, ...filteredHistory].slice(0, 10);
-    localStorage.setItem("recentlyViewed", JSON.stringify(newHistory));
+    if (product && product._id) {
+      const history = JSON.parse(localStorage.getItem("recentlyViewed") || "[]");
+      const filteredHistory = history.filter((item) => item._id !== product._id);
+      const newHistory = [product, ...filteredHistory].slice(0, 10);
+      localStorage.setItem("recentlyViewed", JSON.stringify(newHistory));
+      window.dispatchEvent(new Event("recentlyViewedUpdated"));
+    }
+  }, [product]);
 
-    // 🟢 Trigger a custom event so other components know storage changed
-    window.dispatchEvent(new Event("recentlyViewedUpdated"));
-  }
-}, [product]);
-
-  // 1. Image logic (Preserved)
   const allImages = Array.from(new Set([
     ...(Array.isArray(product?.imageUrl) ? product.imageUrl : [product?.imageUrl]),
     ...(product?.variants?.map(v => v.imageUrl || v.image).filter(Boolean) || [])
@@ -41,20 +55,16 @@ export default function ProductDetailsContent({ product }) {
   const [mainImage, setMainImage] = useState(allImages[0] || "/placeholder.png");
   const [activeSku, setActiveSku] = useState(product.sku || null);
 
-  // 🟢 LOGIC: Copy Shortlink
   const handleCopyLink = () => {
     const shortlink = typeof window !== 'undefined' ? window.location.href : "";
     navigator.clipboard.writeText(shortlink);
     setCopied(true);
-    
     toast.success("Link copied to clipboard!", {
       style: { borderRadius: '10px', background: '#3E442B', color: '#fff', fontSize: '12px' },
     });
-
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // 2. STOCK LOGIC (Preserved)
   const baseStockTotal = product.hasVariants 
     ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
     : (Number(product.stock) || 0);
@@ -71,7 +81,6 @@ export default function ProductDetailsContent({ product }) {
   const isOutOfStock = currentStock <= 0;
   const isLowStock = !isOutOfStock && currentStock <= (displayMoq * 3);
 
-  // 3. Keep data fresh (Preserved)
   useEffect(() => {
     const interval = setInterval(() => {
       router.refresh();
@@ -81,8 +90,6 @@ export default function ProductDetailsContent({ product }) {
 
   return (
     <div className="grid items-start grid-cols-1 gap-10 p-4 lg:grid-cols-12 xl:gap-16 md:p-8">
-      
-      {/* 🟢 SEO STRUCTURED DATA (Fixed Hydration) */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -105,13 +112,25 @@ export default function ProductDetailsContent({ product }) {
         }}
       />
 
-      {/* LEFT COLUMN: IMAGES (Preserved) */}
+      {/* LEFT COLUMN: IMAGES (Zoom Integrated) */}
       <div className="space-y-6 lg:col-span-5">
-        <div className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-xl aspect-square">
+        <div 
+          className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-xl aspect-square cursor-zoom-in"
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        >
           <img 
             src={mainImage} 
             alt={product.name} 
             className="object-cover w-full h-full transition-opacity duration-300" 
+          />
+          {/* Zoom Overlay */}
+          <div 
+            className="absolute inset-0 pointer-events-none transition-opacity duration-200"
+            style={{
+              ...zoomStyle,
+              backgroundRepeat: "no-repeat",
+            }}
           />
         </div>
 
@@ -174,19 +193,16 @@ export default function ProductDetailsContent({ product }) {
           </h1>
         </div>
 
-        {/* DESCRIPTION & SHORTLINK (Fixed Hydration) */}
         <div className="space-y-4">
           <div className="p-7 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
              <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-3">Product Description</span>
              <p className="font-medium leading-relaxed text-gray-600">{product.description}</p>
           </div>
 
-          {/* Share Link Tool */}
           <div className="p-4 border border-dashed border-gray-200 bg-gray-50/50 rounded-[2rem] flex items-center gap-4">
             <div className="flex-1 px-2">
                <span className="text-[9px] font-black text-[#EA638C] uppercase tracking-widest block mb-1">Direct Share Link</span>
                <p className="text-[11px] text-gray-400 font-mono truncate">
-                 {/* 🟢 FIXED: Only render window.location.href after client-side mounting */}
                  {isMounted ? window.location.href : "..."}
                </p>
             </div>
@@ -201,7 +217,6 @@ export default function ProductDetailsContent({ product }) {
           </div>
         </div>
 
-        {/* PURCHASE SECTION (Preserved) */}
         <div className="relative">
           <ProductPurchaseSection 
             product={product} 
