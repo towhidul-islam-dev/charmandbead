@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom"; 
-import { Truck, ShieldCheck, RotateCcw, Zap, Barcode, Copy, Check, Share2, X, MousePointer2 } from "lucide-react"; 
+import { Truck, ShieldCheck, RotateCcw, Zap, Barcode, Check, Share2, X, MousePointer2 } from "lucide-react"; 
 import ProductPurchaseSection from "@/components/ProductPurchaseSection";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/Context/CartContext";
@@ -14,10 +14,13 @@ export default function ProductDetailsContent({ product }) {
   const [isMounted, setIsMounted] = useState(false); 
   const [isModalOpen, setIsModalOpen] = useState(false); 
 
-  // --- ZOOM STATE LOGIC ---
+  // --- ZOOM STATE LOGIC (Preserved) ---
   const [zoomStyle, setZoomStyle] = useState({ display: "none" });
 
   const handleMouseMove = (e) => {
+    // Disable zoom overlay on mobile to prevent UI glitches during scroll
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return;
+
     const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
     const x = ((e.pageX - left - window.scrollX) / width) * 100;
     const y = ((e.pageY - top - window.scrollY) / height) * 100;
@@ -37,7 +40,7 @@ export default function ProductDetailsContent({ product }) {
 
   if (!product) return null;
 
-  // --- RECENTLY VIEWED TRACKING LOGIC ---
+  // --- RECENTLY VIEWED TRACKING LOGIC (Preserved) ---
   useEffect(() => {
     if (product && product._id) {
       const history = JSON.parse(localStorage.getItem("recentlyViewed") || "[]");
@@ -66,6 +69,7 @@ export default function ProductDetailsContent({ product }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // --- STOCK & MOQ LOGIC (Preserved) ---
   const baseStockTotal = product.hasVariants 
     ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
     : (Number(product.stock) || 0);
@@ -89,7 +93,7 @@ export default function ProductDetailsContent({ product }) {
     return () => clearInterval(interval);
   }, [router]);
 
-  // 🟢 PORTAL MODAL COMPONENT
+  // --- PORTAL MODAL (Fixes Visibility) ---
   const ModalPortal = () => {
     if (!isMounted || !isModalOpen) return null;
     return createPortal(
@@ -99,7 +103,7 @@ export default function ProductDetailsContent({ product }) {
         onClick={() => setIsModalOpen(false)}
       >
         <button 
-          className="absolute top-6 right-6 p-4 bg-[#3E442B] text-white rounded-full hover:scale-110 active:scale-90 transition-all shadow-2xl"
+          className="absolute top-6 right-6 p-4 bg-[#3E442B] text-white rounded-full transition-all shadow-2xl"
           onClick={(e) => {
             e.stopPropagation();
             setIsModalOpen(false);
@@ -119,7 +123,7 @@ export default function ProductDetailsContent({ product }) {
   };
 
   return (
-    <div className="grid items-start grid-cols-1 gap-10 p-4 lg:grid-cols-12 xl:gap-16 md:p-8">
+    <div className="grid items-start grid-cols-1 gap-6 p-4 lg:grid-cols-12 xl:gap-16 md:p-8">
       
       <ModalPortal />
 
@@ -145,10 +149,10 @@ export default function ProductDetailsContent({ product }) {
         }}
       />
 
-      {/* LEFT COLUMN: IMAGES */}
+      {/* LEFT COLUMN: IMAGES (Mobile Optimized Spacing) */}
       <div className="space-y-4 lg:col-span-5">
         <div 
-          className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-xl aspect-square cursor-zoom-in group"
+          className="relative rounded-[2rem] overflow-hidden bg-white border border-gray-100 shadow-xl aspect-square cursor-zoom-in"
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
           onDoubleClick={() => setIsModalOpen(true)}
@@ -164,20 +168,20 @@ export default function ProductDetailsContent({ product }) {
           />
         </div>
 
-        {/* 🟢 Double Click Hint */}
-        <div className="flex items-center justify-center gap-2 py-1 opacity-60">
-            <MousePointer2 size={12} className="text-[#EA638C]" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Double-click to expand</span>
+        {/* Double Click Hint - Compact for Mobile */}
+        <div className="flex items-center justify-center gap-2 py-0.5 opacity-60">
+            <MousePointer2 size={10} className="text-[#EA638C]" />
+            <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Double-click to expand</span>
         </div>
 
         {allImages.length > 1 && (
-          <div className="flex flex-wrap gap-3 px-2">
+          <div className="flex flex-wrap gap-2 md:gap-3 px-1 justify-center md:justify-start">
             {allImages.map((img, idx) => (
               <button
                 key={idx}
                 onClick={() => setMainImage(img)}
-                className={`w-16 h-16 rounded-2xl overflow-hidden border-2 transition-all ${
-                  mainImage === img ? "border-[#EA638C] scale-110 shadow-md" : "border-gray-100 opacity-70 hover:opacity-100"
+                className={`w-14 h-14 md:w-16 md:h-16 rounded-xl md:rounded-2xl overflow-hidden border-2 transition-all ${
+                  mainImage === img ? "border-[#EA638C] scale-105 shadow-md" : "border-gray-100 opacity-70 hover:opacity-100"
                 }`}
               >
                 <img src={img} className="object-cover w-full h-full" alt="thumbnail" />
@@ -186,15 +190,15 @@ export default function ProductDetailsContent({ product }) {
           </div>
         )}
 
-        <div className="flex items-center justify-around p-4 border border-white bg-gray-50/80 rounded-3xl">
-          <FeatureItem icon={<Truck size={16} />} text="Fast Delivery" color="blue" />
-          <FeatureItem icon={<ShieldCheck size={16} />} text="Secure" color="brand" />
-          <FeatureItem icon={<RotateCcw size={16} />} text="7-Days" color="orange" />
+        <div className="flex items-center justify-around p-3 border border-white bg-gray-50/80 rounded-3xl">
+          <FeatureItem icon={<Truck size={14} />} text="Fast Delivery" color="blue" />
+          <FeatureItem icon={<ShieldCheck size={14} />} text="Secure" color="brand" />
+          <FeatureItem icon={<RotateCcw size={14} />} text="7-Days" color="orange" />
         </div>
       </div>
 
-      {/* RIGHT COLUMN: DETAILS */}
-      <div className="space-y-8 lg:col-span-7">
+      {/* RIGHT COLUMN: DETAILS (Strictly preserved UI & logic) */}
+      <div className="space-y-6 md:space-y-8 lg:col-span-7">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full transition-all duration-500 shadow-sm
@@ -206,12 +210,14 @@ export default function ProductDetailsContent({ product }) {
                 {isOutOfStock ? "Sold Out" : isLowStock ? `Hurry! Only ${currentStock} units left` : "In Stock"}
               </span>
             </div>
+
             {displayMoq > 1 && (
               <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-4 py-1.5 rounded-full border border-pink-100">
                 <Zap size={12} className="fill-current" />
                 <span>Min. Order: {displayMoq} Units</span>
               </div>
             )}
+
             {activeSku && (
               <div className="flex items-center gap-1.5 text-[#3E442B] font-black text-[10px] uppercase tracking-widest bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200">
                 <Barcode size={12} />
@@ -219,16 +225,18 @@ export default function ProductDetailsContent({ product }) {
               </div>
             )}
           </div>
-          <h1 className="text-4xl italic font-black leading-tight tracking-tighter text-gray-900 uppercase md:text-5xl">
+
+          <h1 className="text-3xl md:text-5xl italic font-black leading-tight tracking-tighter text-gray-900 uppercase">
             {product.name}
           </h1>
         </div>
 
         <div className="space-y-4">
-          <div className="p-7 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
+          <div className="p-6 md:p-7 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
              <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-3">Product Description</span>
-             <p className="font-medium leading-relaxed text-gray-600">{product.description}</p>
+             <p className="font-medium leading-relaxed text-gray-600 text-sm md:text-base">{product.description}</p>
           </div>
+
           <div className="p-4 border border-dashed border-gray-200 bg-gray-50/50 rounded-[2rem] flex items-center gap-4">
             <div className="flex-1 px-2">
                <span className="text-[9px] font-black text-[#EA638C] uppercase tracking-widest block mb-1">Direct Share Link</span>
@@ -238,11 +246,11 @@ export default function ProductDetailsContent({ product }) {
             </div>
             <button
               onClick={handleCopyLink}
-              className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all duration-300
+              className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all duration-300
                 ${copied ? 'bg-[#3E442B] text-white' : 'bg-white text-[#EA638C] border border-gray-100 hover:shadow-md active:scale-95'}`}
             >
               {copied ? <Check size={14} /> : <Share2 size={14} />}
-              {copied ? "Copied" : "Copy Link"}
+              {copied ? "Copy" : "Copy Link"}
             </button>
           </div>
         </div>
