@@ -81,7 +81,7 @@ const ClientHeader = ({ pathname }) => {
           <Link href="/" className="flex items-center gap-2 md:gap-3 group shrink-0">
             <div className="relative flex items-center justify-center w-10 h-10 md:w-12 md:h-12 overflow-hidden rounded-full bg-[#FBB6E6] shadow-sm">
               <Image 
-                src="/logo.svg" 
+                src="/logo_new.svg" 
                 alt="Charm & Bead Logo" 
                 width={48} 
                 height={48} 
@@ -219,7 +219,7 @@ export default function Navbar() {
       <>
         <header className="fixed top-0 left-0 z-50 flex items-center w-full h-16 px-8 text-white shadow-lg bg-[#3E442B]">
           <Link href="/admin/dashboard" className="flex items-center gap-2">
-            <Image src="/logo.svg" alt="Admin Logo" width={32} height={32} className="invert" priority />
+            <Image src="/logo_new.svg" alt="Admin Logo" width={32} height={32} className="invert" priority />
             <span className="text-xl font-bold tracking-tight text-[#EA638C]">Admin Console</span>
           </Link>
           <div className="flex items-center gap-4 ml-auto">
