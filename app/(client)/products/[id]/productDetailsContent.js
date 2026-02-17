@@ -299,19 +299,47 @@ export default function ProductDetailsContent({ product }) {
              <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-3">Product Description</span>
              <p className="font-medium leading-relaxed text-gray-600 text-sm md:text-base">{product.description}</p>
           </div> */}
-<div className="p-6 md:p-7 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
-  <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-3">
-    Product Description
-  </span>
-  
-  <div className="space-y-2">
-    {product.description.split('.').filter(sentence => sentence.trim() !== "").map((point, index) => (
-      <p key={index} className="font-medium leading-relaxed text-gray-600 text-sm md:text-base border-l-2 border-[#EA638C]/20 pl-4">
-        {point.trim()}.
-      </p>
-    ))}
-  </div>
-</div>
+          {/* --- PRODUCT DESCRIPTION SECTION --- */}
+          <div className="p-6 md:p-7 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-4">
+              Product Description
+            </span>
+
+            <div className="flex flex-col gap-y-4">
+              {" "}
+              {/* Increased vertical gap between lines */}
+              {product.description
+                .split(".")
+                .filter((p) => p.trim())
+                .map((point, i) => {
+                  const parts = point.split(":");
+
+                  return (
+                    <div
+                      key={i}
+                      className="flex flex-col md:flex-row md:gap-2 border-b border-gray-50 pb-2 last:border-0"
+                    >
+                      {parts.length > 1 ? (
+                        <>
+                          {/* Label - Bold and Pink */}
+                          <span className="font-black text-[#EA638C] text-xs md:text-sm uppercase tracking-wider min-w-[100px]">
+                            {parts[0].trim()}:
+                          </span>
+                          {/* Value - Clean and Normal */}
+                          <span className="font-medium text-gray-600 text-sm md:text-base">
+                            {parts.slice(1).join(":").trim()}
+                          </span>
+                        </>
+                      ) : (
+                        <p className="font-medium text-gray-600 text-sm md:text-base">
+                          {point.trim()}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
 
           <div className="p-4 border border-dashed border-gray-200 bg-gray-50/50 rounded-[2rem] flex items-center gap-4">
             <div className="flex-1 px-2">
