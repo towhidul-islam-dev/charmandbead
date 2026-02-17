@@ -11,7 +11,7 @@ const slides = [
     title: "New Arrivals",
   },
   {
-    image: "/c&b1.png",
+    image: "/sale.png",
     link: "/products?category=charms",
     title: "Exquisite Charms",
   },
