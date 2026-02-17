@@ -151,7 +151,8 @@ export default function ProductDetailsContent({ product }) {
   };
 
   return (
-    <div className="grid items-start grid-cols-1 gap-6 p-4 lg:grid-cols-12 xl:gap-16 md:p-8">
+    /* 🟢 MOBILE UI FIX: Added w-full max-w-full overflow-x-hidden */
+    <div className="grid items-start grid-cols-1 gap-6 p-4 lg:grid-cols-12 xl:gap-16 md:p-8 w-full max-w-full overflow-x-hidden">
       <ModalPortal />
 
       <script
@@ -178,7 +179,7 @@ export default function ProductDetailsContent({ product }) {
         }}
       />
 
-      {/* LEFT COLUMN: IMAGES (Mobile Optimized Spacing) */}
+      {/* LEFT COLUMN: IMAGES */}
       <div className="space-y-4 lg:col-span-5">
         <div
           className="relative rounded-[2rem] overflow-hidden bg-white border border-gray-100 shadow-xl aspect-square cursor-zoom-in"
@@ -197,7 +198,6 @@ export default function ProductDetailsContent({ product }) {
           />
         </div>
 
-        {/* Double Click Hint - Compact for Mobile */}
         <div className="flex items-center justify-center gap-2 py-0.5 opacity-60">
           <MousePointer2 size={10} className="text-[#EA638C]" />
           <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
@@ -246,7 +246,7 @@ export default function ProductDetailsContent({ product }) {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: DETAILS (Strictly preserved UI & logic) */}
+      {/* RIGHT COLUMN: DETAILS */}
       <div className="space-y-6 md:space-y-8 lg:col-span-7">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -295,44 +295,31 @@ export default function ProductDetailsContent({ product }) {
         </div>
 
         <div className="space-y-4">
-          {/* <div className="p-6 md:p-7 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
-             <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-3">Product Description</span>
-             <p className="font-medium leading-relaxed text-gray-600 text-sm md:text-base">{product.description}</p>
-          </div> */}
-          {/* --- PRODUCT DESCRIPTION SECTION --- */}
+          {/* 🟢 DESCRIPTION FIX: Every point separate line + Bold titles */}
           <div className="p-6 md:p-7 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
             <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-4">
               Product Description
             </span>
 
-            <div className="flex flex-col gap-y-4">
-              {" "}
-              {/* Increased vertical gap between lines */}
+            <div className="flex flex-col gap-y-3">
               {product.description
                 .split(".")
                 .filter((p) => p.trim())
                 .map((point, i) => {
                   const parts = point.split(":");
-
                   return (
-                    <div
-                      key={i}
-                      className="flex flex-col md:flex-row md:gap-2 border-b border-gray-50 pb-2 last:border-0"
-                    >
+                    <div key={i} className="leading-relaxed">
                       {parts.length > 1 ? (
-                        <>
-                          {/* Label - Bold and Pink */}
-                          <span className="font-black text-[#EA638C] text-xs md:text-sm uppercase tracking-wider min-w-[100px]">
+                        <p className="text-sm md:text-base text-gray-600">
+                          {/* 🟢 Bold label with dark text for contrast */}
+                          <span className="font-extrabold text-gray-900 mr-1">
                             {parts[0].trim()}:
                           </span>
-                          {/* Value - Clean and Normal */}
-                          <span className="font-medium text-gray-600 text-sm md:text-base">
-                            {parts.slice(1).join(":").trim()}
-                          </span>
-                        </>
+                          {parts.slice(1).join(":").trim()}.
+                        </p>
                       ) : (
                         <p className="font-medium text-gray-600 text-sm md:text-base">
-                          {point.trim()}
+                          {point.trim()}.
                         </p>
                       )}
                     </div>
@@ -341,8 +328,8 @@ export default function ProductDetailsContent({ product }) {
             </div>
           </div>
 
-          <div className="p-4 border border-dashed border-gray-200 bg-gray-50/50 rounded-[2rem] flex items-center gap-4">
-            <div className="flex-1 px-2">
+          <div className="p-4 border border-dashed border-gray-200 bg-gray-50/50 rounded-[2rem] flex items-center gap-4 overflow-hidden">
+            <div className="flex-1 px-2 min-w-0">
               <span className="text-[9px] font-black text-[#EA638C] uppercase tracking-widest block mb-1">
                 Direct Share Link
               </span>
@@ -352,7 +339,7 @@ export default function ProductDetailsContent({ product }) {
             </div>
             <button
               onClick={handleCopyLink}
-              className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all duration-300
+              className={`flex-shrink-0 flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all duration-300
                 ${copied ? "bg-[#3E442B] text-white" : "bg-white text-[#EA638C] border border-gray-100 hover:shadow-md active:scale-95"}`}
             >
               {copied ? <Check size={14} /> : <Share2 size={14} />}
