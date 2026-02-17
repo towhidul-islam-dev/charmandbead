@@ -65,12 +65,15 @@ export async function saveProduct(prevState, formData) {
     let productData = {
       name: formData.get("name")?.trim(),
       description: formData.get("description"),
-      // Store IDs for relationships
-      categoryId: categoryId || null,
-      subCategoryId: subCategoryId || null,
-      // 🧬 Store Names for instant UI display
+      
+      // 🛠️ FIX: Mapping to the keys your Schema expects
+      category: categoryId || null,      // Changed from categoryId
+      subCategory: subCategoryId || null, // Changed from subCategoryId
+      
+      // Keep these for UI display in Admin Tables
       categoryName: mainCat ? mainCat.name : "Uncategorized",
       subCategoryName: subCat ? subCat.name : "",
+      
       isNewArrival: formData.get("isNewArrival") === "true",
       hasVariants: hasVariants,
       imageUrl: imageUrl,
@@ -97,12 +100,12 @@ export async function saveProduct(prevState, formData) {
           };
         }),
       );
-      productData.stock = productData.variants.reduce((acc, v) => acc + v.stock, 0);
+      productData.stock = productData.variants.reduce((acc, v) => acc + (v.stock || 0), 0);
     }
 
     let finalProduct;
     if (id && id !== "null" && id !== "") {
-      finalProduct = await Product.findByIdAndUpdate(id, productData, { new: true });
+      finalProduct = await Product.findByIdAndUpdate(id, productData, { new: true, runValidators: true });
     } else {
       finalProduct = await Product.create(productData);
     }
@@ -112,8 +115,13 @@ export async function saveProduct(prevState, formData) {
     revalidatePath("/products");
     revalidatePath("/");
 
-    return { success: true, message: "Treasure Saved! ✨", data: JSON.parse(JSON.stringify(finalProduct)) };
+    return { 
+      success: true, 
+      message: "Treasure Saved! ✨", 
+      data: JSON.parse(JSON.stringify(finalProduct)) 
+    };
   } catch (error) {
+    console.error("Save Error:", error);
     return { success: false, message: error.message };
   }
 }
