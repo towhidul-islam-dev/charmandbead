@@ -93,24 +93,31 @@ export default function ProductDetailsContent({ product }) {
     <div className="grid items-start grid-cols-1 gap-10 p-4 lg:grid-cols-12 xl:gap-16 md:p-8">
       
       {/* 🟢 IMAGE MODAL (Only shows when triggered) */}
-      {isModalOpen && (
-        <div 
-          className="fixed inset-0 z-[999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 cursor-zoom-out"
-          onClick={() => setIsModalOpen(false)}
-        >
-          <button 
-            className="absolute top-8 right-8 p-3 bg-[#3E442B] text-white rounded-full hover:scale-110 transition-transform shadow-lg"
-            onClick={() => setIsModalOpen(false)}
-          >
-            <X size={24} />
-          </button>
-          <img 
-            src={mainImage} 
-            className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-300" 
-            alt="Enlarged view" 
-          />
-        </div>
-      )}
+{isMounted && isModalOpen && (
+  <div 
+    className="fixed inset-0 flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 cursor-pointer"
+    style={{ zIndex: 99999 }} // Force it to the very top
+    onClick={() => setIsModalOpen(false)}
+  >
+    <button 
+      className="absolute top-6 right-6 p-4 bg-[#3E442B] text-white rounded-full hover:rotate-90 transition-transform shadow-2xl"
+      style={{ zIndex: 100000 }}
+      onClick={(e) => {
+        e.stopPropagation(); // Prevents double-triggering close
+        setIsModalOpen(false);
+      }}
+    >
+      <X size={28} />
+    </button>
+    
+    <img 
+      src={mainImage} 
+      className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl transition-all duration-300"
+      alt="Large View"
+      onClick={(e) => e.stopPropagation()} // Prevents closing when clicking the image itself
+    />
+  </div>
+)}
 
       <script
         type="application/ld+json"
