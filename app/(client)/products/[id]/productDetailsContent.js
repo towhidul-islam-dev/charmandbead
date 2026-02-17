@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Truck, ShieldCheck, RotateCcw, Zap, Barcode, Copy, Check, Share2 } from "lucide-react"; 
+import { Truck, ShieldCheck, RotateCcw, Zap, Barcode, Copy, Check, Share2, X } from "lucide-react"; 
 import ProductPurchaseSection from "@/components/ProductPurchaseSection";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/Context/CartContext";
@@ -11,6 +11,7 @@ export default function ProductDetailsContent({ product }) {
   const { cart } = useCart(); 
   const [copied, setCopied] = useState(false);
   const [isMounted, setIsMounted] = useState(false); 
+  const [isModalOpen, setIsModalOpen] = useState(false); // 🟢 New state for Modal
 
   // --- ZOOM STATE LOGIC ---
   const [zoomStyle, setZoomStyle] = useState({ display: "none" });
@@ -36,7 +37,7 @@ export default function ProductDetailsContent({ product }) {
 
   if (!product) return null;
 
-  // --- RECENTLY VIEWED TRACKING LOGIC ---
+  // --- RECENTLY VIEWED TRACKING LOGIC (Preserved) ---
   useEffect(() => {
     if (product && product._id) {
       const history = JSON.parse(localStorage.getItem("recentlyViewed") || "[]");
@@ -90,6 +91,27 @@ export default function ProductDetailsContent({ product }) {
 
   return (
     <div className="grid items-start grid-cols-1 gap-10 p-4 lg:grid-cols-12 xl:gap-16 md:p-8">
+      
+      {/* 🟢 IMAGE MODAL (Only shows when triggered) */}
+      {isModalOpen && (
+        <div 
+          className="fixed inset-0 z-[999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 cursor-zoom-out"
+          onClick={() => setIsModalOpen(false)}
+        >
+          <button 
+            className="absolute top-8 right-8 p-3 bg-[#3E442B] text-white rounded-full hover:scale-110 transition-transform shadow-lg"
+            onClick={() => setIsModalOpen(false)}
+          >
+            <X size={24} />
+          </button>
+          <img 
+            src={mainImage} 
+            className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-300" 
+            alt="Enlarged view" 
+          />
+        </div>
+      )}
+
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -112,25 +134,23 @@ export default function ProductDetailsContent({ product }) {
         }}
       />
 
-      {/* LEFT COLUMN: IMAGES (Zoom Integrated) */}
+      {/* LEFT COLUMN: IMAGES */}
       <div className="space-y-6 lg:col-span-5">
         <div 
           className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-xl aspect-square cursor-zoom-in"
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
+          onClick={() => setIsModalOpen(true)} // 🟢 Trigger Modal
         >
           <img 
             src={mainImage} 
             alt={product.name} 
             className="object-cover w-full h-full transition-opacity duration-300" 
           />
-          {/* Zoom Overlay */}
+          {/* Zoom Overlay (Hover effect) */}
           <div 
             className="absolute inset-0 pointer-events-none transition-opacity duration-200"
-            style={{
-              ...zoomStyle,
-              backgroundRepeat: "no-repeat",
-            }}
+            style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }}
           />
         </div>
 
@@ -157,7 +177,7 @@ export default function ProductDetailsContent({ product }) {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: DETAILS */}
+      {/* RIGHT COLUMN: DETAILS (All original logic preserved) */}
       <div className="space-y-8 lg:col-span-7">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
