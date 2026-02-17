@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Truck, ShieldCheck, RotateCcw, Zap, Barcode, Copy, Check, Share2, X } from "lucide-react"; 
+import { createPortal } from "react-dom"; 
+import { Truck, ShieldCheck, RotateCcw, Zap, Barcode, Copy, Check, Share2, X, MousePointer2 } from "lucide-react"; 
 import ProductPurchaseSection from "@/components/ProductPurchaseSection";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/Context/CartContext";
@@ -11,7 +12,7 @@ export default function ProductDetailsContent({ product }) {
   const { cart } = useCart(); 
   const [copied, setCopied] = useState(false);
   const [isMounted, setIsMounted] = useState(false); 
-  const [isModalOpen, setIsModalOpen] = useState(false); // 🟢 New state for Modal
+  const [isModalOpen, setIsModalOpen] = useState(false); 
 
   // --- ZOOM STATE LOGIC ---
   const [zoomStyle, setZoomStyle] = useState({ display: "none" });
@@ -30,14 +31,13 @@ export default function ProductDetailsContent({ product }) {
 
   const handleMouseLeave = () => setZoomStyle({ display: "none" });
 
-  // Handle Mounting
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   if (!product) return null;
 
-  // --- RECENTLY VIEWED TRACKING LOGIC (Preserved) ---
+  // --- RECENTLY VIEWED TRACKING LOGIC ---
   useEffect(() => {
     if (product && product._id) {
       const history = JSON.parse(localStorage.getItem("recentlyViewed") || "[]");
@@ -89,35 +89,39 @@ export default function ProductDetailsContent({ product }) {
     return () => clearInterval(interval);
   }, [router]);
 
+  // 🟢 PORTAL MODAL COMPONENT
+  const ModalPortal = () => {
+    if (!isMounted || !isModalOpen) return null;
+    return createPortal(
+      <div 
+        className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl cursor-pointer p-4 md:p-12"
+        style={{ zIndex: 100000 }} 
+        onClick={() => setIsModalOpen(false)}
+      >
+        <button 
+          className="absolute top-6 right-6 p-4 bg-[#3E442B] text-white rounded-full hover:scale-110 active:scale-90 transition-all shadow-2xl"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsModalOpen(false);
+          }}
+        >
+          <X size={32} />
+        </button>
+        <img 
+          src={mainImage} 
+          className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+          alt="Enlarged"
+          onClick={(e) => e.stopPropagation()} 
+        />
+      </div>,
+      document.body 
+    );
+  };
+
   return (
     <div className="grid items-start grid-cols-1 gap-10 p-4 lg:grid-cols-12 xl:gap-16 md:p-8">
       
-      {/* 🟢 IMAGE MODAL (Only shows when triggered) */}
-{isMounted && isModalOpen && (
-  <div 
-    className="fixed inset-0 flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 cursor-pointer"
-    style={{ zIndex: 99999 }} // Force it to the very top
-    onClick={() => setIsModalOpen(false)}
-  >
-    <button 
-      className="absolute top-6 right-6 p-4 bg-[#3E442B] text-white rounded-full hover:rotate-90 transition-transform shadow-2xl"
-      style={{ zIndex: 100000 }}
-      onClick={(e) => {
-        e.stopPropagation(); // Prevents double-triggering close
-        setIsModalOpen(false);
-      }}
-    >
-      <X size={28} />
-    </button>
-    
-    <img 
-      src={mainImage} 
-      className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl transition-all duration-300"
-      alt="Large View"
-      onClick={(e) => e.stopPropagation()} // Prevents closing when clicking the image itself
-    />
-  </div>
-)}
+      <ModalPortal />
 
       <script
         type="application/ld+json"
@@ -142,23 +146,28 @@ export default function ProductDetailsContent({ product }) {
       />
 
       {/* LEFT COLUMN: IMAGES */}
-      <div className="space-y-6 lg:col-span-5">
+      <div className="space-y-4 lg:col-span-5">
         <div 
-          className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-xl aspect-square cursor-zoom-in"
+          className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-xl aspect-square cursor-zoom-in group"
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
-          onClick={() => setIsModalOpen(true)} // 🟢 Trigger Modal
+          onDoubleClick={() => setIsModalOpen(true)}
         >
           <img 
             src={mainImage} 
             alt={product.name} 
             className="object-cover w-full h-full transition-opacity duration-300" 
           />
-          {/* Zoom Overlay (Hover effect) */}
           <div 
             className="absolute inset-0 pointer-events-none transition-opacity duration-200"
             style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }}
           />
+        </div>
+
+        {/* 🟢 Double Click Hint */}
+        <div className="flex items-center justify-center gap-2 py-1 opacity-60">
+            <MousePointer2 size={12} className="text-[#EA638C]" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Double-click to expand</span>
         </div>
 
         {allImages.length > 1 && (
@@ -184,7 +193,7 @@ export default function ProductDetailsContent({ product }) {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: DETAILS (All original logic preserved) */}
+      {/* RIGHT COLUMN: DETAILS */}
       <div className="space-y-8 lg:col-span-7">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -192,21 +201,17 @@ export default function ProductDetailsContent({ product }) {
               ${isOutOfStock ? 'bg-red-500 text-white' : 
                 isLowStock ? 'bg-orange-100 text-orange-600 border border-orange-200 animate-pulse' : 
                 'bg-gray-900 text-white'}`}>
-              
               {!isOutOfStock && <div className={`w-1.5 h-1.5 rounded-full ${isLowStock ? 'bg-orange-600' : 'bg-green-400'}`} />}
-              
               <span className="text-[10px] font-black uppercase tracking-widest">
                 {isOutOfStock ? "Sold Out" : isLowStock ? `Hurry! Only ${currentStock} units left` : "In Stock"}
               </span>
             </div>
-
             {displayMoq > 1 && (
               <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-4 py-1.5 rounded-full border border-pink-100">
                 <Zap size={12} className="fill-current" />
                 <span>Min. Order: {displayMoq} Units</span>
               </div>
             )}
-
             {activeSku && (
               <div className="flex items-center gap-1.5 text-[#3E442B] font-black text-[10px] uppercase tracking-widest bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200">
                 <Barcode size={12} />
@@ -214,7 +219,6 @@ export default function ProductDetailsContent({ product }) {
               </div>
             )}
           </div>
-
           <h1 className="text-4xl italic font-black leading-tight tracking-tighter text-gray-900 uppercase md:text-5xl">
             {product.name}
           </h1>
@@ -225,7 +229,6 @@ export default function ProductDetailsContent({ product }) {
              <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-3">Product Description</span>
              <p className="font-medium leading-relaxed text-gray-600">{product.description}</p>
           </div>
-
           <div className="p-4 border border-dashed border-gray-200 bg-gray-50/50 rounded-[2rem] flex items-center gap-4">
             <div className="flex-1 px-2">
                <span className="text-[9px] font-black text-[#EA638C] uppercase tracking-widest block mb-1">Direct Share Link</span>
