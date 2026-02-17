@@ -299,25 +299,19 @@ export default function ProductDetailsContent({ product }) {
              <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-3">Product Description</span>
              <p className="font-medium leading-relaxed text-gray-600 text-sm md:text-base">{product.description}</p>
           </div> */}
-          <div className="p-6 md:p-7 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-3">
-              Product Description
-            </span>
-
-            <div className="space-y-2">
-              {product.description
-                .split(".")
-                .filter((sentence) => sentence.trim() !== "")
-                .map((point, index) => (
-                  <p
-                    key={index}
-                    className="font-medium leading-relaxed text-gray-600 text-sm md:text-base border-l-2 border-[#EA638C]/20 pl-4"
-                  >
-                    {point.trim()}.
-                  </p>
-                ))}
-            </div>
-          </div>
+<div className="p-6 md:p-7 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
+  <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-3">
+    Product Description
+  </span>
+  
+  <div className="space-y-2">
+    {product.description.split('.').filter(sentence => sentence.trim() !== "").map((point, index) => (
+      <p key={index} className="font-medium leading-relaxed text-gray-600 text-sm md:text-base border-l-2 border-[#EA638C]/20 pl-4">
+        {point.trim()}.
+      </p>
+    ))}
+  </div>
+</div>
 
           <div className="p-4 border border-dashed border-gray-200 bg-gray-50/50 rounded-[2rem] flex items-center gap-4">
             <div className="flex-1 px-2">
