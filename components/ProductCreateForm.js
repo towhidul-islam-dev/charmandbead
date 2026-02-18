@@ -5,11 +5,12 @@ import { createInAppNotification } from "@/actions/inAppNotifications";
 import { useNotifications } from "@/Context/NotificationContext";
 import ProductCard from "@/components/ProductCard";
 import toast, { Toaster } from "react-hot-toast";
-import { CATEGORY_DNA } from "@/lib/categoryDNA"; // 🧬 Integrated new DNA
+import { CATEGORY_DNA } from "@/lib/categoryDNA";
 import { 
   PhotoIcon, SparklesIcon, XMarkIcon, 
   PlusIcon, TagIcon, CubeIcon, CameraIcon,
-  CommandLineIcon, EyeIcon, ChevronDownIcon
+  CommandLineIcon, EyeIcon, ChevronDownIcon,
+  ImagesIcon // Added for Gallery header
 } from "@heroicons/react/24/outline";
 
 export default function ProductForm({ initialData }) {
@@ -22,10 +23,11 @@ export default function ProductForm({ initialData }) {
   const [isNewArrival, setIsNewArrival] = useState(initialData?.isNewArrival || false);
   const [mainPreview, setMainPreview] = useState(initialData?.imageUrl || null);
   
-  // 🧬 Linked to DNA IDs
+  // 📸 NEW: Gallery State
+  const [galleryPreviews, setGalleryPreviews] = useState(initialData?.gallery || []);
+  
   const [mainCategory, setMainCategory] = useState(initialData?.categoryId || "");
   const [subCategory, setSubCategory] = useState(initialData?.subCategoryId || "");
-  
   const [previewName, setPreviewName] = useState(initialData?.name || "");
   const [previewPrice, setPreviewPrice] = useState(initialData?.price || 0);
 
@@ -44,7 +46,6 @@ export default function ProductForm({ initialData }) {
   const previewProduct = {
     _id: "preview",
     name: previewName || "Product Name",
-    // 🧬 Pulls actual names from DNA for the preview card
     categoryName: subCategory 
         ? getCategoryDisplayName(subCategory) 
         : (mainCategory ? getCategoryDisplayName(mainCategory) : "Category"),
@@ -60,14 +61,26 @@ export default function ProductForm({ initialData }) {
     setSubCategory(""); 
   };
 
+  const handleGalleryUpload = (e) => {
+    const files = Array.from(e.target.files);
+    const newPreviews = files.map(file => ({
+      file,
+      url: URL.createObjectURL(file),
+      isNew: true
+    }));
+    setGalleryPreviews(prev => [...prev, ...newPreviews]);
+  };
+
+  const removeGalleryImage = (index) => {
+    setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
   const clientAction = async (formData) => {
-    // 1. Inject Identity and Flags
     formData.set("id", initialData?._id || "");
     formData.set("hasVariants", useVariants.toString());
     formData.set("isNewArrival", isNewArrival.toString());
     formData.set("existingImage", initialData?.imageUrl || "");
     
-    // 🧬 2. Capture Names and IDs (Snapshotting for the database)
     if (mainCategory) {
       formData.set("categoryId", mainCategory);
       formData.set("categoryName", getCategoryDisplayName(mainCategory));
@@ -77,10 +90,16 @@ export default function ProductForm({ initialData }) {
       formData.set("subCategoryName", getCategoryDisplayName(subCategory));
     }
     
-    // 3. Ensure numeric values
     formData.set("price", Number(previewPrice) || 0);
 
-    // 4. Variant Processing
+    // 📸 Gallery Processing
+    const existingGallery = galleryPreviews.filter(p => !p.isNew);
+    formData.set("existingGallery", JSON.stringify(existingGallery));
+    
+    galleryPreviews.forEach((p, i) => {
+      if (p.isNew) formData.append(`galleryFile_${i}`, p.file);
+    });
+
     if (useVariants) {
       const variantsData = variants.map(({ preview, ...rest }) => ({
         ...rest,
@@ -109,6 +128,7 @@ export default function ProductForm({ initialData }) {
       if (!initialData) {
         setVariants([]);
         setMainPreview(null);
+        setGalleryPreviews([]);
         setMainCategory("");
         setSubCategory("");
         setIsNewArrival(false);
@@ -120,41 +140,17 @@ export default function ProductForm({ initialData }) {
     }
   }, [state, initialData, isNewArrival, previewName, addNotification]);
 
-  const generateAutoSKUs = () => {
-    const prefix = previewName.replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase() || "PRD";
-    const newVariants = variants.map((v) => ({
-      ...v, sku: v.sku || `${prefix}-${Math.floor(100 + Math.random() * 900)}`
-    }));
-    setVariants(newVariants);
-    toast.success("Batch SKUs generated!");
-  };
-
-  const handlePreview = (file, callback, index = null) => {
-    if (file) {
-      const url = URL.createObjectURL(file);
-      if (index !== null) {
-        const newV = [...variants];
-        newV[index].preview = url;
-        setVariants(newV);
-      } else { callback(url); }
-    }
-  };
-
-  const addVariant = () => setVariants([...variants, { 
-    size: "", color: "", price: "", stock: "", sku: "", minOrderQuantity: 1, preview: null 
-  }]);
-
-  const inputClass = "w-full bg-gray-50 border-none p-3.5 md:p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-sm appearance-none";
+  // 🛠️ FIX 1: Enhanced inputClass for Mobile Visibility (text-base prevents zoom-clip)
+  const inputClass = "w-full bg-gray-50 border-none p-3.5 md:p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-[16px] md:text-sm appearance-none leading-normal";
   const sectionClass = "bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-6";
 
   return (
     <>
       <Toaster position="top-right" />
-      
       <form ref={formRef} action={clientAction} className="px-4 py-6 mx-auto max-w-7xl">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-          
           <div className="space-y-6 lg:col-span-2">
+            {/* Product Essence */}
             <section className={sectionClass}>
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-pink-50 rounded-xl text-[#EA638C]"><TagIcon className="w-5 h-5" /></div>
@@ -162,28 +158,19 @@ export default function ProductForm({ initialData }) {
               </div>
               <div className="space-y-5">
                 <input type="text" name="name" value={previewName} onChange={(e) => setPreviewName(e.target.value)} required className={inputClass} placeholder="Product Name" />
-                
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="relative">
                     <select value={mainCategory} onChange={handleCategoryChange} className={inputClass} required>
                       <option value="">Select Category</option>
-                      {/* 🧬 Mapping Main Categories from DNA */}
                       {CATEGORY_DNA.filter(c => !c.parentId).map(cat => (
                         <option key={cat._id} value={cat._id}>{cat.name}</option>
                       ))}
                     </select>
                     <ChevronDownIcon className="absolute w-4 h-4 text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2" />
                   </div>
-
                   <div className="relative">
-                    <select 
-                        value={subCategory} 
-                        onChange={(e) => setSubCategory(e.target.value)} 
-                        className={inputClass} 
-                        disabled={!mainCategory || availableSubCategories.length === 0}
-                    >
+                    <select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className={inputClass} disabled={!mainCategory || availableSubCategories.length === 0}>
                         <option value="">Select Sub-Category</option>
-                        {/* 🧬 Mapping Sub-Categories from DNA */}
                         {availableSubCategories.map(sub => (
                         <option key={sub._id} value={sub._id}>{sub.name}</option>
                         ))}
@@ -195,6 +182,7 @@ export default function ProductForm({ initialData }) {
               </div>
             </section>
 
+            {/* Inventory & Variants */}
             <section className={sectionClass}>
               <div className="flex flex-col justify-between gap-4 mb-8 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-3">
@@ -202,7 +190,11 @@ export default function ProductForm({ initialData }) {
                     <h3 className="text-[11px] font-black tracking-widest text-[#3E442B] uppercase">Inventory & MOQ</h3>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {useVariants && <button type="button" onClick={generateAutoSKUs} className="px-3 py-2 bg-gray-100 text-[#3E442B] rounded-xl text-[9px] font-black uppercase flex items-center gap-2 hover:bg-[#3E442B] hover:text-white transition-all"><CommandLineIcon className="w-3.5 h-3.5" /> Gen SKUs</button>}
+                  {useVariants && <button type="button" onClick={() => {
+                     const prefix = previewName.replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase() || "PRD";
+                     setVariants(variants.map(v => ({...v, sku: v.sku || `${prefix}-${Math.floor(100 + Math.random() * 900)}`})));
+                     toast.success("Batch SKUs generated!");
+                  }} className="px-3 py-2 bg-gray-100 text-[#3E442B] rounded-xl text-[9px] font-black uppercase flex items-center gap-2 hover:bg-[#3E442B] hover:text-white transition-all"><CommandLineIcon className="w-3.5 h-3.5" /> Gen SKUs</button>}
                   <button type="button" onClick={() => setUseVariants(!useVariants)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${useVariants ? 'bg-[#EA638C] text-white' : 'bg-gray-100 text-gray-400'}`}>{useVariants ? "Disable Variants" : "Enable Variants"}</button>
                 </div>
               </div>
@@ -225,7 +217,7 @@ export default function ProductForm({ initialData }) {
               ) : (
                 <div className="space-y-4">
                   {variants.map((v, i) => (
-                    <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100 group transition-all">
+                    <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100 group">
                         <div className="flex items-center gap-4 mb-5">
                             <div onClick={() => document.getElementById(`v-img-${i}`).click()} className="relative flex items-center justify-center w-16 h-16 overflow-hidden bg-white border-2 border-gray-200 border-dashed cursor-pointer rounded-2xl shrink-0">
                                 {v.preview || v.imageUrl ? <img src={v.preview || v.imageUrl} className="object-cover w-full h-full" alt="variant" /> : <CameraIcon className="w-6 h-6 text-gray-300" />}
@@ -260,10 +252,18 @@ export default function ProductForm({ initialData }) {
                                 <input placeholder="1" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className="w-full bg-pink-50 p-3 rounded-xl text-[11px] font-bold text-[#EA638C] outline-none ring-1 ring-inset ring-[#EA638C]/10" />
                             </div>
                         </div>
-                        <input type="file" id={`v-img-${i}`} name={`variantImage_${i}`} className="hidden" onChange={(e) => handlePreview(e.target.files[0], null, i)} />
+                        <input type="file" id={`v-img-${i}`} className="hidden" onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const newV = [...variants];
+                            newV[i].preview = URL.createObjectURL(file);
+                            newV[i].file = file; // Store file to send later
+                            setVariants(newV);
+                          }
+                        }} />
                     </div>
                   ))}
-                  <button type="button" onClick={addVariant} className="w-full py-5 border-2 border-dashed border-gray-100 rounded-[2.5rem] text-[10px] font-black uppercase text-gray-400 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"><PlusIcon className="w-4 h-4" /> Add Variant Row</button>
+                  <button type="button" onClick={() => setVariants([...variants, { size: "", color: "", price: "", stock: "", sku: "", minOrderQuantity: 1, preview: null }])} className="w-full py-5 border-2 border-dashed border-gray-100 rounded-[2.5rem] text-[10px] font-black uppercase text-gray-400 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"><PlusIcon className="w-4 h-4" /> Add Variant Row</button>
                 </div>
               )}
             </section>
@@ -281,12 +281,36 @@ export default function ProductForm({ initialData }) {
                 </div>
               </div>
 
+              {/* Main Image */}
               <section className={sectionClass}>
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Main Image</h3>
                 <div className="w-full h-64 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative" onClick={() => document.getElementById('main-img').click()}>
                   {mainPreview ? <img src={mainPreview} className="object-cover w-full h-full transition-all group-hover:scale-105" alt="main" /> : <PhotoIcon className="w-12 h-12 text-gray-200" />}
                 </div>
-                <input id="main-img" name="imageFile" type="file" className="hidden" onChange={(e) => handlePreview(e.target.files[0], setMainPreview)} />
+                <input id="main-img" name="imageFile" type="file" className="hidden" onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) setMainPreview(URL.createObjectURL(file));
+                }} />
+              </section>
+
+              {/* 📸 FIX 2: Additional Detail Gallery */}
+              <section className={sectionClass}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Detail Gallery</h3>
+                  <button type="button" onClick={() => document.getElementById('gallery-input').click()} className="text-[10px] font-black text-[#EA638C] uppercase">+ Add</button>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {galleryPreviews.map((p, idx) => (
+                    <div key={idx} className="relative aspect-square bg-gray-50 rounded-2xl overflow-hidden border border-gray-100">
+                      <img src={p.url || p} className="object-cover w-full h-full" alt="gallery" />
+                      <button onClick={() => removeGalleryImage(idx)} type="button" className="absolute p-1 bg-white rounded-full top-1 right-1 shadow-sm"><XMarkIcon className="w-3 h-3 text-red-400" /></button>
+                    </div>
+                  ))}
+                  <div onClick={() => document.getElementById('gallery-input').click()} className="flex items-center justify-center aspect-square border-2 border-dashed border-gray-100 rounded-2xl cursor-pointer hover:bg-gray-50 transition-colors">
+                    <PlusIcon className="w-5 h-5 text-gray-300" />
+                  </div>
+                </div>
+                <input id="gallery-input" type="file" multiple className="hidden" onChange={handleGalleryUpload} />
               </section>
 
               <section className="bg-[#3E442B] p-8 rounded-[3rem] shadow-xl text-white">

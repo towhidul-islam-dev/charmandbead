@@ -42,46 +42,59 @@ export async function silentInventoryHeal() {
   }
 }
 
-export async function saveProduct(prevState, formData) {
+export async function saveProduct(prevState, formData) export async function saveProduct(prevState, formData) {
   try {
     await mongodb();
     const id = formData.get("id");
     const hasVariants = formData.get("hasVariants") === "true";
 
+    // 1. Handle Main Image
     let imageUrl = formData.get("existingImage") || "";
     const mainImageFile = formData.get("imageFile");
     if (mainImageFile && mainImageFile instanceof File && mainImageFile.size > 0) {
       imageUrl = await uploadToCloudinary(mainImageFile);
     }
 
-    // 🧬 Read IDs from the form
+    // 📸 2. Handle Detail Gallery
+    // Get existing gallery URLs (those that aren't being deleted)
+    const existingGallery = JSON.parse(formData.get("existingGallery") || "[]");
+    
+    // Process new gallery uploads
+    const newGalleryUploads = [];
+    // We loop through the formData keys to find any galleryFile_x
+    for (const [key, value] of formData.entries()) {
+      if (key.startsWith("galleryFile_") && value instanceof File && value.size > 0) {
+        const uploadedUrl = await uploadToCloudinary(value);
+        if (uploadedUrl) newGalleryUploads.push(uploadedUrl);
+      }
+    }
+    
+    // Merge existing URLs with new uploads
+    const finalGallery = [...existingGallery, ...newGalleryUploads];
+
+    // 🧬 3. DNA Category Logic
     const categoryId = formData.get("categoryId");
     const subCategoryId = formData.get("subCategoryId");
-
-    // 🧬 Snapshot Names from DNA
     const mainCat = CATEGORY_DNA.find(c => String(c._id) === String(categoryId));
     const subCat = CATEGORY_DNA.find(c => String(c._id) === String(subCategoryId));
 
     let productData = {
       name: formData.get("name")?.trim(),
       description: formData.get("description"),
-      
-      // 🛠️ FIX: Mapping to the keys your Schema expects
-      category: categoryId || null,      // Changed from categoryId
-      subCategory: subCategoryId || null, // Changed from subCategoryId
-      
-      // Keep these for UI display in Admin Tables
+      category: categoryId || null,
+      subCategory: subCategoryId || null,
       categoryName: mainCat ? mainCat.name : "Uncategorized",
       subCategoryName: subCat ? subCat.name : "",
-      
       isNewArrival: formData.get("isNewArrival") === "true",
       hasVariants: hasVariants,
       imageUrl: imageUrl,
+      gallery: finalGallery, // 📸 Adding the gallery array to the DB
       price: Number(formData.get("price")) || 0,
       stock: Number(formData.get("stock")) || 0,
       minOrderQuantity: Number(formData.get("minOrderQuantity")) || 1,
     };
 
+    // 4. Handle Variants
     if (hasVariants) {
       const rawVariants = JSON.parse(formData.get("variantsJson") || "[]");
       productData.variants = await Promise.all(
