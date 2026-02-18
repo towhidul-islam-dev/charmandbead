@@ -29,7 +29,6 @@ export default function ProductForm({ initialData }) {
   const [previewName, setPreviewName] = useState(initialData?.name || "");
   const [previewPrice, setPreviewPrice] = useState(initialData?.price || 0);
 
-  // 📸 NEW: Modal State
   const [previewModalImg, setPreviewModalImg] = useState(null);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -37,7 +36,7 @@ export default function ProductForm({ initialData }) {
 
   useEffect(() => { setIsMounted(true); }, []);
 
-  // --- 🧬 DNA HIERARCHY LOGIC ---
+  // --- DNA HIERARCHY LOGIC ---
   const getCategoryDisplayName = (id) => {
     return CATEGORY_DNA.find(c => String(c._id) === String(id))?.name || "";
   };
@@ -104,13 +103,21 @@ export default function ProductForm({ initialData }) {
     });
 
     if (useVariants) {
-      const variantsData = variants.map(({ preview, ...rest }) => ({
+      // Logic Fix: Ensure we don't send local preview blobs to the server
+      const variantsData = variants.map(({ preview, file, ...rest }) => ({
         ...rest,
         minOrderQuantity: Number(rest.minOrderQuantity) || 1,
         price: Number(rest.price) || 0,
         stock: Number(rest.stock) || 0
       }));
       formData.set("variantsJson", JSON.stringify(variantsData));
+
+      // Append variant files correctly
+      variants.forEach((v, i) => {
+        if (v.file) {
+          formData.append(`variantFile_${i}`, v.file);
+        }
+      });
     }
     
     formAction(formData);
@@ -143,10 +150,11 @@ export default function ProductForm({ initialData }) {
     }
   }, [state, initialData, isNewArrival, previewName, addNotification]);
 
-  const inputClass = "w-full bg-gray-50 border-none p-3.5 md:p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-[16px] md:text-sm appearance-none leading-normal";
+  // FIXED: inputClass adjusted for mobile text visibility
+  const inputClass = "w-full bg-gray-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-[16px] md:text-sm block";
   const sectionClass = "bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-6";
+  const variantInputClass = "w-full bg-white px-3 py-3 rounded-xl text-[13px] md:text-[11px] font-bold outline-none border border-transparent focus:border-[#EA638C]/20 text-gray-900";
 
-  // --- 📸 MODAL COMPONENT (PORTAL) ---
   const PreviewModal = () => {
     if (!isMounted || !previewModalImg) return null;
     return createPortal(
@@ -154,20 +162,14 @@ export default function ProductForm({ initialData }) {
         className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200"
         onClick={() => setPreviewModalImg(null)}
       >
-        <div 
-          className="relative max-w-4xl max-h-[90vh] w-full bg-white rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            onClick={() => setPreviewModalImg(null)}
-            className="absolute top-5 right-5 p-2.5 bg-[#EA638C] text-white rounded-full hover:rotate-90 transition-all z-10 shadow-lg"
-          >
+        <div className="relative max-w-4xl max-h-[90vh] w-full bg-white rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => setPreviewModalImg(null)} className="absolute top-5 right-5 p-2.5 bg-[#EA638C] text-white rounded-full hover:rotate-90 transition-all z-10 shadow-lg">
             <XMarkIcon className="w-6 h-6 stroke-[3]" />
           </button>
-          <div className="p-4 flex items-center justify-center bg-gray-50">
+          <div className="flex items-center justify-center p-4 bg-gray-50">
             <img src={previewModalImg} alt="Preview" className="max-h-[75vh] w-auto object-contain rounded-xl" />
           </div>
-          <div className="p-4 bg-white text-center border-t border-gray-100">
+          <div className="p-4 text-center bg-white border-t border-gray-100">
             <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#3E442B]">Visual Inspection View</span>
           </div>
         </div>
@@ -184,7 +186,6 @@ export default function ProductForm({ initialData }) {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             
-            {/* Essence Section */}
             <section className={sectionClass}>
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-pink-50 rounded-xl text-[#EA638C]"><TagIcon className="w-5 h-5" /></div>
@@ -216,7 +217,6 @@ export default function ProductForm({ initialData }) {
               </div>
             </section>
 
-            {/* Inventory Section */}
             <section className={sectionClass}>
               <div className="flex flex-col justify-between gap-4 mb-8 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-3">
@@ -224,11 +224,6 @@ export default function ProductForm({ initialData }) {
                     <h3 className="text-[11px] font-black tracking-widest text-[#3E442B] uppercase">Inventory & MOQ</h3>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {useVariants && <button type="button" onClick={() => {
-                     const prefix = previewName.replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase() || "PRD";
-                     setVariants(variants.map(v => ({...v, sku: v.sku || `${prefix}-${Math.floor(100 + Math.random() * 900)}`})));
-                     toast.success("Batch SKUs generated!");
-                  }} className="px-3 py-2 bg-gray-100 text-[#3E442B] rounded-xl text-[9px] font-black uppercase flex items-center gap-2 hover:bg-[#3E442B] hover:text-white transition-all"><CommandLineIcon className="w-3.5 h-3.5" /> Gen SKUs</button>}
                   <button type="button" onClick={() => setUseVariants(!useVariants)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${useVariants ? 'bg-[#EA638C] text-white' : 'bg-gray-100 text-gray-400'}`}>{useVariants ? "Disable Variants" : "Enable Variants"}</button>
                 </div>
               </div>
@@ -251,9 +246,8 @@ export default function ProductForm({ initialData }) {
               ) : (
                 <div className="space-y-4">
                   {variants.map((v, i) => (
-                    <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100 group">
+                    <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100">
                         <div className="flex items-center gap-4 mb-5">
-                            {/* 📸 Variant Image Preview Trigger */}
                             <div 
                               onClick={() => {
                                 if (v.preview || v.imageUrl) setPreviewModalImg(v.preview || v.imageUrl);
@@ -264,7 +258,7 @@ export default function ProductForm({ initialData }) {
                                 {v.preview || v.imageUrl ? (
                                   <>
                                     <img src={v.preview || v.imageUrl} className="object-cover w-full h-full" alt="variant" />
-                                    <div className="absolute inset-0 flex items-center justify-center transition-opacity bg-black/20 opacity-0 group-hover/v:opacity-100">
+                                    <div className="absolute inset-0 flex items-center justify-center transition-opacity opacity-0 bg-black/20 group-hover/v:opacity-100">
                                       <MagnifyingGlassPlusIcon className="w-5 h-5 text-white" />
                                     </div>
                                   </>
@@ -272,7 +266,7 @@ export default function ProductForm({ initialData }) {
                             </div>
                             <div className="flex-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 block mb-1">SKU</span>
-                                <input placeholder="SKU" value={v.sku} onChange={e => { const n = [...variants]; n[i].sku = e.target.value; setVariants(n); }} className="w-full bg-white px-3 py-2.5 rounded-xl text-[11px] font-bold outline-none border border-transparent focus:border-[#EA638C]/20" />
+                                <input placeholder="SKU" value={v.sku} onChange={e => { const n = [...variants]; n[i].sku = e.target.value; setVariants(n); }} className={variantInputClass} />
                             </div>
                             <div className="flex gap-2">
                                <button type="button" onClick={() => document.getElementById(`v-img-${i}`).click()} className="p-2 text-[#3E442B] bg-white rounded-full shadow-sm hover:bg-gray-100">
@@ -286,23 +280,23 @@ export default function ProductForm({ initialData }) {
                         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                             <div className="space-y-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 ml-2">Size</span>
-                                <input placeholder="Size" value={v.size} onChange={e => { const n = [...variants]; n[i].size = e.target.value; setVariants(n); }} className="w-full bg-white p-3 rounded-xl text-[11px] font-bold outline-none" />
+                                <input placeholder="Size" value={v.size} onChange={e => { const n = [...variants]; n[i].size = e.target.value; setVariants(n); }} className={variantInputClass} />
                             </div>
                             <div className="space-y-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 ml-2">Color</span>
-                                <input placeholder="Color" value={v.color} onChange={e => { const n = [...variants]; n[i].color = e.target.value; setVariants(n); }} className="w-full bg-white p-3 rounded-xl text-[11px] font-bold outline-none" />
+                                <input placeholder="Color" value={v.color} onChange={e => { const n = [...variants]; n[i].color = e.target.value; setVariants(n); }} className={variantInputClass} />
                             </div>
                             <div className="space-y-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 ml-2">Price</span>
-                                <input placeholder="0.00" step="0.01" type="number" value={v.price} onChange={e => { const n = [...variants]; n[i].price = e.target.value; setVariants(n); }} className="w-full bg-white p-3 rounded-xl text-[11px] font-bold outline-none" />
+                                <input placeholder="0.00" type="number" value={v.price} onChange={e => { const n = [...variants]; n[i].price = e.target.value; setVariants(n); }} className={variantInputClass} />
                             </div>
                             <div className="space-y-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 ml-2">Stock</span>
-                                <input placeholder="0" type="number" value={v.stock} onChange={e => { const n = [...variants]; n[i].stock = e.target.value; setVariants(n); }} className="w-full bg-white p-3 rounded-xl text-[11px] font-bold outline-none" />
+                                <input placeholder="0" type="number" value={v.stock} onChange={e => { const n = [...variants]; n[i].stock = e.target.value; setVariants(n); }} className={variantInputClass} />
                             </div>
                             <div className="col-span-2 space-y-1 lg:col-span-1">
                                 <span className="text-[8px] font-black uppercase text-[#EA638C] ml-2">MOQ</span>
-                                <input placeholder="1" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className="w-full bg-pink-50 p-3 rounded-xl text-[11px] font-bold text-[#EA638C] outline-none ring-1 ring-inset ring-[#EA638C]/10" />
+                                <input placeholder="1" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className={`${variantInputClass} bg-pink-50 text-[#EA638C] ring-1 ring-[#EA638C]/10`} />
                             </div>
                         </div>
                         <input type="file" id={`v-img-${i}`} className="hidden" onChange={(e) => {
@@ -322,7 +316,6 @@ export default function ProductForm({ initialData }) {
             </section>
           </div>
 
-          {/* Sidebar Section */}
           <div className="space-y-6">
             <div className="lg:sticky lg:top-6">
               <div className="hidden sm:block">
@@ -335,7 +328,6 @@ export default function ProductForm({ initialData }) {
                 </div>
               </div>
 
-              {/* Main Image */}
               <section className={sectionClass}>
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Main Image</h3>
                 <div 
@@ -347,8 +339,8 @@ export default function ProductForm({ initialData }) {
                 >
                   {mainPreview ? (
                     <>
-                      <img src={mainPreview} className="object-cover w-full h-full transition-all group-hover:scale-105" alt="main" />
-                      <div className="absolute inset-0 flex items-center justify-center transition-opacity bg-black/20 opacity-0 group-hover:opacity-100">
+                      <img src={mainPreview} className="object-cover w-full h-full" alt="main" />
+                      <div className="absolute inset-0 flex items-center justify-center transition-opacity opacity-0 bg-black/20 group-hover:opacity-100">
                         <MagnifyingGlassPlusIcon className="w-10 h-10 text-white" />
                       </div>
                     </>
@@ -358,12 +350,8 @@ export default function ProductForm({ initialData }) {
                   const file = e.target.files[0];
                   if (file) setMainPreview(URL.createObjectURL(file));
                 }} />
-                {mainPreview && (
-                  <button type="button" onClick={() => document.getElementById('main-img').click()} className="w-full mt-3 text-[9px] font-black text-gray-400 uppercase hover:text-[#EA638C]">Change Image</button>
-                )}
               </section>
 
-              {/* Detail Gallery */}
               <section className={sectionClass}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Detail Gallery</h3>
@@ -371,26 +359,17 @@ export default function ProductForm({ initialData }) {
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   {galleryPreviews.map((p, idx) => (
-                    <div key={idx} className="relative aspect-square bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 group/gal">
-                      <img 
-                        src={p.url || p} 
-                        className="object-cover w-full h-full cursor-zoom-in" 
-                        alt="gallery" 
-                        onClick={() => setPreviewModalImg(p.url || p)}
-                      />
-                      <button onClick={() => removeGalleryImage(idx)} type="button" className="absolute p-1 transition-opacity bg-white rounded-full opacity-0 top-1 right-1 shadow-sm group-hover/gal:opacity-100">
+                    <div key={idx} className="relative overflow-hidden border border-gray-100 aspect-square bg-gray-50 rounded-2xl group/gal">
+                      <img src={p.url || p} className="object-cover w-full h-full cursor-zoom-in" alt="gallery" onClick={() => setPreviewModalImg(p.url || p)} />
+                      <button onClick={() => removeGalleryImage(idx)} type="button" className="absolute p-1 transition-opacity bg-white rounded-full shadow-sm opacity-0 top-1 right-1 group-hover/gal:opacity-100">
                         <XMarkIcon className="w-3 h-3 text-red-400" />
                       </button>
                     </div>
                   ))}
-                  <div onClick={() => document.getElementById('gallery-input').click()} className="flex items-center justify-center aspect-square border-2 border-dashed border-gray-100 rounded-2xl cursor-pointer hover:bg-gray-50 transition-colors">
-                    <PlusIcon className="w-5 h-5 text-gray-300" />
-                  </div>
                 </div>
                 <input id="gallery-input" type="file" multiple className="hidden" onChange={handleGalleryUpload} />
               </section>
 
-              {/* Submit Section */}
               <section className="bg-[#3E442B] p-8 rounded-[3rem] shadow-xl text-white">
                 <div className="flex items-center justify-between mb-8">
                   <div className="flex items-center gap-3">
@@ -401,7 +380,7 @@ export default function ProductForm({ initialData }) {
                     <div className={`w-4 h-4 bg-white rounded-full transition-transform ${isNewArrival ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
                 </div>
-                <button type="submit" disabled={isPending} className="w-full py-5 bg-[#EA638C] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl hover:shadow-pink-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">
+                <button type="submit" disabled={isPending} className="w-full py-5 bg-[#EA638C] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">
                   {isPending ? "Syncing DNA..." : (initialData ? "Update Product" : "Save Product")}
                 </button>
               </section>
