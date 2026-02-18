@@ -56,12 +56,10 @@ export async function saveProduct(prevState, formData) {
     }
 
     // 📸 2. Handle Detail Gallery
-    // Get existing gallery URLs (those that aren't being deleted)
     const existingGallery = JSON.parse(formData.get("existingGallery") || "[]");
+    const newGalleryUploads = [];
     
     // Process new gallery uploads
-    const newGalleryUploads = [];
-    // We loop through the formData keys to find any galleryFile_x
     for (const [key, value] of formData.entries()) {
       if (key.startsWith("galleryFile_") && value instanceof File && value.size > 0) {
         const uploadedUrl = await uploadToCloudinary(value);
@@ -69,7 +67,6 @@ export async function saveProduct(prevState, formData) {
       }
     }
     
-    // Merge existing URLs with new uploads
     const finalGallery = [...existingGallery, ...newGalleryUploads];
 
     // 🧬 3. DNA Category Logic
@@ -88,7 +85,7 @@ export async function saveProduct(prevState, formData) {
       isNewArrival: formData.get("isNewArrival") === "true",
       hasVariants: hasVariants,
       imageUrl: imageUrl,
-      gallery: finalGallery, // 📸 Adding the gallery array to the DB
+      gallery: finalGallery,
       price: Number(formData.get("price")) || 0,
       stock: Number(formData.get("stock")) || 0,
       minOrderQuantity: Number(formData.get("minOrderQuantity")) || 1,
@@ -100,33 +97,43 @@ export async function saveProduct(prevState, formData) {
       productData.variants = await Promise.all(
         rawVariants.map(async (v, i) => {
           let vImg = v.imageUrl || "";
-          const vFile = formData.get(`variantImage_${i}`);
+          
+          // FIXED: Changed 'variantImage_' to 'variantFile_' to match your Form
+          const vFile = formData.get(`variantFile_${i}`); 
+          
           if (vFile && vFile instanceof File && vFile.size > 0) {
-            vImg = await uploadToCloudinary(vFile);
+            const uploadedVImg = await uploadToCloudinary(vFile);
+            if (uploadedVImg) vImg = uploadedVImg;
           }
+          
           return {
             ...v,
             imageUrl: vImg,
-            price: Number(v.price),
-            stock: Number(v.stock),
-            minOrderQuantity: Number(v.minOrderQuantity),
+            price: Number(v.price) || 0,
+            stock: Number(v.stock) || 0,
+            minOrderQuantity: Number(v.minOrderQuantity) || 1,
           };
         }),
       );
+      
+      // Auto-calculate total stock from all variants
       productData.stock = productData.variants.reduce((acc, v) => acc + (v.stock || 0), 0);
     }
 
     let finalProduct;
-    if (id && id !== "null" && id !== "") {
+    if (id && id !== "null" && id !== "" && id !== "undefined") {
       finalProduct = await Product.findByIdAndUpdate(id, productData, { new: true, runValidators: true });
     } else {
       finalProduct = await Product.create(productData);
     }
 
+    // Ensure revalidatePath is imported from 'next/cache'
     revalidatePath("/admin/products");
-    revalidatePath("/admin/new-arrivals");
     revalidatePath("/products");
     revalidatePath("/");
+    if (finalProduct?._id) {
+      revalidatePath(`/product/${finalProduct._id}`);
+    }
 
     return { 
       success: true, 
@@ -135,7 +142,7 @@ export async function saveProduct(prevState, formData) {
     };
   } catch (error) {
     console.error("Save Error:", error);
-    return { success: false, message: error.message };
+    return { success: false, message: error.message || "An unexpected error occurred" };
   }
 }
 
