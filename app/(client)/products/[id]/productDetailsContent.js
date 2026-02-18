@@ -116,7 +116,7 @@ export default function ProductDetailsContent({ product }) {
     if (!isMounted || !isModalOpen) return null;
     return createPortal(
       <div
-        className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl cursor-pointer p-4 md:p-12 animate-in fade-in duration-200"
+        className="fixed inset-0 flex items-center justify-center p-4 duration-200 cursor-pointer bg-black/95 backdrop-blur-xl md:p-12 animate-in fade-in"
         style={{ zIndex: 100000 }}
         onClick={() => setIsModalOpen(false)}
       >
@@ -131,7 +131,7 @@ export default function ProductDetailsContent({ product }) {
         </button>
         <img
           src={mainImage}
-          className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-300"
+          className="object-contain max-w-full max-h-full duration-300 rounded-lg shadow-2xl animate-in zoom-in-95"
           alt="Enlarged"
           onClick={(e) => e.stopPropagation()}
         />
@@ -141,7 +141,7 @@ export default function ProductDetailsContent({ product }) {
   };
 
   return (
-    <div className="grid items-start grid-cols-1 gap-6 p-4 lg:grid-cols-12 xl:gap-16 md:p-8 w-full max-w-full overflow-x-hidden">
+    <div className="grid items-start w-full max-w-full grid-cols-1 gap-6 p-4 overflow-x-hidden lg:grid-cols-12 xl:gap-16 md:p-8">
       <ModalPortal />
 
       {/* LEFT COLUMN: IMAGES & GALLERY */}
@@ -159,10 +159,10 @@ export default function ProductDetailsContent({ product }) {
               className="object-cover w-full h-full transition-opacity duration-300"
             />
             <div
-              className="absolute inset-0 pointer-events-none transition-opacity duration-200"
+              className="absolute inset-0 transition-opacity duration-200 pointer-events-none"
               style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }}
             />
-            <div className="absolute bottom-6 right-6 p-3 bg-white/90 backdrop-blur-md rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity shadow-sm border border-gray-100">
+            <div className="absolute p-3 transition-opacity border border-gray-100 shadow-sm opacity-0 bottom-6 right-6 bg-white/90 backdrop-blur-md rounded-2xl group-hover:opacity-100">
                <Expand size={20} className="text-[#EA638C]" />
             </div>
           </div>
@@ -180,7 +180,7 @@ export default function ProductDetailsContent({ product }) {
               <span className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">
                 Product Gallery & Variants
               </span>
-              <div className="flex flex-wrap gap-3 px-1 justify-center md:justify-start">
+              <div className="flex flex-wrap justify-center gap-3 px-1 md:justify-start">
                 {allImages.map((img, idx) => (
                   <button
                     key={idx}
@@ -235,7 +235,7 @@ export default function ProductDetailsContent({ product }) {
             )}
           </div>
 
-          <h1 className="text-4xl md:text-6xl italic font-black leading-none tracking-tighter text-gray-900 uppercase">
+          <h1 className="text-4xl italic font-black leading-none tracking-tighter text-gray-900 uppercase md:text-6xl">
             {product.name}
           </h1>
         </div>
@@ -243,22 +243,22 @@ export default function ProductDetailsContent({ product }) {
         <div className="space-y-4">
           {/* DESCRIPTION BLOCK */}
           <div className="p-7 md:p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-pink-50/50 rounded-full blur-3xl -mr-16 -mt-16" />
+            <div className="absolute top-0 right-0 w-32 h-32 -mt-16 -mr-16 rounded-full bg-pink-50/50 blur-3xl" />
             <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-6 relative">
               Product Description
             </span>
-            <div className="flex flex-col gap-y-4 relative">
+            <div className="relative flex flex-col gap-y-4">
               {product.description.split(".").filter((p) => p.trim()).map((point, i) => {
                   const parts = point.split(":");
                   return (
                     <div key={i} className="leading-relaxed">
                       {parts.length > 1 ? (
-                        <p className="text-sm md:text-base text-gray-600">
+                        <p className="text-sm text-gray-600 md:text-base">
                           <span className="font-extrabold text-[#3E442B] mr-1">{parts[0].trim()}:</span>
                           {parts.slice(1).join(":").trim()}.
                         </p>
                       ) : (
-                        <p className="font-medium text-gray-600 text-sm md:text-base">{point.trim()}.</p>
+                        <p className="text-sm font-medium text-gray-600 md:text-base">{point.trim()}.</p>
                       )}
                     </div>
                   );
@@ -268,7 +268,7 @@ export default function ProductDetailsContent({ product }) {
 
           {/* SHARE LINK */}
           <div className="p-4 border border-dashed border-gray-200 bg-gray-50/50 rounded-[2rem] flex items-center gap-4">
-            <div className="flex-1 px-2 min-w-0">
+            <div className="flex-1 min-w-0 px-2">
               <span className="text-[9px] font-black text-[#EA638C] uppercase tracking-widest block mb-1">Direct Share Link</span>
               <p className="text-[11px] text-gray-400 font-mono truncate">{isMounted ? window.location.href : "..."}</p>
             </div>
