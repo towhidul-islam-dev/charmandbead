@@ -31,6 +31,9 @@ export const metadata = {
     siteName: 'Charm & Bead',
     images: [{ url: '/og-image.jpg' }],
   },
+  icons: {
+    icon: "/logo_new.svg", // Path to file in your /public folder
+  },
 };
 
 export default async function ClientLayout({ children }) {
