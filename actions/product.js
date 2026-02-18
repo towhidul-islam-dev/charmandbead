@@ -42,7 +42,7 @@ export async function silentInventoryHeal() {
   }
 }
 
-export async function saveProduct(prevState, formData) export async function saveProduct(prevState, formData) {
+export async function saveProduct(prevState, formData) {
   try {
     await mongodb();
     const id = formData.get("id");
