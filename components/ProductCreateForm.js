@@ -1,5 +1,6 @@
 "use client";
 import { useState, useActionState, useEffect, useRef, useMemo } from "react"; 
+import { createPortal } from "react-dom";
 import { saveProduct } from "@/actions/product";
 import { createInAppNotification } from "@/actions/inAppNotifications";
 import { useNotifications } from "@/Context/NotificationContext";
@@ -10,7 +11,7 @@ import {
   PhotoIcon, SparklesIcon, XMarkIcon, 
   PlusIcon, TagIcon, CubeIcon, CameraIcon,
   CommandLineIcon, EyeIcon, ChevronDownIcon,
-  ImagesIcon // Added for Gallery header
+  MagnifyingGlassPlusIcon
 } from "@heroicons/react/24/outline";
 
 export default function ProductForm({ initialData }) {
@@ -22,16 +23,19 @@ export default function ProductForm({ initialData }) {
   const [variants, setVariants] = useState(initialData?.variants || []);
   const [isNewArrival, setIsNewArrival] = useState(initialData?.isNewArrival || false);
   const [mainPreview, setMainPreview] = useState(initialData?.imageUrl || null);
-  
-  // 📸 NEW: Gallery State
   const [galleryPreviews, setGalleryPreviews] = useState(initialData?.gallery || []);
-  
   const [mainCategory, setMainCategory] = useState(initialData?.categoryId || "");
   const [subCategory, setSubCategory] = useState(initialData?.subCategoryId || "");
   const [previewName, setPreviewName] = useState(initialData?.name || "");
   const [previewPrice, setPreviewPrice] = useState(initialData?.price || 0);
 
+  // 📸 NEW: Modal State
+  const [previewModalImg, setPreviewModalImg] = useState(null);
+  const [isMounted, setIsMounted] = useState(false);
+
   const [state, formAction, isPending] = useActionState(saveProduct, null);
+
+  useEffect(() => { setIsMounted(true); }, []);
 
   // --- 🧬 DNA HIERARCHY LOGIC ---
   const getCategoryDisplayName = (id) => {
@@ -92,7 +96,6 @@ export default function ProductForm({ initialData }) {
     
     formData.set("price", Number(previewPrice) || 0);
 
-    // 📸 Gallery Processing
     const existingGallery = galleryPreviews.filter(p => !p.isNew);
     formData.set("existingGallery", JSON.stringify(existingGallery));
     
@@ -136,21 +139,52 @@ export default function ProductForm({ initialData }) {
         setPreviewPrice(0);
       }
     } else if (state?.success === false) {
-      toast.error(state.message || "Sync failed. Check IDs.");
+      toast.error(state.message || "Sync failed.");
     }
   }, [state, initialData, isNewArrival, previewName, addNotification]);
 
-  // 🛠️ FIX 1: Enhanced inputClass for Mobile Visibility (text-base prevents zoom-clip)
   const inputClass = "w-full bg-gray-50 border-none p-3.5 md:p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-[16px] md:text-sm appearance-none leading-normal";
   const sectionClass = "bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-6";
+
+  // --- 📸 MODAL COMPONENT (PORTAL) ---
+  const PreviewModal = () => {
+    if (!isMounted || !previewModalImg) return null;
+    return createPortal(
+      <div 
+        className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+        onClick={() => setPreviewModalImg(null)}
+      >
+        <div 
+          className="relative max-w-4xl max-h-[90vh] w-full bg-white rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => setPreviewModalImg(null)}
+            className="absolute top-5 right-5 p-2.5 bg-[#EA638C] text-white rounded-full hover:rotate-90 transition-all z-10 shadow-lg"
+          >
+            <XMarkIcon className="w-6 h-6 stroke-[3]" />
+          </button>
+          <div className="p-4 flex items-center justify-center bg-gray-50">
+            <img src={previewModalImg} alt="Preview" className="max-h-[75vh] w-auto object-contain rounded-xl" />
+          </div>
+          <div className="p-4 bg-white text-center border-t border-gray-100">
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#3E442B]">Visual Inspection View</span>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
 
   return (
     <>
       <Toaster position="top-right" />
+      <PreviewModal />
       <form ref={formRef} action={clientAction} className="px-4 py-6 mx-auto max-w-7xl">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
-            {/* Product Essence */}
+            
+            {/* Essence Section */}
             <section className={sectionClass}>
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-pink-50 rounded-xl text-[#EA638C]"><TagIcon className="w-5 h-5" /></div>
@@ -182,7 +216,7 @@ export default function ProductForm({ initialData }) {
               </div>
             </section>
 
-            {/* Inventory & Variants */}
+            {/* Inventory Section */}
             <section className={sectionClass}>
               <div className="flex flex-col justify-between gap-4 mb-8 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-3">
@@ -219,16 +253,35 @@ export default function ProductForm({ initialData }) {
                   {variants.map((v, i) => (
                     <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100 group">
                         <div className="flex items-center gap-4 mb-5">
-                            <div onClick={() => document.getElementById(`v-img-${i}`).click()} className="relative flex items-center justify-center w-16 h-16 overflow-hidden bg-white border-2 border-gray-200 border-dashed cursor-pointer rounded-2xl shrink-0">
-                                {v.preview || v.imageUrl ? <img src={v.preview || v.imageUrl} className="object-cover w-full h-full" alt="variant" /> : <CameraIcon className="w-6 h-6 text-gray-300" />}
+                            {/* 📸 Variant Image Preview Trigger */}
+                            <div 
+                              onClick={() => {
+                                if (v.preview || v.imageUrl) setPreviewModalImg(v.preview || v.imageUrl);
+                                else document.getElementById(`v-img-${i}`).click();
+                              }} 
+                              className="relative flex items-center justify-center w-16 h-16 overflow-hidden bg-white border-2 border-gray-200 border-dashed cursor-pointer rounded-2xl shrink-0 group/v"
+                            >
+                                {v.preview || v.imageUrl ? (
+                                  <>
+                                    <img src={v.preview || v.imageUrl} className="object-cover w-full h-full" alt="variant" />
+                                    <div className="absolute inset-0 flex items-center justify-center transition-opacity bg-black/20 opacity-0 group-hover/v:opacity-100">
+                                      <MagnifyingGlassPlusIcon className="w-5 h-5 text-white" />
+                                    </div>
+                                  </>
+                                ) : <CameraIcon className="w-6 h-6 text-gray-300" />}
                             </div>
                             <div className="flex-1">
                                 <span className="text-[8px] font-black uppercase text-gray-400 block mb-1">SKU</span>
                                 <input placeholder="SKU" value={v.sku} onChange={e => { const n = [...variants]; n[i].sku = e.target.value; setVariants(n); }} className="w-full bg-white px-3 py-2.5 rounded-xl text-[11px] font-bold outline-none border border-transparent focus:border-[#EA638C]/20" />
                             </div>
-                            <button type="button" onClick={() => setVariants(variants.filter((_, idx) => idx !== i))} className="p-2 text-red-400 bg-white rounded-full shadow-sm hover:bg-red-50">
-                                <XMarkIcon className="w-5 h-5" />
-                            </button>
+                            <div className="flex gap-2">
+                               <button type="button" onClick={() => document.getElementById(`v-img-${i}`).click()} className="p-2 text-[#3E442B] bg-white rounded-full shadow-sm hover:bg-gray-100">
+                                  <CameraIcon className="w-5 h-5" />
+                               </button>
+                               <button type="button" onClick={() => setVariants(variants.filter((_, idx) => idx !== i))} className="p-2 text-red-400 bg-white rounded-full shadow-sm hover:bg-red-50">
+                                  <XMarkIcon className="w-5 h-5" />
+                               </button>
+                            </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                             <div className="space-y-1">
@@ -257,7 +310,7 @@ export default function ProductForm({ initialData }) {
                           if (file) {
                             const newV = [...variants];
                             newV[i].preview = URL.createObjectURL(file);
-                            newV[i].file = file; // Store file to send later
+                            newV[i].file = file;
                             setVariants(newV);
                           }
                         }} />
@@ -269,6 +322,7 @@ export default function ProductForm({ initialData }) {
             </section>
           </div>
 
+          {/* Sidebar Section */}
           <div className="space-y-6">
             <div className="lg:sticky lg:top-6">
               <div className="hidden sm:block">
@@ -284,16 +338,32 @@ export default function ProductForm({ initialData }) {
               {/* Main Image */}
               <section className={sectionClass}>
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Main Image</h3>
-                <div className="w-full h-64 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative" onClick={() => document.getElementById('main-img').click()}>
-                  {mainPreview ? <img src={mainPreview} className="object-cover w-full h-full transition-all group-hover:scale-105" alt="main" /> : <PhotoIcon className="w-12 h-12 text-gray-200" />}
+                <div 
+                  className="w-full h-64 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative" 
+                  onClick={() => {
+                    if (mainPreview) setPreviewModalImg(mainPreview);
+                    else document.getElementById('main-img').click();
+                  }}
+                >
+                  {mainPreview ? (
+                    <>
+                      <img src={mainPreview} className="object-cover w-full h-full transition-all group-hover:scale-105" alt="main" />
+                      <div className="absolute inset-0 flex items-center justify-center transition-opacity bg-black/20 opacity-0 group-hover:opacity-100">
+                        <MagnifyingGlassPlusIcon className="w-10 h-10 text-white" />
+                      </div>
+                    </>
+                  ) : <PhotoIcon className="w-12 h-12 text-gray-200" />}
                 </div>
                 <input id="main-img" name="imageFile" type="file" className="hidden" onChange={(e) => {
                   const file = e.target.files[0];
                   if (file) setMainPreview(URL.createObjectURL(file));
                 }} />
+                {mainPreview && (
+                  <button type="button" onClick={() => document.getElementById('main-img').click()} className="w-full mt-3 text-[9px] font-black text-gray-400 uppercase hover:text-[#EA638C]">Change Image</button>
+                )}
               </section>
 
-              {/* 📸 FIX 2: Additional Detail Gallery */}
+              {/* Detail Gallery */}
               <section className={sectionClass}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Detail Gallery</h3>
@@ -301,9 +371,16 @@ export default function ProductForm({ initialData }) {
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   {galleryPreviews.map((p, idx) => (
-                    <div key={idx} className="relative aspect-square bg-gray-50 rounded-2xl overflow-hidden border border-gray-100">
-                      <img src={p.url || p} className="object-cover w-full h-full" alt="gallery" />
-                      <button onClick={() => removeGalleryImage(idx)} type="button" className="absolute p-1 bg-white rounded-full top-1 right-1 shadow-sm"><XMarkIcon className="w-3 h-3 text-red-400" /></button>
+                    <div key={idx} className="relative aspect-square bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 group/gal">
+                      <img 
+                        src={p.url || p} 
+                        className="object-cover w-full h-full cursor-zoom-in" 
+                        alt="gallery" 
+                        onClick={() => setPreviewModalImg(p.url || p)}
+                      />
+                      <button onClick={() => removeGalleryImage(idx)} type="button" className="absolute p-1 transition-opacity bg-white rounded-full opacity-0 top-1 right-1 shadow-sm group-hover/gal:opacity-100">
+                        <XMarkIcon className="w-3 h-3 text-red-400" />
+                      </button>
                     </div>
                   ))}
                   <div onClick={() => document.getElementById('gallery-input').click()} className="flex items-center justify-center aspect-square border-2 border-dashed border-gray-100 rounded-2xl cursor-pointer hover:bg-gray-50 transition-colors">
@@ -313,6 +390,7 @@ export default function ProductForm({ initialData }) {
                 <input id="gallery-input" type="file" multiple className="hidden" onChange={handleGalleryUpload} />
               </section>
 
+              {/* Submit Section */}
               <section className="bg-[#3E442B] p-8 rounded-[3rem] shadow-xl text-white">
                 <div className="flex items-center justify-between mb-8">
                   <div className="flex items-center gap-3">
