@@ -11,6 +11,7 @@ import {
   Share2,
   X,
   MousePointer2,
+  Expand,
 } from "lucide-react";
 import ProductPurchaseSection from "@/components/ProductPurchaseSection";
 import { useRouter } from "next/navigation";
@@ -24,15 +25,12 @@ export default function ProductDetailsContent({ product }) {
   const [isMounted, setIsMounted] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // --- ZOOM STATE LOGIC (Preserved) ---
+  // --- ZOOM STATE LOGIC ---
   const [zoomStyle, setZoomStyle] = useState({ display: "none" });
 
   const handleMouseMove = (e) => {
-    // Disable zoom overlay on mobile to prevent UI glitches during scroll
     if (typeof window !== "undefined" && window.innerWidth < 768) return;
-
-    const { left, top, width, height } =
-      e.currentTarget.getBoundingClientRect();
+    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
     const x = ((e.pageX - left - window.scrollX) / width) * 100;
     const y = ((e.pageY - top - window.scrollY) / height) * 100;
     setZoomStyle({
@@ -51,36 +49,35 @@ export default function ProductDetailsContent({ product }) {
 
   if (!product) return null;
 
-  // --- RECENTLY VIEWED TRACKING LOGIC (Preserved) ---
+  // --- RECENTLY VIEWED TRACKING ---
   useEffect(() => {
     if (product && product._id) {
-      const history = JSON.parse(
-        localStorage.getItem("recentlyViewed") || "[]",
-      );
-      const filteredHistory = history.filter(
-        (item) => item._id !== product._id,
-      );
+      const history = JSON.parse(localStorage.getItem("recentlyViewed") || "[]");
+      const filteredHistory = history.filter((item) => item._id !== product._id);
       const newHistory = [product, ...filteredHistory].slice(0, 10);
       localStorage.setItem("recentlyViewed", JSON.stringify(newHistory));
       window.dispatchEvent(new Event("recentlyViewedUpdated"));
     }
   }, [product]);
 
+  // --- IMAGE AGGREGATION (Main + Gallery + Variant Images) ---
   const allImages = Array.from(
     new Set([
-      ...(Array.isArray(product?.imageUrl)
-        ? product.imageUrl
-        : [product?.imageUrl]),
-      ...(product?.variants
-        ?.map((v) => v.imageUrl || v.image)
-        .filter(Boolean) || []),
+      ...(Array.isArray(product?.imageUrl) ? product.imageUrl : [product?.imageUrl]),
+      ...(product?.gallery || []),
+      ...(product?.variants?.map((v) => v.imageUrl || v.image).filter(Boolean) || []),
     ]),
-  ).filter((img) => img !== "/placeholder.png");
+  ).filter((img) => img && img !== "/placeholder.png");
 
-  const [mainImage, setMainImage] = useState(
-    allImages[0] || "/placeholder.png",
-  );
+  const [mainImage, setMainImage] = useState(allImages[0] || "/placeholder.png");
   const [activeSku, setActiveSku] = useState(product.sku || null);
+
+  // Sync main image if the product ID changes (for navigation between products)
+  useEffect(() => {
+    if (allImages.length > 0) {
+      setMainImage(allImages[0]);
+    }
+  }, [product?._id]);
 
   const handleCopyLink = () => {
     const shortlink = typeof window !== "undefined" ? window.location.href : "";
@@ -97,7 +94,7 @@ export default function ProductDetailsContent({ product }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // --- STOCK & MOQ LOGIC (Preserved) ---
+  // --- STOCK & MOQ LOGIC ---
   const baseStockTotal = product.hasVariants
     ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
     : Number(product.stock) || 0;
@@ -114,24 +111,17 @@ export default function ProductDetailsContent({ product }) {
   const isOutOfStock = currentStock <= 0;
   const isLowStock = !isOutOfStock && currentStock <= displayMoq * 3;
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      router.refresh();
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [router]);
-
-  // --- PORTAL MODAL (Fixes Visibility) ---
+  // --- PORTAL MODAL FOR ENLARGED VIEW ---
   const ModalPortal = () => {
     if (!isMounted || !isModalOpen) return null;
     return createPortal(
       <div
-        className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl cursor-pointer p-4 md:p-12"
+        className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl cursor-pointer p-4 md:p-12 animate-in fade-in duration-200"
         style={{ zIndex: 100000 }}
         onClick={() => setIsModalOpen(false)}
       >
         <button
-          className="absolute top-6 right-6 p-4 bg-[#3E442B] text-white rounded-full transition-all shadow-2xl"
+          className="absolute top-6 right-6 p-4 bg-[#EA638C] text-white rounded-full transition-all shadow-2xl hover:rotate-90"
           onClick={(e) => {
             e.stopPropagation();
             setIsModalOpen(false);
@@ -141,7 +131,7 @@ export default function ProductDetailsContent({ product }) {
         </button>
         <img
           src={mainImage}
-          className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+          className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-300"
           alt="Enlarged"
           onClick={(e) => e.stopPropagation()}
         />
@@ -151,98 +141,70 @@ export default function ProductDetailsContent({ product }) {
   };
 
   return (
-    /* 🟢 MOBILE UI FIX: Added w-full max-w-full overflow-x-hidden */
     <div className="grid items-start grid-cols-1 gap-6 p-4 lg:grid-cols-12 xl:gap-16 md:p-8 w-full max-w-full overflow-x-hidden">
       <ModalPortal />
 
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org/",
-            "@type": "Product",
-            name: product.name,
-            image: allImages,
-            description: product.description,
-            sku: activeSku || product._id,
-            offers: {
-              "@type": "Offer",
-              url: isMounted ? window.location.href : "",
-              priceCurrency: "BDT",
-              price: product.price,
-              availability: isOutOfStock
-                ? "https://schema.org/OutOfStock"
-                : "https://schema.org/InStock",
-              priceValidUntil: "2026-12-31",
-            },
-          }),
-        }}
-      />
-
-      {/* LEFT COLUMN: IMAGES */}
-      <div className="space-y-4 lg:col-span-5">
-        <div
-          className="relative rounded-[2rem] overflow-hidden bg-white border border-gray-100 shadow-xl aspect-square cursor-zoom-in"
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-          onDoubleClick={() => setIsModalOpen(true)}
-        >
-          <img
-            src={mainImage}
-            alt={product.name}
-            className="object-cover w-full h-full transition-opacity duration-300"
-          />
+      {/* LEFT COLUMN: IMAGES & GALLERY */}
+      <div className="space-y-6 lg:col-span-5">
+        <div className="space-y-4">
           <div
-            className="absolute inset-0 pointer-events-none transition-opacity duration-200"
-            style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }}
-          />
-        </div>
-
-        <div className="flex items-center justify-center gap-2 py-0.5 opacity-60">
-          <MousePointer2 size={10} className="text-[#EA638C]" />
-          <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
-            Double-click to expand
-          </span>
-        </div>
-
-        {allImages.length > 1 && (
-          <div className="flex flex-wrap gap-2 md:gap-3 px-1 justify-center md:justify-start">
-            {allImages.map((img, idx) => (
-              <button
-                key={idx}
-                onClick={() => setMainImage(img)}
-                className={`w-14 h-14 md:w-16 md:h-16 rounded-xl md:rounded-2xl overflow-hidden border-2 transition-all ${
-                  mainImage === img
-                    ? "border-[#EA638C] scale-105 shadow-md"
-                    : "border-gray-100 opacity-70 hover:opacity-100"
-                }`}
-              >
-                <img
-                  src={img}
-                  className="object-cover w-full h-full"
-                  alt="thumbnail"
-                />
-              </button>
-            ))}
+            className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-2xl aspect-square cursor-zoom-in group"
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            onClick={() => setIsModalOpen(true)}
+          >
+            <img
+              src={mainImage}
+              alt={product.name}
+              className="object-cover w-full h-full transition-opacity duration-300"
+            />
+            <div
+              className="absolute inset-0 pointer-events-none transition-opacity duration-200"
+              style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }}
+            />
+            <div className="absolute bottom-6 right-6 p-3 bg-white/90 backdrop-blur-md rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity shadow-sm border border-gray-100">
+               <Expand size={20} className="text-[#EA638C]" />
+            </div>
           </div>
-        )}
 
-        <div className="flex items-center justify-around p-3 border border-white bg-gray-50/80 rounded-3xl">
-          <FeatureItem
-            icon={<Truck size={14} />}
-            text="Fast Delivery"
-            color="blue"
-          />
-          <FeatureItem
-            icon={<ShieldCheck size={14} />}
-            text="Secure"
-            color="brand"
-          />
-          <FeatureItem
-            icon={<RotateCcw size={14} />}
-            text="7-Days"
-            color="orange"
-          />
+          <div className="flex items-center justify-center gap-2 py-0.5 opacity-60">
+            <MousePointer2 size={10} className="text-[#EA638C]" />
+            <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+              Click to expand full view
+            </span>
+          </div>
+
+          {/* DETAIL GALLERY (Including Variants) */}
+          {allImages.length > 1 && (
+            <div className="space-y-3">
+              <span className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">
+                Product Gallery & Variants
+              </span>
+              <div className="flex flex-wrap gap-3 px-1 justify-center md:justify-start">
+                {allImages.map((img, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setMainImage(img)}
+                    className={`relative w-16 h-16 md:w-20 md:h-20 rounded-[1.2rem] overflow-hidden border-2 transition-all group
+                      ${mainImage === img 
+                        ? "border-[#EA638C] ring-4 ring-pink-50 scale-105 shadow-lg" 
+                        : "border-transparent bg-gray-50 hover:border-gray-200"}`}
+                  >
+                    <img src={img} className="object-cover w-full h-full" alt={`media-${idx}`} />
+                    {mainImage !== img && (
+                        <div className="absolute inset-0 bg-[#3E442B]/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-around p-4 border border-white bg-gray-50/80 rounded-[2rem] shadow-inner">
+          <FeatureItem icon={<Truck size={14} />} text="Fast Delivery" color="blue" />
+          <FeatureItem icon={<ShieldCheck size={14} />} text="Secure" color="brand" />
+          <FeatureItem icon={<RotateCcw size={14} />} text="7-Days" color="orange" />
         </div>
       </div>
 
@@ -250,34 +212,18 @@ export default function ProductDetailsContent({ product }) {
       <div className="space-y-6 md:space-y-8 lg:col-span-7">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <div
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-full transition-all duration-500 shadow-sm
-              ${
-                isOutOfStock
-                  ? "bg-red-500 text-white"
-                  : isLowStock
-                    ? "bg-orange-100 text-orange-600 border border-orange-200 animate-pulse"
-                    : "bg-gray-900 text-white"
-              }`}
-            >
-              {!isOutOfStock && (
-                <div
-                  className={`w-1.5 h-1.5 rounded-full ${isLowStock ? "bg-orange-600" : "bg-green-400"}`}
-                />
-              )}
+            <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full shadow-sm
+              ${isOutOfStock ? "bg-red-500 text-white" : isLowStock ? "bg-orange-100 text-orange-600 border border-orange-200" : "bg-gray-900 text-white"}`}>
+              {!isOutOfStock && <div className={`w-1.5 h-1.5 rounded-full ${isLowStock ? "bg-orange-600 animate-pulse" : "bg-green-400"}`} />}
               <span className="text-[10px] font-black uppercase tracking-widest">
-                {isOutOfStock
-                  ? "Sold Out"
-                  : isLowStock
-                    ? `Hurry! Only ${currentStock} units left`
-                    : "In Stock"}
+                {isOutOfStock ? "Sold Out" : isLowStock ? `Only ${currentStock} Left` : "Available"}
               </span>
             </div>
 
             {displayMoq > 1 && (
               <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-4 py-1.5 rounded-full border border-pink-100">
                 <Zap size={12} className="fill-current" />
-                <span>Min. Order: {displayMoq} Units</span>
+                <span>MOQ: {displayMoq} Units</span>
               </div>
             )}
 
@@ -289,38 +235,30 @@ export default function ProductDetailsContent({ product }) {
             )}
           </div>
 
-          <h1 className="text-3xl md:text-5xl italic font-black leading-tight tracking-tighter text-gray-900 uppercase">
+          <h1 className="text-4xl md:text-6xl italic font-black leading-none tracking-tighter text-gray-900 uppercase">
             {product.name}
           </h1>
         </div>
 
         <div className="space-y-4">
-          {/* 🟢 DESCRIPTION FIX: Every point separate line + Bold titles */}
-          <div className="p-6 md:p-7 bg-white rounded-[2rem] border border-gray-100 shadow-sm">
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-4">
+          {/* DESCRIPTION BLOCK */}
+          <div className="p-7 md:p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-pink-50/50 rounded-full blur-3xl -mr-16 -mt-16" />
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] block mb-6 relative">
               Product Description
             </span>
-
-            <div className="flex flex-col gap-y-3">
-              {product.description
-                .split(".")
-                .filter((p) => p.trim())
-                .map((point, i) => {
+            <div className="flex flex-col gap-y-4 relative">
+              {product.description.split(".").filter((p) => p.trim()).map((point, i) => {
                   const parts = point.split(":");
                   return (
                     <div key={i} className="leading-relaxed">
                       {parts.length > 1 ? (
                         <p className="text-sm md:text-base text-gray-600">
-                          {/* 🟢 Bold label with dark text for contrast */}
-                          <span className="font-extrabold text-gray-900 mr-1">
-                            {parts[0].trim()}:
-                          </span>
+                          <span className="font-extrabold text-[#3E442B] mr-1">{parts[0].trim()}:</span>
                           {parts.slice(1).join(":").trim()}.
                         </p>
                       ) : (
-                        <p className="font-medium text-gray-600 text-sm md:text-base">
-                          {point.trim()}.
-                        </p>
+                        <p className="font-medium text-gray-600 text-sm md:text-base">{point.trim()}.</p>
                       )}
                     </div>
                   );
@@ -328,26 +266,24 @@ export default function ProductDetailsContent({ product }) {
             </div>
           </div>
 
-          <div className="p-4 border border-dashed border-gray-200 bg-gray-50/50 rounded-[2rem] flex items-center gap-4 overflow-hidden">
+          {/* SHARE LINK */}
+          <div className="p-4 border border-dashed border-gray-200 bg-gray-50/50 rounded-[2rem] flex items-center gap-4">
             <div className="flex-1 px-2 min-w-0">
-              <span className="text-[9px] font-black text-[#EA638C] uppercase tracking-widest block mb-1">
-                Direct Share Link
-              </span>
-              <p className="text-[11px] text-gray-400 font-mono truncate">
-                {isMounted ? window.location.href : "..."}
-              </p>
+              <span className="text-[9px] font-black text-[#EA638C] uppercase tracking-widest block mb-1">Direct Share Link</span>
+              <p className="text-[11px] text-gray-400 font-mono truncate">{isMounted ? window.location.href : "..."}</p>
             </div>
             <button
               onClick={handleCopyLink}
-              className={`flex-shrink-0 flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all duration-300
+              className={`flex-shrink-0 flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all
                 ${copied ? "bg-[#3E442B] text-white" : "bg-white text-[#EA638C] border border-gray-100 hover:shadow-md active:scale-95"}`}
             >
               {copied ? <Check size={14} /> : <Share2 size={14} />}
-              {copied ? "Copy" : "Copy Link"}
+              {copied ? "Copy" : "Share"}
             </button>
           </div>
         </div>
 
+        {/* PURCHASE SECTION */}
         <div className="relative">
           <ProductPurchaseSection
             product={product}
@@ -365,14 +301,14 @@ export default function ProductDetailsContent({ product }) {
 
 function FeatureItem({ icon, text, color }) {
   const colorMap = {
-    blue: "text-blue-600",
-    brand: "text-[#EA638C]",
-    orange: "text-orange-600",
+    blue: "text-blue-600 bg-blue-50",
+    brand: "text-[#EA638C] bg-pink-50",
+    orange: "text-orange-600 bg-orange-50",
   };
   return (
     <div className="flex items-center gap-2">
-      <div className={colorMap[color]}>{icon}</div>
-      <span className="text-[9px] font-black text-gray-700 uppercase tracking-wider">
+      <div className={`p-2 rounded-xl ${colorMap[color]}`}>{icon}</div>
+      <span className="text-[9px] font-black text-gray-700 uppercase tracking-wider hidden sm:block">
         {text}
       </span>
     </div>
