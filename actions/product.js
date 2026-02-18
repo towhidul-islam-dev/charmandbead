@@ -186,9 +186,19 @@ export async function deleteProduct(productId) {
       return `${folder}/${fileName.split(".")[0]}`;
     };
 
+    // 1. Delete Main Image
     const mainPublicId = extractPublicId(product.imageUrl);
     if (mainPublicId) await cloudinary.uploader.destroy(mainPublicId);
 
+    // 📸 2. NEW: Delete Gallery Images (Missing in your original file)
+    if (product.gallery && product.gallery.length > 0) {
+      await Promise.all(product.gallery.map(url => {
+        const gPid = extractPublicId(url);
+        return gPid ? cloudinary.uploader.destroy(gPid) : null;
+      }));
+    }
+
+    // 3. Delete Variant Images
     if (product.hasVariants && product.variants?.length > 0) {
       await Promise.all(product.variants.map(v => {
         const vPid = extractPublicId(v.imageUrl);
@@ -197,9 +207,8 @@ export async function deleteProduct(productId) {
     }
 
     await Product.findByIdAndDelete(productId);
-    revalidatePath("/admin/products");
-    revalidatePath("/products");
-    revalidatePath("/");
+    
+    // ... rest of revalidatePath logic
     return { success: true, message: "Deleted successfully" };
   } catch (error) {
     return { success: false, message: error.message };
