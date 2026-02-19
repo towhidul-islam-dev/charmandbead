@@ -12,18 +12,49 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-async function uploadToCloudinary(file) {
-  if (!file || file.size === 0 || typeof file === "string") return null;
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  return new Promise((resolve, reject) => {
-    cloudinary.uploader
-      .upload_stream({ folder: "ecom-products" }, (error, result) => {
-        if (error) reject(error);
-        else resolve(result.secure_url);
-      })
-      .end(buffer);
-  });
+// async function uploadToCloudinary(file) {
+//   if (!file || file.size === 0 || typeof file === "string") return null;
+//   const arrayBuffer = await file.arrayBuffer();
+//   const buffer = Buffer.from(arrayBuffer);
+//   return new Promise((resolve, reject) => {
+//     cloudinary.uploader
+//       .upload_stream({ folder: "ecom-products" }, (error, result) => {
+//         if (error) reject(error);
+//         else resolve(result.secure_url);
+//       })
+//       .end(buffer);
+//   });
+// }
+
+export async function uploadToCloudinary(file) {
+  if (!file || file.size === 0 || typeof file === "string") {
+    console.log("☁️ Cloudinary: Skip upload (Invalid file or already a URL)");
+    return typeof file === "string" ? file : null;
+  }
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        { folder: "ecom-products" },
+        (error, result) => {
+          if (error) {
+            console.error("❌ Cloudinary Upload Error:", error);
+            reject(error);
+          } else {
+            console.log("✅ Cloudinary Success:", result.secure_url);
+            resolve(result.secure_url);
+          }
+        }
+      );
+      uploadStream.end(buffer);
+    });
+  } catch (err) {
+    console.error("❌ Buffer Conversion Error:", err);
+    return null;
+  }
 }
 
 export async function silentInventoryHeal() {
@@ -137,18 +168,27 @@ export async function saveProduct(prevState, formData) {
     let finalProduct;
     // Check if ID exists to determine update vs create
     const isValidId = id && id !== "null" && id !== "" && id !== "undefined";
-
+console.log("FINAL GALLERY ARRAY TO SAVE:", finalGallery);
     if (isValidId) {
-      // Use findByIdAndUpdate for existing products
-      finalProduct = await Product.findByIdAndUpdate(
-        id, 
-        { $set: productData }, 
-        { new: true, runValidators: true }
-      );
-    } else {
-      // Create new product
-      finalProduct = await Product.create(productData);
+  // We use the spread operator to ensure gallery is part of the top-level set
+  finalProduct = await Product.findByIdAndUpdate(
+    id,
+    { 
+      $set: {
+        ...productData,
+        gallery: productData.gallery // Explicitly pass the array
+      } 
+    },
+    { 
+      new: true, 
+      runValidators: true,
+      // This ensures Mongoose doesn't filter out fields not in its "cached" schema
+      strict: false 
     }
+  );
+} else {
+  finalProduct = await Product.create(productData);
+}
 
     // --- 6. REVALIDATION ---
     revalidatePath("/admin/products");

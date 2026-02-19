@@ -34,6 +34,9 @@ const ProductSchema = new mongoose.Schema(
 
     sku: { type: String, sparse: true },
     imageUrl: String,
+
+    gallery: { type: [String], default: [] },
+
     price: { type: Number, default: 0 },
     stock: { type: Number, default: 0, min: 0 },
     minOrderQuantity: { type: Number, default: 1 },
@@ -56,7 +59,7 @@ const generateSKU = (name, color, size) => {
   return `${p}-${c}-${s}-${Math.floor(100 + Math.random() * 900)}`;
 };
 
-// 🟢 PRE-SAVE (For New Products)
+// 🟢 PRE-SAVE (For New Products) - Preserved existing logic
 ProductSchema.pre("save", async function () {
   if (this.hasVariants && this.variants?.length > 0) {
     this.variants.forEach((v) => {
@@ -73,7 +76,7 @@ ProductSchema.pre("save", async function () {
   }
 });
 
-// 🟢 PRE-UPDATE (For findByIdAndUpdate)
+// 🟢 PRE-UPDATE (For findByIdAndUpdate) - Preserved existing logic
 ProductSchema.pre(["findOneAndUpdate", "updateOne"], function () {
   const update = this.getUpdate();
   const data = update.$set || update;
