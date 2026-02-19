@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
+import Image from "next/image"; // Added Next.js Image
 import {
   Truck,
   ShieldCheck,
@@ -27,7 +27,7 @@ export default function ProductDetailsContent({ product }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [zoomStyle, setZoomStyle] = useState({ display: "none" });
 
-  // --- 📸 IMAGE LOGIC ---
+  // --- 📸 MASTER IMAGE LOGIC ---
   const allImages = useMemo(() => {
     if (!product) return [];
     const images = new Set();
@@ -37,7 +37,7 @@ export default function ProductDetailsContent({ product }) {
     if (product.variants && Array.isArray(product.variants)) {
       product.variants.forEach(v => {
         const vImg = v.imageUrl || v.image;
-        if (vImg) images.add(vImg);
+        if (vImg && typeof vImg === 'string') images.add(vImg);
       });
     }
 
@@ -46,20 +46,32 @@ export default function ProductDetailsContent({ product }) {
     );
   }, [product]);
 
-  // Main Product State
+  // Main Image State
   const [mainImage, setMainImage] = useState(allImages[0] || "/placeholder.png");
   
-  // ✨ NEW: Separate state for Detail Gallery
-  const [detailImage, setDetailImage] = useState(product?.gallery?.[0] || null);
+  // ✨ NEW: Separate state for Detail Gallery images specifically
+  const [detailGalleryImage, setDetailGalleryImage] = useState(null);
   
   const [activeSku, setActiveSku] = useState(product?.sku || null);
 
   useEffect(() => {
     if (allImages.length > 0) setMainImage(allImages[0]);
-    if (product?.gallery?.length > 0) setDetailImage(product.gallery[0]);
+    // Initialize detail gallery with first gallery image if available
+    if (product?.gallery?.length > 0) setDetailGalleryImage(product.gallery[0]);
   }, [allImages, product?.gallery]);
 
   useEffect(() => { setIsMounted(true); }, []);
+
+  // --- RECENTLY VIEWED TRACKING ---
+  useEffect(() => {
+    if (product?._id) {
+      const history = JSON.parse(localStorage.getItem("recentlyViewed") || "[]");
+      const filteredHistory = history.filter((item) => item._id !== product._id);
+      const newHistory = [product, ...filteredHistory].slice(0, 10);
+      localStorage.setItem("recentlyViewed", JSON.stringify(newHistory));
+      window.dispatchEvent(new Event("recentlyViewedUpdated"));
+    }
+  }, [product]);
 
   // --- ZOOM LOGIC ---
   const handleMouseMove = (e) => {
@@ -75,6 +87,8 @@ export default function ProductDetailsContent({ product }) {
     });
   };
 
+  const handleMouseLeave = () => setZoomStyle({ display: "none" });
+
   const handleCopyLink = () => {
     const shortlink = typeof window !== "undefined" ? window.location.href : "";
     navigator.clipboard.writeText(shortlink);
@@ -89,19 +103,38 @@ export default function ProductDetailsContent({ product }) {
   const baseStockTotal = product?.hasVariants
     ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
     : Number(product?.stock) || 0;
-  const inCartQtyTotal = cart.reduce((acc, item) => item.productId === product?._id ? acc + item.quantity : acc, 0);
+
+  const inCartQtyTotal = cart.reduce((acc, item) => {
+    return item.productId === product?._id ? acc + item.quantity : acc;
+  }, 0);
+
   const currentStock = Math.max(0, baseStockTotal - inCartQtyTotal);
-  const displayMoq = product?.hasVariants ? Math.min(...product.variants.map((v) => v.minOrderQuantity || 1)) : product?.minOrderQuantity || 1;
+  const displayMoq = product?.hasVariants
+    ? Math.min(...product.variants.map((v) => v.minOrderQuantity || 1))
+    : product?.minOrderQuantity || 1;
+
   const isOutOfStock = currentStock <= 0;
   const isLowStock = !isOutOfStock && currentStock <= displayMoq * 3;
 
   const ModalPortal = () => {
     if (!isMounted || !isModalOpen) return null;
     return createPortal(
-      <div className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl z-[999999] p-4 cursor-pointer" onClick={() => setIsModalOpen(false)}>
-        <button className="absolute top-6 right-6 p-4 bg-[#EA638C] text-white rounded-full shadow-2xl"><X size={32} /></button>
-        <div className="relative w-full h-[80vh]">
-          <Image src={mainImage} fill className="object-contain" alt="Enlarged" unoptimized />
+      <div
+        className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl z-[999999] p-4 md:p-12 cursor-pointer"
+        onClick={() => setIsModalOpen(false)}
+      >
+        <button className="absolute top-6 right-6 p-4 bg-[#EA638C] text-white rounded-full shadow-2xl transition-all hover:rotate-90">
+          <X size={32} />
+        </button>
+        <div className="relative w-full h-full max-w-5xl max-h-[80vh]">
+            <Image 
+                src={mainImage} 
+                fill 
+                className="object-contain rounded-lg" 
+                alt="Enlarged" 
+                onClick={(e) => e.stopPropagation()} 
+                unoptimized
+            />
         </div>
       </div>,
       document.body
@@ -111,75 +144,98 @@ export default function ProductDetailsContent({ product }) {
   if (!product) return null;
 
   return (
-    <div className="grid items-start w-full grid-cols-1 gap-6 p-4 overflow-x-hidden bg-white lg:grid-cols-12 xl:gap-16 md:p-8">
+    <div className="grid items-start w-full max-w-full grid-cols-1 gap-6 p-4 overflow-x-hidden bg-white lg:grid-cols-12 xl:gap-16 md:p-8">
       <ModalPortal />
 
       {/* LEFT COLUMN: IMAGES */}
-      <div className="space-y-6 lg:col-span-5">
-        {/* Main Hero Image */}
+      <div className="space-y-4 lg:col-span-5">
         <div
           className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-2xl aspect-square cursor-zoom-in group"
           onMouseMove={handleMouseMove}
-          onMouseLeave={() => setZoomStyle({ display: "none" })}
+          onMouseLeave={handleMouseLeave}
           onDoubleClick={() => setIsModalOpen(true)}
         >
-          <Image src={mainImage} alt={product.name} fill priority className="object-cover transition-opacity duration-300" sizes="(max-width: 1024px) 100vw, 40vw" />
+          <Image 
+            src={mainImage} 
+            alt={product.name} 
+            fill 
+            priority
+            className="object-cover transition-opacity duration-300" 
+            sizes="(max-width: 1024px) 100vw, 40vw"
+          />
           <div className="absolute inset-0 transition-opacity duration-200 pointer-events-none" style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }} />
           <div className="absolute p-3 transition-all border border-gray-100 rounded-full shadow-lg opacity-0 bottom-6 right-6 bg-white/90 backdrop-blur-sm group-hover:opacity-100">
-            <MousePointer2 size={18} className="text-[#EA638C]" />
+              <MousePointer2 size={18} className="text-[#EA638C]" />
           </div>
         </div>
 
-        {/* Hero Thumbnails */}
+        {/* THUMBNAIL GRID */}
         {allImages.length > 1 && (
           <div className="flex flex-wrap justify-center gap-2 px-1 md:gap-3 md:justify-start">
-            {allImages.map((img, idx) => (
-              <button
-                key={idx}
-                onClick={() => setMainImage(img)}
-                className={`relative w-14 h-14 md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 transition-all ${
-                  mainImage === img ? "border-[#EA638C] scale-105 shadow-xl" : "border-gray-100 opacity-60 hover:opacity-100"
-                }`}
-              >
-                <Image src={img} fill className="object-cover" alt="thumbnail" sizes="80px" />
-              </button>
-            ))}
+            {allImages.map((img, idx) => {
+              const matchingVariant = product.variants?.find(v => (v.imageUrl || v.image) === img);
+              return (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setMainImage(img);
+                    if (matchingVariant?.sku) setActiveSku(matchingVariant.sku);
+                    else setActiveSku(product.sku);
+                  }}
+                  className={`relative w-14 h-14 md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 transition-all active:scale-90 ${
+                    mainImage === img ? "border-[#EA638C] scale-105 shadow-xl z-10" : "border-gray-50 opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <Image src={img} fill className="object-cover" alt="thumbnail" sizes="80px" />
+                  {matchingVariant && (
+                    <div className="absolute top-0 right-0 p-1 bg-[#EA638C] rounded-bl-xl shadow-sm z-10">
+                      <Check size={10} className="text-white stroke-[4]" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
 
-        {/* 🖼️ SEPARATE DETAIL GALLERY SECTION */}
+        {/* 🖼️ DETAIL GALLERY (Existing UI Logic Preserved) */}
         {product.gallery && product.gallery.length > 0 && (
-          <div className="p-6 bg-[#FBB6E6]/10 rounded-[2.5rem] border-2 border-[#EA638C]/20 shadow-sm mt-8">
+          <div className="p-5 bg-[#FBB6E6]/10 rounded-[2rem] border border-[#FBB6E6]/20">
             <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-white rounded-full shadow-sm">
-                <Images size={16} className="text-[#EA638C]" />
+              <div className="p-1.5 bg-white rounded-full shadow-sm">
+                <Images size={14} className="text-[#EA638C]" />
               </div>
-              <span className="text-[10px] font-black text-[#3E442B] uppercase tracking-[0.4em]">Detail Showcase</span>
+              <span className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.3em]">Detail Image Gallery</span>
             </div>
             
-            {/* Active Detail Display */}
-            <div className="relative w-full aspect-video rounded-2xl overflow-hidden border-4 border-white shadow-lg mb-4 bg-white">
-               <Image src={detailImage || product.gallery[0]} fill className="object-cover" alt="Active Detail" sizes="(max-width: 1024px) 100vw, 40vw" />
+            {/* Display the active detail image using separate state */}
+            <div className="relative w-full aspect-video rounded-2xl overflow-hidden border-2 border-white shadow-sm mb-3">
+                 <Image 
+                    src={detailGalleryImage || product.gallery[0]} 
+                    fill 
+                    className="object-cover" 
+                    alt="Gallery Active" 
+                    sizes="(max-width: 1024px) 100vw, 40vw"
+                 />
             </div>
 
-            {/* Detail Selection Grid */}
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-3">
               {product.gallery.map((url, idx) => (
                 <div 
                   key={idx} 
-                  className={`relative aspect-square rounded-xl overflow-hidden border-2 cursor-pointer transition-all ${
-                    detailImage === url ? "border-[#EA638C] scale-95" : "border-white hover:border-[#FBB6E6]"
+                  className={`group relative aspect-square rounded-2xl overflow-hidden border-2 shadow-sm cursor-pointer transition-all ${
+                    detailGalleryImage === url ? "border-[#EA638C]" : "border-white"
                   }`}
-                  onClick={() => setDetailImage(url)}
+                  onClick={() => setDetailGalleryImage(url)}
                 >
-                  <Image src={url} fill className="object-cover" alt={`Gallery ${idx}`} sizes="100px" />
+                  <Image src={url} fill alt={`Detail ${idx}`} className="object-cover" sizes="150px" />
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Feature Items */}
+        {/* FEATURE ITEMS */}
         <div className="flex items-center justify-around p-4 border border-white bg-gray-50/80 rounded-[2rem] shadow-inner">
           <FeatureItem icon={<Truck size={16} />} text="Express" color="blue" />
           <FeatureItem icon={<ShieldCheck size={16} />} text="Genuine" color="brand" />
@@ -195,12 +251,14 @@ export default function ProductDetailsContent({ product }) {
               {!isOutOfStock && <div className={`w-2 h-2 rounded-full ${isLowStock ? "bg-orange-600 animate-pulse" : "bg-green-400"}`} />}
               {isOutOfStock ? "Sold Out" : isLowStock ? `Hurry Up! ${currentStock} Left` : "In Stock"}
             </div>
+
             {displayMoq > 1 && (
               <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-5 py-2 rounded-full border border-pink-100">
                 <Zap size={12} className="fill-current" />
                 <span>MOQ : {displayMoq} Units</span>
               </div>
             )}
+
             {activeSku && (
               <div className="flex items-center gap-1.5 text-[#3E442B] font-black text-[10px] uppercase tracking-widest bg-gray-50 px-5 py-2 rounded-full border border-gray-100">
                 <Barcode size={12} />
@@ -208,24 +266,38 @@ export default function ProductDetailsContent({ product }) {
               </div>
             )}
           </div>
-          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-gray-900 uppercase">{product.name}</h1>
+
+          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-gray-900 uppercase">
+            {product.name}
+          </h1>
         </div>
 
-        {/* Description Box */}
+        {/* DESCRIPTION */}
         <div className="p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
           <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] block mb-6">Product Essence</span>
-          <div className="text-base leading-relaxed text-gray-600 md:text-lg font-semibold">
-            {product.description}
+          <div className="flex flex-col gap-y-4">
+            {product.description?.split(".").filter(p => p.trim()).map((point, i) => {
+              const parts = point.split(":");
+              return (
+                <div key={i} className="text-base leading-relaxed text-gray-600 md:text-lg">
+                  {parts.length > 1 ? (
+                    <p><span className="mr-2 text-sm font-black text-gray-900 uppercase">{parts[0].trim()} :</span>{parts.slice(1).join(":").trim()}.</p>
+                  ) : (
+                    <p className="font-semibold">{point.trim()}.</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Share Section */}
+        {/* SHARE LINK */}
         <div className="p-5 border-2 border-dashed border-gray-100 bg-gray-50/30 rounded-[2rem] flex items-center gap-4">
           <div className="flex-1 min-w-0 px-2">
             <span className="text-[10px] font-black text-[#EA638C] uppercase tracking-widest block mb-1">Share Treasure</span>
             <p className="font-mono text-xs text-gray-400 truncate">{isMounted ? window.location.href : "..."}</p>
           </div>
-          <button onClick={handleCopyLink} className={`flex-shrink-0 flex items-center gap-2 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${copied ? "bg-[#3E442B] text-white" : "bg-white text-[#EA638C] border border-gray-200 shadow-xl"}`}>
+          <button onClick={handleCopyLink} className={`flex-shrink-0 flex items-center gap-2 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${copied ? "bg-[#3E442B] text-white" : "bg-white text-[#EA638C] border border-gray-200 shadow-xl hover:translate-y-[-2px]"}`}>
             {copied ? <Check size={16} /> : <Share2 size={16} />}
             {copied ? "Copied" : "Copy Link"}
           </button>
@@ -234,7 +306,10 @@ export default function ProductDetailsContent({ product }) {
         <ProductPurchaseSection
           product={product}
           isOutOfStock={isOutOfStock}
-          onVariantChange={(v) => { if (v?.imageUrl) setMainImage(v.imageUrl); }}
+          onVariantChange={(variantData) => {
+            if (variantData?.imageUrl) setMainImage(variantData.imageUrl);
+            if (variantData?.sku) setActiveSku(variantData.sku);
+          }}
         />
       </div>
     </div>
