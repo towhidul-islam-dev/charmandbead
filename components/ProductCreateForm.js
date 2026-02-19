@@ -59,6 +59,20 @@ export default function ProductForm({ initialData }) {
   };
 
   // --- HANDLERS ---
+  const generateAutoSKUs = () => {
+    if (!previewName) {
+      toast.error("Enter a product name first!");
+      return;
+    }
+    const prefix = previewName.replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase() || "PRD";
+    const newVariants = variants.map((v) => ({
+      ...v, 
+      sku: v.sku || `${prefix}-${Math.floor(100 + Math.random() * 900)}`
+    }));
+    setVariants(newVariants);
+    toast.success("Batch SKUs generated! ⚡");
+  };
+
   const handleCategoryChange = (e) => {
     setMainCategory(e.target.value);
     setSubCategory(""); 
@@ -103,7 +117,6 @@ export default function ProductForm({ initialData }) {
     });
 
     if (useVariants) {
-      // Logic Fix: Ensure we don't send local preview blobs to the server
       const variantsData = variants.map(({ preview, file, ...rest }) => ({
         ...rest,
         minOrderQuantity: Number(rest.minOrderQuantity) || 1,
@@ -112,11 +125,8 @@ export default function ProductForm({ initialData }) {
       }));
       formData.set("variantsJson", JSON.stringify(variantsData));
 
-      // Append variant files correctly
       variants.forEach((v, i) => {
-        if (v.file) {
-          formData.append(`variantFile_${i}`, v.file);
-        }
+        if (v.file) formData.append(`variantFile_${i}`, v.file);
       });
     }
     
@@ -150,7 +160,7 @@ export default function ProductForm({ initialData }) {
     }
   }, [state, initialData, isNewArrival, previewName, addNotification]);
 
-  // FIXED: inputClass adjusted for mobile text visibility
+  // --- STYLES ---
   const inputClass = "w-full bg-gray-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-[16px] md:text-sm block";
   const sectionClass = "bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-6";
   const variantInputClass = "w-full bg-white px-3 py-3 rounded-xl text-[13px] md:text-[11px] font-bold outline-none border border-transparent focus:border-[#EA638C]/20 text-gray-900";
@@ -158,10 +168,7 @@ export default function ProductForm({ initialData }) {
   const PreviewModal = () => {
     if (!isMounted || !previewModalImg) return null;
     return createPortal(
-      <div 
-        className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-        onClick={() => setPreviewModalImg(null)}
-      >
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setPreviewModalImg(null)}>
         <div className="relative max-w-4xl max-h-[90vh] w-full bg-white rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
           <button onClick={() => setPreviewModalImg(null)} className="absolute top-5 right-5 p-2.5 bg-[#EA638C] text-white rounded-full hover:rotate-90 transition-all z-10 shadow-lg">
             <XMarkIcon className="w-6 h-6 stroke-[3]" />
@@ -224,7 +231,14 @@ export default function ProductForm({ initialData }) {
                     <h3 className="text-[11px] font-black tracking-widest text-[#3E442B] uppercase">Inventory & MOQ</h3>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => setUseVariants(!useVariants)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${useVariants ? 'bg-[#EA638C] text-white' : 'bg-gray-100 text-gray-400'}`}>{useVariants ? "Disable Variants" : "Enable Variants"}</button>
+                  {useVariants && (
+                    <button type="button" onClick={generateAutoSKUs} className="px-3 py-2 bg-gray-100 text-[#3E442B] rounded-xl text-[9px] font-black uppercase flex items-center gap-2 hover:bg-[#3E442B] hover:text-white transition-all">
+                      <CommandLineIcon className="w-3.5 h-3.5" /> Gen SKU's
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setUseVariants(!useVariants)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${useVariants ? 'bg-[#EA638C] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                    {useVariants ? "Disable Variants" : "Enable Variants"}
+                  </button>
                 </div>
               </div>
 
