@@ -48,18 +48,22 @@ export async function saveProduct(prevState, formData) {
     const id = formData.get("id");
     const hasVariants = formData.get("hasVariants") === "true";
 
-    // 1. Handle Main Image
+    // --- 1. HANDLE MAIN IMAGE ---
     let imageUrl = formData.get("existingImage") || "";
     const mainImageFile = formData.get("imageFile");
     if (mainImageFile && mainImageFile instanceof File && mainImageFile.size > 0) {
       imageUrl = await uploadToCloudinary(mainImageFile);
     }
 
-    // 📸 2. Handle Detail Gallery
-    const existingGallery = JSON.parse(formData.get("existingGallery") || "[]");
+    // --- 2. HANDLE DETAIL GALLERY ---
+    // Extract existing gallery and clean objects to just URL strings
+    const rawExistingGallery = JSON.parse(formData.get("existingGallery") || "[]");
+    const existingGalleryUrls = rawExistingGallery.map(item => 
+      typeof item === 'string' ? item : (item.url || "")
+    ).filter(url => url !== "");
+
     const newGalleryUploads = [];
-    
-    // Process new gallery uploads
+    // Process new gallery uploads from formData entries
     for (const [key, value] of formData.entries()) {
       if (key.startsWith("galleryFile_") && value instanceof File && value.size > 0) {
         const uploadedUrl = await uploadToCloudinary(value);
@@ -67,14 +71,16 @@ export async function saveProduct(prevState, formData) {
       }
     }
     
-    const finalGallery = [...existingGallery, ...newGalleryUploads];
+    // Combine existing and new uploads
+    const finalGallery = [...existingGalleryUrls, ...newGalleryUploads];
 
-    // 🧬 3. DNA Category Logic
+    // --- 3. DNA CATEGORY LOGIC ---
     const categoryId = formData.get("categoryId");
     const subCategoryId = formData.get("subCategoryId");
     const mainCat = CATEGORY_DNA.find(c => String(c._id) === String(categoryId));
     const subCat = CATEGORY_DNA.find(c => String(c._id) === String(subCategoryId));
 
+    // Initialize product data object
     let productData = {
       name: formData.get("name")?.trim(),
       description: formData.get("description"),
@@ -85,29 +91,30 @@ export async function saveProduct(prevState, formData) {
       isNewArrival: formData.get("isNewArrival") === "true",
       hasVariants: hasVariants,
       imageUrl: imageUrl,
-      gallery: finalGallery,
+      gallery: finalGallery, // Array of strings matches your Schema
       price: Number(formData.get("price")) || 0,
       stock: Number(formData.get("stock")) || 0,
       minOrderQuantity: Number(formData.get("minOrderQuantity")) || 1,
     };
 
-    // 4. Handle Variants
+    // --- 4. HANDLE VARIANTS ---
     if (hasVariants) {
       const rawVariants = JSON.parse(formData.get("variantsJson") || "[]");
       productData.variants = await Promise.all(
         rawVariants.map(async (v, i) => {
           let vImg = v.imageUrl || "";
           
-          // FIXED: Changed 'variantImage_' to 'variantFile_' to match your Form
+          // Check for a new file for this specific variant index
           const vFile = formData.get(`variantFile_${i}`); 
-          
           if (vFile && vFile instanceof File && vFile.size > 0) {
             const uploadedVImg = await uploadToCloudinary(vFile);
             if (uploadedVImg) vImg = uploadedVImg;
           }
           
           return {
-            ...v,
+            sku: v.sku || "",
+            size: v.size,
+            color: v.color,
             imageUrl: vImg,
             price: Number(v.price) || 0,
             stock: Number(v.stock) || 0,
@@ -116,18 +123,34 @@ export async function saveProduct(prevState, formData) {
         }),
       );
       
-      // Auto-calculate total stock from all variants
+      // Auto-calculate total stock from variants to sync with the main product
       productData.stock = productData.variants.reduce((acc, v) => acc + (v.stock || 0), 0);
+      
+      // Sync main price to the lowest variant price
+      const variantPrices = productData.variants.map(v => v.price).filter(p => p > 0);
+      if (variantPrices.length > 0) {
+        productData.price = Math.min(...variantPrices);
+      }
     }
 
+    // --- 5. DATABASE OPERATION ---
     let finalProduct;
-    if (id && id !== "null" && id !== "" && id !== "undefined") {
-      finalProduct = await Product.findByIdAndUpdate(id, productData, { new: true, runValidators: true });
+    // Check if ID exists to determine update vs create
+    const isValidId = id && id !== "null" && id !== "" && id !== "undefined";
+
+    if (isValidId) {
+      // Use findByIdAndUpdate for existing products
+      finalProduct = await Product.findByIdAndUpdate(
+        id, 
+        { $set: productData }, 
+        { new: true, runValidators: true }
+      );
     } else {
+      // Create new product
       finalProduct = await Product.create(productData);
     }
 
-    // Ensure revalidatePath is imported from 'next/cache'
+    // --- 6. REVALIDATION ---
     revalidatePath("/admin/products");
     revalidatePath("/products");
     revalidatePath("/");
@@ -140,9 +163,13 @@ export async function saveProduct(prevState, formData) {
       message: "Treasure Saved! ✨", 
       data: JSON.parse(JSON.stringify(finalProduct)) 
     };
+
   } catch (error) {
     console.error("Save Error:", error);
-    return { success: false, message: error.message || "An unexpected error occurred" };
+    return { 
+      success: false, 
+      message: error.message || "An unexpected error occurred during the save process." 
+    };
   }
 }
 

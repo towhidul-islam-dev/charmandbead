@@ -23,15 +23,19 @@ export default function ProductForm({ initialData }) {
   const [variants, setVariants] = useState(initialData?.variants || []);
   const [isNewArrival, setIsNewArrival] = useState(initialData?.isNewArrival || false);
   const [mainPreview, setMainPreview] = useState(initialData?.imageUrl || null);
-  const [galleryPreviews, setGalleryPreviews] = useState(initialData?.gallery || []);
   const [mainCategory, setMainCategory] = useState(initialData?.categoryId || "");
   const [subCategory, setSubCategory] = useState(initialData?.subCategoryId || "");
   const [previewName, setPreviewName] = useState(initialData?.name || "");
   const [previewPrice, setPreviewPrice] = useState(initialData?.price || 0);
-
+  
   const [previewModalImg, setPreviewModalImg] = useState(null);
   const [isMounted, setIsMounted] = useState(false);
-
+const [galleryPreviews, setGalleryPreviews] = useState(
+  initialData?.gallery?.map(url => ({ 
+    url: url, 
+    isNew: false 
+  })) || []
+);
   const [state, formAction, isPending] = useActionState(saveProduct, null);
 
   useEffect(() => { setIsMounted(true); }, []);
@@ -366,23 +370,56 @@ export default function ProductForm({ initialData }) {
                 }} />
               </section>
 
-              <section className={sectionClass}>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Detail Gallery</h3>
-                  <button type="button" onClick={() => document.getElementById('gallery-input').click()} className="text-[10px] font-black text-[#EA638C] uppercase">+ Add</button>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  {galleryPreviews.map((p, idx) => (
-                    <div key={idx} className="relative overflow-hidden border border-gray-100 aspect-square bg-gray-50 rounded-2xl group/gal">
-                      <img src={p.url || p} className="object-cover w-full h-full cursor-zoom-in" alt="gallery" onClick={() => setPreviewModalImg(p.url || p)} />
-                      <button onClick={() => removeGalleryImage(idx)} type="button" className="absolute p-1 transition-opacity bg-white rounded-full shadow-sm opacity-0 top-1 right-1 group-hover/gal:opacity-100">
-                        <XMarkIcon className="w-3 h-3 text-red-400" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <input id="gallery-input" type="file" multiple className="hidden" onChange={handleGalleryUpload} />
-              </section>
+<section className={sectionClass}>
+  <div className="flex items-center justify-between mb-4">
+    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Detail Gallery</h3>
+    <button type="button" onClick={() => document.getElementById('gallery-input').click()} className="text-[10px] font-black text-[#EA638C] uppercase">+ Add</button>
+  </div>
+  
+  {/* Added the Grid Wrapper here */}
+  <div 
+    className="grid grid-cols-3 gap-3 min-h-[100px] p-2 rounded-2xl bg-gray-50/50 border-2 border-dashed border-transparent hover:border-[#EA638C]/20 transition-all"
+    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+    onDrop={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const files = Array.from(e.dataTransfer.files);
+      const newPreviews = files.map(file => ({ file, url: URL.createObjectURL(file), isNew: true }));
+      setGalleryPreviews(prev => [...prev, ...newPreviews]);
+    }}
+  >
+    {galleryPreviews.length === 0 ? (
+      <div className="col-span-3 flex flex-col items-center justify-center py-4 text-gray-300">
+        <PhotoIcon className="w-8 h-8 opacity-20" />
+        <span className="text-[8px] font-bold uppercase mt-1">Drop Images Here</span>
+      </div>
+    ) : (
+      galleryPreviews.map((p, idx) => (
+        <div key={idx} className="relative overflow-hidden border border-gray-100 aspect-square bg-white rounded-2xl group/gal shadow-sm">
+          <img 
+            src={p.url} 
+            className="object-cover w-full h-full cursor-zoom-in" 
+            alt="gallery" 
+            onClick={() => setPreviewModalImg(p.url)} 
+          />
+          <button 
+            onClick={() => removeGalleryImage(idx)} 
+            type="button" 
+            className="absolute p-1 transition-opacity bg-white/90 backdrop-blur-sm rounded-full shadow-sm opacity-0 top-1 right-1 group-hover/gal:opacity-100 hover:text-red-500"
+          >
+            <XMarkIcon className="w-3 h-3 stroke-[3]" />
+          </button>
+          {p.isNew && (
+            <div className="absolute bottom-1 left-1 bg-[#EA638C] text-white text-[6px] font-black px-1.5 py-0.5 rounded-full uppercase">
+              New
+            </div>
+          )}
+        </div>
+      ))
+    )}
+  </div>
+  <input id="gallery-input" type="file" multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} />
+</section>
 
               <section className="bg-[#3E442B] p-8 rounded-[3rem] shadow-xl text-white">
                 <div className="flex items-center justify-between mb-8">
