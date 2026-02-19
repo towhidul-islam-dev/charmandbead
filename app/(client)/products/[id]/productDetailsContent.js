@@ -26,21 +26,22 @@ export default function ProductDetailsContent({ product }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [zoomStyle, setZoomStyle] = useState({ display: "none" });
 
-  // --- 📸 MASTER IMAGE LOGIC (Preserving your existing logic) ---
+  // --- 📸 MASTER IMAGE LOGIC (Updated to strictly match your server data) ---
   const allImages = useMemo(() => {
     if (!product) return [];
     const images = new Set();
     
+    // 1. Primary Image (kvuzuyv7...)
     if (product.imageUrl) images.add(product.imageUrl);
-    if (product.image) images.add(product.image);
     
-    const rawGallery = product.gallery || [];
-    if (Array.isArray(rawGallery)) {
-      rawGallery.forEach(img => {
+    // 2. Server Gallery Array (jo4u3ask..., chi4eam3..., x37reooe...)
+    if (product.gallery && Array.isArray(product.gallery)) {
+      product.gallery.forEach(img => {
         if (img && typeof img === 'string') images.add(img);
       });
     }
     
+    // 3. Variant Images (r9rckuav..., r1anuqrh...)
     if (product.variants && Array.isArray(product.variants)) {
       product.variants.forEach(v => {
         const vImg = v.imageUrl || v.image;
@@ -57,14 +58,10 @@ export default function ProductDetailsContent({ product }) {
   const [activeSku, setActiveSku] = useState(product?.sku || null);
 
   useEffect(() => {
-    if (allImages.length > 0) {
-      setMainImage(allImages[0]);
-    }
+    if (allImages.length > 0) setMainImage(allImages[0]);
   }, [allImages]);
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  useEffect(() => { setIsMounted(true); }, []);
 
   // --- RECENTLY VIEWED TRACKING ---
   useEffect(() => {
@@ -77,7 +74,6 @@ export default function ProductDetailsContent({ product }) {
     }
   }, [product]);
 
-  // --- ZOOM LOGIC ---
   const handleMouseMove = (e) => {
     if (typeof window !== "undefined" && window.innerWidth < 768) return;
     const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
@@ -103,33 +99,24 @@ export default function ProductDetailsContent({ product }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Stock & MOQ Logic
   const baseStockTotal = product?.hasVariants
     ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
     : Number(product?.stock) || 0;
-
-  const inCartQtyTotal = cart.reduce((acc, item) => {
-    return item.productId === product?._id ? acc + item.quantity : acc;
-  }, 0);
-
+  const inCartQtyTotal = cart.reduce((acc, item) => item.productId === product?._id ? acc + item.quantity : acc, 0);
   const currentStock = Math.max(0, baseStockTotal - inCartQtyTotal);
   const displayMoq = product?.hasVariants
     ? Math.min(...product.variants.map((v) => v.minOrderQuantity || 1))
     : product?.minOrderQuantity || 1;
-
   const isOutOfStock = currentStock <= 0;
   const isLowStock = !isOutOfStock && currentStock <= displayMoq * 3;
 
   const ModalPortal = () => {
     if (!isMounted || !isModalOpen) return null;
     return createPortal(
-      <div
-        className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl z-[999999] p-4 md:p-12 cursor-pointer"
-        onClick={() => setIsModalOpen(false)}
-      >
-        <button className="absolute top-6 right-6 p-4 bg-[#EA638C] text-white rounded-full shadow-2xl transition-all hover:rotate-90">
-          <X size={32} />
-        </button>
-        <img src={mainImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" alt="Enlarged" onClick={(e) => e.stopPropagation()} />
+      <div className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl z-[999999] p-4 cursor-pointer" onClick={() => setIsModalOpen(false)}>
+        <button className="absolute top-6 right-6 p-4 bg-[#EA638C] text-white rounded-full shadow-2xl transition-all hover:rotate-90"><X size={32} /></button>
+        <img src={mainImage} className="max-w-full max-h-full object-contain rounded-lg" alt="Enlarged" onClick={(e) => e.stopPropagation()} />
       </div>,
       document.body
     );
@@ -166,7 +153,7 @@ export default function ProductDetailsContent({ product }) {
                   key={idx}
                   onClick={() => {
                     setMainImage(img);
-                    if (matchingSku) setActiveSku(matchingVariant.sku);
+                    if (matchingVariant?.sku) setActiveSku(matchingVariant.sku);
                     else setActiveSku(product.sku);
                   }}
                   className={`relative w-14 h-14 md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 transition-all active:scale-90 ${
@@ -185,21 +172,21 @@ export default function ProductDetailsContent({ product }) {
           </div>
         )}
 
-        {/* 🖼️ NEW GALLERY SECTION (Under Thumbnails) */}
+        {/* 🖼️ DEDICATED GALLERY SECTION (Placed under thumbnails) */}
         {product.gallery && product.gallery.length > 0 && (
-          <div className="p-5 bg-gray-50/50 rounded-[2rem] border border-gray-100">
+          <div className="p-6 bg-[#FBB6E6]/10 rounded-[2.5rem] border border-[#FBB6E6]/20">
             <div className="flex items-center gap-2 mb-4">
               <Images size={16} className="text-[#EA638C]" />
-              <span className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.3em]">Detail Gallery</span>
+              <span className="text-[10px] font-black text-[#3E442B] uppercase tracking-[0.4em]">Detail Gallery</span>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              {product.gallery.map((url, idx) => (
+              {product.gallery.map((url, index) => (
                 <div 
-                  key={idx} 
-                  className="group relative aspect-square rounded-2xl overflow-hidden border-2 border-white shadow-sm cursor-pointer hover:border-[#EA638C] transition-all"
+                  key={index} 
+                  className="group relative aspect-square rounded-2xl overflow-hidden border-2 border-white shadow-md cursor-pointer hover:border-[#EA638C] transition-all"
                   onClick={() => setMainImage(url)}
                 >
-                  <img src={url} alt={`Detail ${idx}`} className="w-full h-full object-cover" />
+                  <img src={url} alt={`Gallery ${index}`} className="w-full h-full object-cover" />
                 </div>
               ))}
             </div>
@@ -221,14 +208,12 @@ export default function ProductDetailsContent({ product }) {
               {!isOutOfStock && <div className={`w-2 h-2 rounded-full ${isLowStock ? "bg-orange-600 animate-pulse" : "bg-green-400"}`} />}
               {isOutOfStock ? "Sold Out" : isLowStock ? `Hurry! ${currentStock} Left` : "In Stock"}
             </div>
-
             {displayMoq > 1 && (
               <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-5 py-2 rounded-full border border-pink-100">
                 <Zap size={12} className="fill-current" />
                 <span>MOQ : {displayMoq} Units</span>
               </div>
             )}
-
             {activeSku && (
               <div className="flex items-center gap-1.5 text-[#3E442B] font-black text-[10px] uppercase tracking-widest bg-gray-50 px-5 py-2 rounded-full border border-gray-100">
                 <Barcode size={12} />
@@ -236,13 +221,10 @@ export default function ProductDetailsContent({ product }) {
               </div>
             )}
           </div>
-
-          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-gray-900 uppercase">
-            {product.name}
-          </h1>
+          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-gray-900 uppercase">{product.name}</h1>
         </div>
 
-        {/* DESCRIPTION (Restored exactly) */}
+        {/* DESCRIPTION */}
         <div className="p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
           <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] block mb-6">Product Essence</span>
           <div className="flex flex-col gap-y-4">
