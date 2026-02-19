@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image"; // Import Next.js Image
+import Image from "next/image"; 
 import {
   Truck,
   ShieldCheck,
@@ -27,29 +27,25 @@ export default function ProductDetailsContent({ product }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [zoomStyle, setZoomStyle] = useState({ display: "none" });
 
+  // --- 📸 IMAGE AGGREGATION ---
   const allImages = useMemo(() => {
     if (!product) return [];
     const images = new Set();
-    if (product.imageUrl) images.add(product.imageUrl);
-    if (product.image) images.add(product.image);
     
-    const serverGallery = product.gallery || [];
-    if (Array.isArray(serverGallery)) {
-      serverGallery.forEach(img => {
-        if (img && typeof img === 'string') images.add(img);
-      });
+    if (product.imageUrl) images.add(product.imageUrl);
+    
+    if (product.gallery && Array.isArray(product.gallery)) {
+      product.gallery.forEach(img => { if (img) images.add(img); });
     }
     
     if (product.variants && Array.isArray(product.variants)) {
       product.variants.forEach(v => {
         const vImg = v.imageUrl || v.image;
-        if (vImg && typeof vImg === 'string') images.add(vImg);
+        if (vImg) images.add(vImg);
       });
     }
 
-    return Array.from(images).filter(img => 
-      img && img !== "/placeholder.png" && !img.includes("undefined")
-    );
+    return Array.from(images).filter(img => img && !img.includes("undefined"));
   }, [product]);
 
   const [mainImage, setMainImage] = useState(allImages[0] || "/placeholder.png");
@@ -61,6 +57,7 @@ export default function ProductDetailsContent({ product }) {
 
   useEffect(() => { setIsMounted(true); }, []);
 
+  // --- ZOOM LOGIC ---
   const handleMouseMove = (e) => {
     if (typeof window !== "undefined" && window.innerWidth < 768) return;
     const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
@@ -74,8 +71,6 @@ export default function ProductDetailsContent({ product }) {
     });
   };
 
-  const handleMouseLeave = () => setZoomStyle({ display: "none" });
-
   const handleCopyLink = () => {
     const shortlink = typeof window !== "undefined" ? window.location.href : "";
     navigator.clipboard.writeText(shortlink);
@@ -86,11 +81,20 @@ export default function ProductDetailsContent({ product }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // --- STOCK & MOQ LOGIC ---
   const baseStockTotal = product?.hasVariants
     ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
     : Number(product?.stock) || 0;
-  const currentStock = Math.max(0, baseStockTotal - (cart.reduce((acc, item) => item.productId === product?._id ? acc + item.quantity : acc, 0)));
-  const displayMoq = product?.hasVariants ? Math.min(...product.variants.map((v) => v.minOrderQuantity || 1)) : product?.minOrderQuantity || 1;
+
+  const inCartQtyTotal = cart.reduce((acc, item) => 
+    item.productId === product?._id ? acc + item.quantity : acc, 0
+  );
+
+  const currentStock = Math.max(0, baseStockTotal - inCartQtyTotal);
+  const displayMoq = product?.hasVariants
+    ? Math.min(...product.variants.map((v) => v.minOrderQuantity || 1))
+    : product?.minOrderQuantity || 1;
+
   const isOutOfStock = currentStock <= 0;
   const isLowStock = !isOutOfStock && currentStock <= displayMoq * 3;
 
@@ -98,9 +102,11 @@ export default function ProductDetailsContent({ product }) {
     if (!isMounted || !isModalOpen) return null;
     return createPortal(
       <div className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl z-[999999] p-4 cursor-pointer" onClick={() => setIsModalOpen(false)}>
-        <button className="absolute top-6 right-6 p-4 bg-[#EA638C] text-white rounded-full shadow-2xl"><X size={32} /></button>
-        <div className="relative w-full h-full max-w-5xl max-h-[80vh]">
-          <Image src={mainImage} fill className="object-contain" alt="Enlarged" unoptimized />
+        <button className="absolute top-6 right-6 p-4 bg-[#EA638C] text-white rounded-full shadow-2xl transition-all hover:rotate-90">
+          <X size={32} />
+        </button>
+        <div className="relative w-full h-[80vh]">
+            <Image src={mainImage} fill className="object-contain" alt="Enlarged" unoptimized />
         </div>
       </div>,
       document.body
@@ -110,7 +116,7 @@ export default function ProductDetailsContent({ product }) {
   if (!product) return null;
 
   return (
-    <div className="grid items-start w-full max-w-full grid-cols-1 gap-6 p-4 overflow-x-hidden bg-white lg:grid-cols-12 xl:gap-16 md:p-8">
+    <div className="grid items-start w-full grid-cols-1 gap-6 p-4 overflow-x-hidden bg-white lg:grid-cols-12 xl:gap-16 md:p-8">
       <ModalPortal />
 
       {/* LEFT COLUMN: IMAGES */}
@@ -118,10 +124,17 @@ export default function ProductDetailsContent({ product }) {
         <div
           className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-2xl aspect-square cursor-zoom-in group"
           onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
+          onMouseLeave={() => setZoomStyle({ display: "none" })}
           onDoubleClick={() => setIsModalOpen(true)}
         >
-          <Image src={mainImage} alt={product.name} fill className="object-cover transition-opacity duration-300" priority />
+          <Image 
+            src={mainImage} 
+            alt={product.name} 
+            fill 
+            priority 
+            className="object-cover transition-opacity duration-300"
+            sizes="(max-width: 1024px) 100vw, 40vw"
+          />
           <div className="absolute inset-0 transition-opacity duration-200 pointer-events-none" style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }} />
           <div className="absolute p-3 transition-all border border-gray-100 rounded-full shadow-lg opacity-0 bottom-6 right-6 bg-white/90 backdrop-blur-sm group-hover:opacity-100">
               <MousePointer2 size={18} className="text-[#EA638C]" />
@@ -131,28 +144,17 @@ export default function ProductDetailsContent({ product }) {
         {/* THUMBNAIL GRID */}
         {allImages.length > 1 && (
           <div className="flex flex-wrap justify-center gap-2 px-1 md:gap-3 md:justify-start">
-            {allImages.map((img, idx) => {
-              const matchingVariant = product.variants?.find(v => (v.imageUrl || v.image) === img);
-              return (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setMainImage(img);
-                    if (matchingVariant?.sku) setActiveSku(matchingVariant.sku);
-                  }}
-                  className={`relative w-14 h-14 md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 transition-all active:scale-90 ${
-                    mainImage === img ? "border-[#EA638C] scale-105 shadow-xl z-10" : "border-gray-50 opacity-60 hover:opacity-100"
-                  }`}
-                >
-                  <Image src={img} fill className="object-cover" alt="thumbnail" sizes="80px" />
-                  {matchingVariant && (
-                    <div className="absolute top-0 right-0 p-1 bg-[#EA638C] rounded-bl-xl shadow-sm z-20">
-                      <Check size={10} className="text-white stroke-[4]" />
-                    </div>
-                  )}
-                </button>
-              );
-            })}
+            {allImages.map((img, idx) => (
+              <button
+                key={idx}
+                onClick={() => setMainImage(img)}
+                className={`relative w-14 h-14 md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 transition-all active:scale-90 ${
+                  mainImage === img ? "border-[#EA638C] scale-105 shadow-xl z-10" : "border-gray-100 opacity-60 hover:opacity-100"
+                }`}
+              >
+                <Image src={img} fill className="object-cover" alt="thumbnail" sizes="80px" />
+              </button>
+            ))}
           </div>
         )}
 
@@ -172,7 +174,7 @@ export default function ProductDetailsContent({ product }) {
                   className="group relative aspect-square rounded-2xl overflow-hidden border-2 border-white shadow-md cursor-pointer hover:border-[#EA638C] transition-all"
                   onClick={() => setMainImage(url)}
                 >
-                  <Image src={url} fill className="object-cover" alt={`Detail ${idx}`} sizes="(max-width: 768px) 33vw, 15vw" />
+                  <Image src={url} fill className="object-cover" alt={`Detail ${idx}`} sizes="150px" />
                 </div>
               ))}
             </div>
@@ -200,33 +202,14 @@ export default function ProductDetailsContent({ product }) {
                 <span>MOQ : {displayMoq} Units</span>
               </div>
             )}
-            {activeSku && (
-              <div className="flex items-center gap-1.5 text-[#3E442B] font-black text-[10px] uppercase tracking-widest bg-gray-50 px-5 py-2 rounded-full border border-gray-100">
-                <Barcode size={12} />
-                <span>SKU: {activeSku}</span>
-              </div>
-            )}
           </div>
-          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-gray-900 uppercase">
-            {product.name}
-          </h1>
+          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-gray-900 uppercase">{product.name}</h1>
         </div>
 
         <div className="p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
           <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] block mb-6">Product Essence</span>
           <div className="flex flex-col gap-y-4">
-            {product.description?.split(".").filter(p => p.trim()).map((point, i) => {
-              const parts = point.split(":");
-              return (
-                <div key={i} className="text-base leading-relaxed text-gray-600 md:text-lg">
-                  {parts.length > 1 ? (
-                    <p><span className="mr-2 text-sm font-black text-gray-900 uppercase">{parts[0].trim()} :</span>{parts.slice(1).join(":").trim()}.</p>
-                  ) : (
-                    <p className="font-semibold">{point.trim()}.</p>
-                  )}
-                </div>
-              );
-            })}
+             <p className="text-base font-semibold leading-relaxed text-gray-600 md:text-lg">{product.description}</p>
           </div>
         </div>
 
@@ -246,7 +229,6 @@ export default function ProductDetailsContent({ product }) {
           isOutOfStock={isOutOfStock}
           onVariantChange={(variantData) => {
             if (variantData?.imageUrl) setMainImage(variantData.imageUrl);
-            if (variantData?.sku) setActiveSku(variantData.sku);
           }}
         />
       </div>
