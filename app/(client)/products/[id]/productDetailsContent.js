@@ -193,7 +193,7 @@ export default function ProductDetailsContent({ product }) {
               <div className="p-1.5 bg-white rounded-full shadow-sm">
                 <Images size={14} className="text-[#EA638C]" />
               </div>
-              <span className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.3em]">Detail Gallery</span>
+              <span className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.3em]">Detail Image Gallery</span>
             </div>
             <div className="grid grid-cols-3 gap-3">
               {product.gallery.map((url, idx) => (
