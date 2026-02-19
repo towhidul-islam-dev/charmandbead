@@ -221,7 +221,7 @@ export default function ProductDetailsContent({ product }) {
             {displayMoq > 1 && (
               <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-5 py-2 rounded-full border border-pink-100">
                 <Zap size={12} className="fill-current" />
-                <span>MOQ: {displayMoq} Units</span>
+                <span>MOQ : {displayMoq} Units</span>
               </div>
             )}
 
