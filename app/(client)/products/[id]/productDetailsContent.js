@@ -26,41 +26,58 @@ export default function ProductDetailsContent({ product }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [zoomStyle, setZoomStyle] = useState({ display: "none" });
 
-  // --- 📸 MATCHING FIELD NAME: product.gallery ---
+  // --- 📸 MASTER IMAGE LOGIC (Preserving your existing logic) ---
   const allImages = useMemo(() => {
     if (!product) return [];
     const images = new Set();
     
-    // 1. Main Image
     if (product.imageUrl) images.add(product.imageUrl);
+    if (product.image) images.add(product.image);
     
-    // 2. Gallery Array (Matching your JSON: "gallery")
-    if (Array.isArray(product.gallery)) {
-      product.gallery.forEach(img => {
-        if (typeof img === 'string' && img.length > 0) images.add(img);
+    const rawGallery = product.gallery || [];
+    if (Array.isArray(rawGallery)) {
+      rawGallery.forEach(img => {
+        if (img && typeof img === 'string') images.add(img);
       });
     }
     
-    // 3. Variant Images
     if (product.variants && Array.isArray(product.variants)) {
       product.variants.forEach(v => {
-        const vImg = v.imageUrl;
+        const vImg = v.imageUrl || v.image;
         if (vImg && typeof vImg === 'string') images.add(vImg);
       });
     }
 
-    return Array.from(images).filter(img => img && !img.includes("undefined"));
+    return Array.from(images).filter(img => 
+      img && img !== "/placeholder.png" && !img.includes("undefined")
+    );
   }, [product]);
 
   const [mainImage, setMainImage] = useState(allImages[0] || "/placeholder.png");
   const [activeSku, setActiveSku] = useState(product?.sku || null);
 
   useEffect(() => {
-    if (allImages.length > 0) setMainImage(allImages[0]);
+    if (allImages.length > 0) {
+      setMainImage(allImages[0]);
+    }
   }, [allImages]);
 
-  useEffect(() => { setIsMounted(true); }, []);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
+  // --- RECENTLY VIEWED TRACKING ---
+  useEffect(() => {
+    if (product?._id) {
+      const history = JSON.parse(localStorage.getItem("recentlyViewed") || "[]");
+      const filteredHistory = history.filter((item) => item._id !== product._id);
+      const newHistory = [product, ...filteredHistory].slice(0, 10);
+      localStorage.setItem("recentlyViewed", JSON.stringify(newHistory));
+      window.dispatchEvent(new Event("recentlyViewedUpdated"));
+    }
+  }, [product]);
+
+  // --- ZOOM LOGIC ---
   const handleMouseMove = (e) => {
     if (typeof window !== "undefined" && window.innerWidth < 768) return;
     const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
@@ -89,20 +106,30 @@ export default function ProductDetailsContent({ product }) {
   const baseStockTotal = product?.hasVariants
     ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
     : Number(product?.stock) || 0;
-  const inCartQtyTotal = cart.reduce((acc, item) => item.productId === product?._id ? acc + item.quantity : acc, 0);
+
+  const inCartQtyTotal = cart.reduce((acc, item) => {
+    return item.productId === product?._id ? acc + item.quantity : acc;
+  }, 0);
+
   const currentStock = Math.max(0, baseStockTotal - inCartQtyTotal);
   const displayMoq = product?.hasVariants
     ? Math.min(...product.variants.map((v) => v.minOrderQuantity || 1))
     : product?.minOrderQuantity || 1;
+
   const isOutOfStock = currentStock <= 0;
   const isLowStock = !isOutOfStock && currentStock <= displayMoq * 3;
 
   const ModalPortal = () => {
     if (!isMounted || !isModalOpen) return null;
     return createPortal(
-      <div className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl z-[999999] p-4 md:p-12 cursor-pointer" onClick={() => setIsModalOpen(false)}>
-        <button className="absolute top-6 right-6 p-4 bg-[#EA638C] text-white rounded-full transition-all hover:rotate-90"><X size={32} /></button>
-        <img src={mainImage} className="max-w-full max-h-full object-contain rounded-lg" alt="Enlarged" onClick={(e) => e.stopPropagation()} />
+      <div
+        className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl z-[999999] p-4 md:p-12 cursor-pointer"
+        onClick={() => setIsModalOpen(false)}
+      >
+        <button className="absolute top-6 right-6 p-4 bg-[#EA638C] text-white rounded-full shadow-2xl transition-all hover:rotate-90">
+          <X size={32} />
+        </button>
+        <img src={mainImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" alt="Enlarged" onClick={(e) => e.stopPropagation()} />
       </div>,
       document.body
     );
@@ -125,7 +152,7 @@ export default function ProductDetailsContent({ product }) {
           <img src={mainImage} alt={product.name} className="object-cover w-full h-full transition-opacity duration-300" />
           <div className="absolute inset-0 pointer-events-none transition-opacity duration-200" style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }} />
           <div className="absolute bottom-6 right-6 bg-white/90 backdrop-blur-sm p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-lg border border-gray-100">
-             <MousePointer2 size={18} className="text-[#EA638C]" />
+              <MousePointer2 size={18} className="text-[#EA638C]" />
           </div>
         </div>
 
@@ -133,13 +160,13 @@ export default function ProductDetailsContent({ product }) {
         {allImages.length > 1 && (
           <div className="flex flex-wrap gap-2 md:gap-3 px-1 justify-center md:justify-start">
             {allImages.map((img, idx) => {
-              const matchingVariant = product.variants?.find(v => v.imageUrl === img);
+              const matchingVariant = product.variants?.find(v => (v.imageUrl || v.image) === img);
               return (
                 <button
                   key={idx}
                   onClick={() => {
                     setMainImage(img);
-                    if (matchingVariant?.sku) setActiveSku(matchingVariant.sku);
+                    if (matchingSku) setActiveSku(matchingVariant.sku);
                     else setActiveSku(product.sku);
                   }}
                   className={`relative w-14 h-14 md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 transition-all active:scale-90 ${
@@ -158,6 +185,27 @@ export default function ProductDetailsContent({ product }) {
           </div>
         )}
 
+        {/* 🖼️ NEW GALLERY SECTION (Under Thumbnails) */}
+        {product.gallery && product.gallery.length > 0 && (
+          <div className="p-5 bg-gray-50/50 rounded-[2rem] border border-gray-100">
+            <div className="flex items-center gap-2 mb-4">
+              <Images size={16} className="text-[#EA638C]" />
+              <span className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.3em]">Detail Gallery</span>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {product.gallery.map((url, idx) => (
+                <div 
+                  key={idx} 
+                  className="group relative aspect-square rounded-2xl overflow-hidden border-2 border-white shadow-sm cursor-pointer hover:border-[#EA638C] transition-all"
+                  onClick={() => setMainImage(url)}
+                >
+                  <img src={url} alt={`Detail ${idx}`} className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-around p-4 border border-white bg-gray-50/80 rounded-[2rem] shadow-inner">
           <FeatureItem icon={<Truck size={16} />} text="Express" color="blue" />
           <FeatureItem icon={<ShieldCheck size={16} />} text="Genuine" color="brand" />
@@ -173,12 +221,14 @@ export default function ProductDetailsContent({ product }) {
               {!isOutOfStock && <div className={`w-2 h-2 rounded-full ${isLowStock ? "bg-orange-600 animate-pulse" : "bg-green-400"}`} />}
               {isOutOfStock ? "Sold Out" : isLowStock ? `Hurry! ${currentStock} Left` : "In Stock"}
             </div>
+
             {displayMoq > 1 && (
               <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-5 py-2 rounded-full border border-pink-100">
                 <Zap size={12} className="fill-current" />
-                <span>MOQ: {displayMoq} Units</span>
+                <span>MOQ : {displayMoq} Units</span>
               </div>
             )}
+
             {activeSku && (
               <div className="flex items-center gap-1.5 text-[#3E442B] font-black text-[10px] uppercase tracking-widest bg-gray-50 px-5 py-2 rounded-full border border-gray-100">
                 <Barcode size={12} />
@@ -186,10 +236,13 @@ export default function ProductDetailsContent({ product }) {
               </div>
             )}
           </div>
-          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-gray-900 uppercase">{product.name}</h1>
+
+          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-gray-900 uppercase">
+            {product.name}
+          </h1>
         </div>
 
-        {/* DESCRIPTION */}
+        {/* DESCRIPTION (Restored exactly) */}
         <div className="p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
           <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] block mb-6">Product Essence</span>
           <div className="flex flex-col gap-y-4">
@@ -207,35 +260,6 @@ export default function ProductDetailsContent({ product }) {
             })}
           </div>
         </div>
-
-        {/* 🖼️ DEDICATED GALLERY SECTION (Uses "product.gallery") */}
-        {product.gallery && product.gallery.length > 0 && (
-          <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100">
-            <div className="flex items-center gap-3 mb-6">
-              <Images size={20} className="text-[#EA638C]" />
-              <span className="text-[10px] font-black text-[#3E442B] uppercase tracking-[0.4em]">Visual Gallery</span>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {product.gallery.map((url, index) => (
-                <div 
-                  key={index} 
-                  className="group relative aspect-square rounded-3xl overflow-hidden border-2 border-white shadow-md cursor-pointer hover:shadow-xl transition-all"
-                  onClick={() => {
-                    setMainImage(url);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                >
-                  <img src={url} alt={`Detail ${index}`} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="bg-white p-2 rounded-full">
-                        <MousePointer2 size={16} className="text-[#EA638C]" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* SHARE LINK */}
         <div className="p-5 border-2 border-dashed border-gray-100 bg-gray-50/30 rounded-[2rem] flex items-center gap-4">
