@@ -207,40 +207,74 @@ export default function ProductDetailsContent({ product }) {
         )}
 
         {/* 🖼️ DETAIL GALLERY */}
-        {product.gallery && product.gallery.length > 0 && (
-          <div className="p-5 bg-[#FBB6E6]/10 rounded-[2rem] border border-[#FBB6E6]/20">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-1.5 bg-white rounded-full shadow-sm">
-                <Images size={14} className="text-[#EA638C]" />
-              </div>
-              <span className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.3em]">Detail Image Gallery</span>
-            </div>
-            
-            <div className="relative w-full aspect-video rounded-2xl overflow-hidden border-2 border-white shadow-sm mb-3">
-                 <Image 
-                    src={detailGalleryImage || product.gallery[0]} 
-                    fill 
-                    className="object-cover" 
-                    alt="Gallery Active" 
-                    sizes="(max-width: 1024px) 100vw, 40vw"
-                 />
-            </div>
+{/* 🖼️ DETAIL GALLERY WITH ZOOM ENABLED */}
+{product.gallery && product.gallery.length > 0 && (
+  <div className="p-5 bg-[#FBB6E6]/10 rounded-[2rem] border border-[#FBB6E6]/20">
+    <div className="flex items-center gap-2 mb-4">
+      <div className="p-1.5 bg-white rounded-full shadow-sm">
+        <Images size={14} className="text-[#EA638C]" />
+      </div>
+      <span className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.3em]">Detail Image Gallery</span>
+    </div>
+    
+    {/* Active Detail Image with Zoom Logic */}
+    <div 
+      className="relative w-full aspect-video rounded-2xl overflow-hidden border-2 border-white shadow-sm mb-3 cursor-none group/gallery"
+      onMouseMove={(e) => {
+        if (typeof window !== "undefined" && window.innerWidth < 768) return;
+        const { width, height } = e.currentTarget.getBoundingClientRect();
+        const x = (e.nativeEvent.offsetX / width) * 100;
+        const y = (e.nativeEvent.offsetY / height) * 100;
+        setZoomStyle({
+          display: "block",
+          backgroundPosition: `${x}% ${y}%`,
+          backgroundImage: `url(${detailGalleryImage || product.gallery[0]})`,
+          backgroundSize: "250%",
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+        });
+      }}
+      onMouseLeave={handleMouseLeave}
+    >
+         <Image 
+            src={detailGalleryImage || product.gallery[0]} 
+            fill 
+            className="object-cover z-10" 
+            alt="Gallery Active" 
+            sizes="(max-width: 1024px) 100vw, 40vw"
+         />
 
-            <div className="grid grid-cols-3 gap-3">
-              {product.gallery.map((url, idx) => (
-                <div 
-                  key={idx} 
-                  className={`group relative aspect-square rounded-2xl overflow-hidden border-2 shadow-sm cursor-pointer transition-all ${
-                    detailGalleryImage === url ? "border-[#EA638C]" : "border-white"
-                  }`}
-                  onClick={() => setDetailGalleryImage(url)}
-                >
-                  <Image src={url} fill alt={`Detail ${idx}`} className="object-cover" sizes="150px" />
-                </div>
-              ))}
-            </div>
+         {/* Zoom Overlay for Gallery */}
+         <div 
+            className="absolute inset-0 z-20 transition-opacity duration-200 pointer-events-none opacity-0 group-hover/gallery:opacity-100" 
+            style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }} 
+          />
+
+          {/* Brand-Colored Cursor Tracker for Gallery */}
+          <div className="absolute z-30 p-2 transition-all border border-gray-100 rounded-full shadow-lg opacity-0 pointer-events-none bottom-4 right-4 bg-white/90 backdrop-blur-sm group-hover/gallery:opacity-100">
+              <MousePointer2 size={14} className="text-[#EA638C]" />
           </div>
-        )}
+    </div>
+
+    {/* Gallery Thumbnails */}
+    <div className="grid grid-cols-3 gap-3">
+      {product.gallery.map((url, idx) => (
+        <div 
+          key={idx} 
+          className={`group relative aspect-square rounded-2xl overflow-hidden border-2 shadow-sm cursor-pointer transition-all ${
+            detailGalleryImage === url ? "border-[#EA638C]" : "border-white"
+          }`}
+          onClick={() => setDetailGalleryImage(url)}
+        >
+          <Image src={url} fill alt={`Detail ${idx}`} className="object-cover" sizes="150px" />
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
         {/* FEATURE ITEMS */}
         <div className="flex items-center justify-around p-4 border border-white bg-gray-50/80 rounded-[2rem] shadow-inner">
