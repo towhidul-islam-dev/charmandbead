@@ -73,12 +73,15 @@ export default function ProductDetailsContent({ product }) {
     }
   }, [product]);
 
-  // --- ZOOM LOGIC ---
+  // --- 🔍 ENHANCED ZOOM LOGIC ---
   const handleMouseMove = (e) => {
     if (typeof window !== "undefined" && window.innerWidth < 768) return;
     const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
-    const x = ((e.pageX - left - window.scrollX) / width) * 100;
-    const y = ((e.pageY - top - window.scrollY) / height) * 100;
+    
+    // Calculate precise cursor position in percentage
+    const x = ((e.clientX - left) / width) * 100;
+    const y = ((e.clientY - top) / height) * 100;
+
     setZoomStyle({
       display: "block",
       backgroundPosition: `${x}% ${y}%`,
@@ -150,7 +153,7 @@ export default function ProductDetailsContent({ product }) {
       {/* LEFT COLUMN: IMAGES */}
       <div className="space-y-4 lg:col-span-5">
         <div
-          className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-2xl aspect-square cursor-zoom-in group"
+          className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-2xl aspect-square cursor-none group"
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
           onDoubleClick={() => setIsModalOpen(true)}
@@ -163,8 +166,13 @@ export default function ProductDetailsContent({ product }) {
             className="object-cover transition-opacity duration-300" 
             sizes="(max-width: 1024px) 100vw, 40vw"
           />
-          <div className="absolute inset-0 transition-opacity duration-200 pointer-events-none" style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }} />
-          <div className="absolute p-3 transition-all border border-gray-100 rounded-full shadow-lg opacity-0 bottom-6 right-6 bg-white/90 backdrop-blur-sm group-hover:opacity-100">
+          {/* Zoom Overlay Layer */}
+          <div 
+            className="absolute inset-0 z-30 transition-opacity duration-200 pointer-events-none opacity-0 group-hover:opacity-100" 
+            style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }} 
+          />
+          {/* Brand-Colored Cursor Tracker */}
+          <div className="absolute z-40 p-3 transition-all border border-gray-100 rounded-full shadow-lg opacity-0 pointer-events-none bottom-6 right-6 bg-white/90 backdrop-blur-sm group-hover:opacity-100">
               <MousePointer2 size={18} className="text-[#EA638C]" />
           </div>
         </div>
@@ -198,7 +206,7 @@ export default function ProductDetailsContent({ product }) {
           </div>
         )}
 
-        {/* 🖼️ DETAIL GALLERY (Existing UI Logic Preserved) */}
+        {/* 🖼️ DETAIL GALLERY */}
         {product.gallery && product.gallery.length > 0 && (
           <div className="p-5 bg-[#FBB6E6]/10 rounded-[2rem] border border-[#FBB6E6]/20">
             <div className="flex items-center gap-2 mb-4">
@@ -208,7 +216,6 @@ export default function ProductDetailsContent({ product }) {
               <span className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.3em]">Detail Image Gallery</span>
             </div>
             
-            {/* Display the active detail image using separate state */}
             <div className="relative w-full aspect-video rounded-2xl overflow-hidden border-2 border-white shadow-sm mb-3">
                  <Image 
                     src={detailGalleryImage || product.gallery[0]} 
