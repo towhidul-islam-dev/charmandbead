@@ -194,6 +194,7 @@ console.log("FINAL GALLERY ARRAY TO SAVE:", finalGallery);
     revalidatePath("/admin/products");
     revalidatePath("/products");
     revalidatePath("/");
+    revalidatePath("/new-arrivals");
     if (finalProduct?._id) {
       revalidatePath(`/product/${finalProduct._id}`);
     }
@@ -258,12 +259,15 @@ export async function deleteProduct(productId) {
     if (mainPublicId) await cloudinary.uploader.destroy(mainPublicId);
 
     // 📸 2. NEW: Delete Gallery Images (Missing in your original file)
-    if (product.gallery && product.gallery.length > 0) {
-      await Promise.all(product.gallery.map(url => {
-        const gPid = extractPublicId(url);
-        return gPid ? cloudinary.uploader.destroy(gPid) : null;
-      }));
+if (product.gallery && product.gallery.length > 0) {
+  await Promise.all(product.gallery.map(async (url) => {
+    const gPid = extractPublicId(url);
+    if (gPid) {
+      console.log("☁️ Cloudinary: Deleting gallery image", gPid);
+      return cloudinary.uploader.destroy(gPid);
     }
+  }));
+}
 
     // 3. Delete Variant Images
     if (product.hasVariants && product.variants?.length > 0) {
