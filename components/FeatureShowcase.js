@@ -115,7 +115,7 @@ export default function FeatureShowcase({ products }) {
 
       {/* --- CATEGORY SLIDER --- */}
       <section className="relative w-full overflow-hidden">
-        <div className="flex items-center justify-between px-2 mb-4">
+        {/* <div className="flex items-center justify-between px-2 mb-4">
           <div className="flex items-center gap-4">
             <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#3E442B]">Materials</h2>
             {activeCategory !== "All" && (
@@ -130,7 +130,7 @@ export default function FeatureShowcase({ products }) {
           <span className="text-[9px] font-black text-[#EA638C] uppercase flex items-center gap-1 italic">
             Slide <ChevronRight size={10} />
           </span>
-        </div>
+        </div> */}
 
         <div ref={scrollRef} className="flex gap-4 px-2 pt-6 pb-8 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-smooth">
           {categoriesData.map((cat, i) => {
@@ -180,7 +180,7 @@ export default function FeatureShowcase({ products }) {
             <option value="price-low">Price: Low-High</option>
             <option value="price-high">Price: High-Low</option>
           </select>
-          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+          <ChevronDown className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2" size={12} />
         </div>
 
         {/* Custom Price Slider */}
@@ -198,7 +198,7 @@ export default function FeatureShowcase({ products }) {
         </div>
 
         {/* Search */}
-        <div className="relative group flex-1">
+        <div className="relative flex-1 group">
           <Search className="absolute text-gray-400 -translate-y-1/2 left-4 top-1/2" size={14} />
           <input
             type="text" placeholder="SEARCH MATERIALS..."
