@@ -2,7 +2,7 @@
 import { useState, useMemo } from "react";
 import Image from "next/image";
 import { ChevronRight, Layers } from "lucide-react";
-import FeatureShowcase from "./FeatureShowcase";
+import FeatureShowcase from "@components/FeatureShowcase";
 
 export default function CategoryFilter({ products }) {
   const [activeCategory, setActiveCategory] = useState("All");
