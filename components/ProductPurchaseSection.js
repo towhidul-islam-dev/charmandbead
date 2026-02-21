@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { Minus, Plus } from "lucide-react";
 import { useCart } from "@/Context/CartContext";
 import toast from "react-hot-toast";
+import Image from "next/image"; // Added for variant thumbnails
 
 export default function ProductPurchaseSection({ product, onVariantChange }) {
   const { addToCart, cart } = useCart();
@@ -33,23 +34,23 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
     const currentSelection = quantities[vKey] || 0;
     const inBagQty = getQtyInBag(variant._id);
     const actuallyAvailable = stock - inBagQty;
-    const step = moq || 1; // Default to 1 if no MOQ defined
+    const step = moq || 1; 
 
     let newQty;
 
     if (direction > 0) {
       // INCREMENT LOGIC
       if (currentSelection === 0) {
-        newQty = step; // First click jumps to MOQ
+        newQty = step; 
       } else {
-        newQty = currentSelection + step; // Subsequent clicks add MOQ
+        newQty = currentSelection + step; 
       }
     } else {
       // DECREMENT LOGIC
       if (currentSelection <= step) {
-        newQty = 0; // If at or below MOQ, reset to 0
+        newQty = 0; 
       } else {
-        newQty = currentSelection - step; // Otherwise subtract MOQ
+        newQty = currentSelection - step; 
       }
     }
 
@@ -148,15 +149,28 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
   );
 }
 
-/* --- Sub-components (Updated QtySelector for visuals) --- */
+/* --- Sub-components (Variant Images Integrated) --- */
 
 function VariantRow({ v, inBagQty, selectionQty, handleUpdateQty }) {
   const liveDisplayStock = Math.max(0, v.stock - inBagQty - selectionQty);
   return (
     <tr className="transition-colors hover:bg-gray-50/30">
       <td className="px-6 py-4">
-        <span className="font-black text-[#3E442B] uppercase text-[12px] block leading-none mb-1">{v.color}</span>
-        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{v.size} (MOQ: {v.minOrderQuantity})</span>
+        <div className="flex items-center gap-4">
+          {/* Variant Image Thumbnail */}
+          <div className="relative w-12 h-12 overflow-hidden border border-gray-100 rounded-xl bg-gray-50 flex-shrink-0 shadow-sm">
+            <Image 
+              src={v.image || v.imageUrl || "/placeholder.png"} 
+              alt={v.color} 
+              fill 
+              className="object-cover" 
+            />
+          </div>
+          <div>
+            <span className="font-black text-[#3E442B] uppercase text-[12px] block leading-none mb-1">{v.color}</span>
+            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{v.size} (MOQ: {v.minOrderQuantity})</span>
+          </div>
+        </div>
       </td>
       <td className="px-6 py-4 text-center">
         <div className="flex flex-col items-center">
@@ -181,13 +195,24 @@ function VariantCard({ v, inBagQty, selectionQty, handleUpdateQty }) {
   const liveDisplayStock = Math.max(0, v.stock - inBagQty - selectionQty);
   return (
     <div className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm flex items-center justify-between active:border-[#FBB6E6] transition-all">
-      <div>
-        <span className="font-black text-[#3E442B] uppercase text-[14px] block leading-none mb-1">{v.color}</span>
-        <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{v.size} • MOQ: {v.minOrderQuantity}</span>
-        <div className="flex items-center gap-2 mt-2">
-           <span className={`text-[10px] font-black ${liveDisplayStock < (v.minOrderQuantity * 2) ? 'text-[#EA638C]' : 'text-gray-400'}`}>
-             {liveDisplayStock} AVAILABLE
-           </span>
+      <div className="flex items-center gap-4">
+        {/* Variant Image Thumbnail */}
+        <div className="relative w-14 h-14 overflow-hidden border border-gray-100 rounded-2xl bg-gray-50 flex-shrink-0 shadow-sm">
+          <Image 
+            src={v.image || v.imageUrl || "/placeholder.png"} 
+            alt={v.color} 
+            fill 
+            className="object-cover" 
+          />
+        </div>
+        <div>
+          <span className="font-black text-[#3E442B] uppercase text-[14px] block leading-none mb-1">{v.color}</span>
+          <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{v.size} • MOQ: {v.minOrderQuantity}</span>
+          <div className="flex items-center gap-2 mt-2">
+             <span className={`text-[10px] font-black ${liveDisplayStock < (v.minOrderQuantity * 2) ? 'text-[#EA638C]' : 'text-gray-400'}`}>
+               {liveDisplayStock} AVAILABLE
+             </span>
+          </div>
         </div>
       </div>
       <QtySelector v={v} selectionQty={selectionQty} liveDisplayStock={liveDisplayStock} handleUpdateQty={handleUpdateQty} />
