@@ -12,7 +12,7 @@ export default function FeatureShowcase({ products }) {
   
   const loadMoreRef = useRef(null);
 
-  // Filter products based on Search and Price only
+  // Filter products based on Search (Name/Category) and Price
   const processedProducts = useMemo(() => {
     let result = products.filter((p) => {
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -50,6 +50,7 @@ export default function FeatureShowcase({ products }) {
 
   return (
     <div className="relative space-y-8">
+      {/* Custom Slider Styling */}
       <style jsx>{`
         input[type='range']::-webkit-slider-thumb {
           -webkit-appearance: none;
@@ -60,30 +61,30 @@ export default function FeatureShowcase({ products }) {
           cursor: pointer;
           border-radius: 50%;
           border: 2px solid white;
-          box-shadow: 0 0 5px rgba(234, 99, 140, 0.3);
+          box-shadow: 0 2px 4px rgba(234, 99, 140, 0.3);
         }
       `}</style>
 
-      {/* --- SIMPLIFIED FILTER BAR --- */}
-      <div className="flex flex-col gap-4 px-2 pb-6 border-b border-gray-100 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col flex-1 w-full gap-4 sm:flex-row sm:items-center">
+      {/* --- REFINED CONTROL BAR --- */}
+      <div className="flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-between pt-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center flex-1 w-full">
           
           {/* Search Input */}
-          <div className="relative flex-1 max-w-md group">
+          <div className="relative group flex-1 max-w-md">
             <Search className="absolute text-gray-400 -translate-y-1/2 left-4 top-1/2" size={14} />
             <input
               type="text"
-              placeholder="SEARCH PRODUCTS OR MATERIALS..."
+              placeholder="Search charms, beads, or materials..."
               value={searchQuery}
-              className="w-full pl-10 pr-5 py-3 bg-gray-50 border border-gray-100 rounded-xl text-[9px] font-black uppercase tracking-widest focus:outline-none focus:bg-white transition-all"
+              className="w-full pl-10 pr-5 py-3 bg-gray-50 border border-gray-100 rounded-xl text-[9px] font-black uppercase tracking-widest focus:outline-none focus:bg-white transition-all focus:border-[#FBB6E6]"
               onChange={(e) => { setSearchQuery(e.target.value); setVisibleCount(8); }}
             />
           </div>
 
           {/* Price Slider */}
-          <div className="w-full px-5 py-2 border border-gray-100 sm:w-56 bg-gray-50 rounded-xl">
+          <div className="w-full sm:w-56 px-5 py-2 bg-gray-50 border border-gray-100 rounded-xl">
             <div className="flex justify-between mb-1">
-              <span className="text-[8px] font-black uppercase text-gray-400 tracking-widest">Budget</span>
+              <span className="text-[8px] font-black uppercase text-gray-400 tracking-widest">Max Budget</span>
               <span className="text-[8px] font-black text-[#3E442B]">৳{maxPrice}</span>
             </div>
             <input 
@@ -100,13 +101,13 @@ export default function FeatureShowcase({ products }) {
           <select 
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="w-full appearance-none px-5 py-3 bg-white border border-gray-200 rounded-xl text-[9px] font-black uppercase tracking-widest focus:outline-none cursor-pointer hover:border-[#FBB6E6]"
+            className="w-full appearance-none px-5 py-3 bg-white border border-gray-200 rounded-xl text-[9px] font-black uppercase tracking-widest focus:outline-none cursor-pointer hover:border-[#EA638C] transition-colors"
           >
             <option value="newest">Sort: Newest</option>
-            <option value="price-low">Price: Low-High</option>
-            <option value="price-high">Price: High-Low</option>
+            <option value="price-low">Price: Low to High</option>
+            <option value="price-high">Price: High to Low</option>
           </select>
-          <ChevronDown className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-4 top-1/2" size={12} />
+          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
         </div>
       </div>
 
@@ -120,13 +121,13 @@ export default function FeatureShowcase({ products }) {
       ) : (
         <div className="py-24 text-center border-2 border-dashed border-gray-100 rounded-[2rem] bg-gray-50/20 mx-2">
           <p className="text-[9px] font-black tracking-[0.3em] text-gray-300 uppercase">
-            No matches for your search
+            No materials matching your filters
           </p>
         </div>
       )}
 
-      {/* Infinite Scroll Trigger */}
-      <div ref={loadMoreRef} className="flex items-center justify-center h-20">
+      {/* Load More Trigger */}
+      <div ref={loadMoreRef} className="h-20 flex items-center justify-center">
         {visibleCount < processedProducts.length && (
           <div className="flex gap-1.5">
             {[0, 1, 2].map((i) => (
@@ -136,7 +137,7 @@ export default function FeatureShowcase({ products }) {
         )}
       </div>
 
-      {/* BACK TO TOP BUTTON */}
+      {/* BACK TO TOP */}
       <button
         onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
         className={`fixed bottom-10 right-10 z-[100] p-5 rounded-full bg-[#3E442B] text-white shadow-xl transition-all duration-700 ${
