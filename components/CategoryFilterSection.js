@@ -1,13 +1,12 @@
 "use client";
 import { useState, useMemo } from "react";
 import Image from "next/image";
-import { ChevronRight, LayoutGrid } from "lucide-react";
+import { ChevronRight, LayoutGrid, X } from "lucide-react";
 import FeatureShowcase from "./FeatureShowcase";
 
 export default function CategoryFilterSection({ products }) {
   const [activeTab, setActiveTab] = useState("All");
 
-  // 🛠️ Logic: Grouping by your categoryName field
   const categories = useMemo(() => {
     const counts = products.reduce((acc, p) => {
       const name = p.categoryName || "General";
@@ -30,34 +29,42 @@ export default function CategoryFilterSection({ products }) {
 
   return (
     <div className="space-y-10">
-      {/* 🟢 CATEGORY SLIDER WITH SOFT PINK BACKDROP */}
-      <section className="relative py-8 -mx-4 px-4 md:-mx-8 md:px-8 bg-[#FBB6E6]/10 border-y border-[#FBB6E6]/20">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex flex-col">
+      {/* 🟢 CATEGORY SLIDER - Background removed & Clipping fixed */}
+      <section className="relative">
+        <div className="flex items-center justify-between px-2 mb-2">
+          <div className="flex items-center gap-4">
             <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#3E442B]">
               Browse Materials
             </h2>
-            <div className="h-0.5 w-6 bg-[#EA638C] mt-1 rounded-full"></div>
+            {activeTab !== "All" && (
+              <button 
+                onClick={() => setActiveTab("All")}
+                className="flex items-center gap-1 px-2 py-1 bg-gray-100 hover:bg-[#FBB6E6]/30 text-[#EA638C] rounded-full text-[8px] font-black uppercase transition-colors border border-gray-200"
+              >
+                <X size={10} /> Clear Filter
+              </button>
+            )}
           </div>
           <span className="text-[9px] font-black text-[#EA638C] uppercase flex items-center gap-1 italic">
             Slide Collection <ChevronRight size={10} />
           </span>
         </div>
 
-        <div className="flex gap-3 pb-2 overflow-x-auto no-scrollbar snap-x snap-mandatory">
+        {/* pt-4 added to prevent border/shadow clipping on top */}
+        <div className="flex gap-3 px-2 pt-4 pb-6 overflow-x-auto no-scrollbar snap-x snap-mandatory">
           {categories.map((cat, i) => (
             <button
               key={i}
               onClick={() => setActiveTab(cat.name)}
-              className={`snap-start flex-shrink-0 transition-all duration-500 ${
-                activeTab === cat.name ? "scale-105" : "opacity-60 hover:opacity-100 grayscale-[0.3] hover:grayscale-0"
+              className={`snap-start flex-shrink-0 transition-all duration-300 outline-none ${
+                activeTab === cat.name ? "scale-105" : "opacity-60 hover:opacity-100 grayscale-[0.2] hover:grayscale-0"
               }`}
             >
               {/* Compact Card Size: 85px Square */}
               <div className={`relative w-[85px] md:w-[95px] aspect-square rounded-[1.2rem] overflow-hidden border-2 transition-all duration-500 ${
                 activeTab === cat.name 
                   ? "border-[#EA638C] shadow-lg shadow-pink-200/50 bg-white" 
-                  : "border-white/50 shadow-sm bg-white/50"
+                  : "border-gray-100 shadow-sm bg-gray-50"
               }`}>
                 {cat.isAll ? (
                   <div className="absolute inset-0 bg-[#3E442B] flex flex-col items-center justify-center">
@@ -74,7 +81,7 @@ export default function CategoryFilterSection({ products }) {
                 )}
                 
                 {/* Brand Gradient Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#3E442B]/90 via-[#3E442B]/20 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#3E442B]/90 via-[#3E442B]/10 to-transparent" />
                 
                 {/* Labels */}
                 <div className="absolute left-0 right-0 px-1 text-center bottom-2">
@@ -92,8 +99,15 @@ export default function CategoryFilterSection({ products }) {
       </section>
 
       {/* 🟢 SHOWCASE */}
-      <div className="duration-700 animate-in fade-in slide-in-from-bottom-2">
-        <FeatureShowcase products={filteredProducts} />
+      <div className="px-2">
+        <div className="flex items-center gap-2 mb-6">
+             <div className="flex-1 h-px bg-gray-100"></div>
+             <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">Showcase</p>
+             <div className="flex-1 h-px bg-gray-100"></div>
+        </div>
+        <div className="duration-700 animate-in fade-in slide-in-from-bottom-2">
+          <FeatureShowcase products={filteredProducts} />
+        </div>
       </div>
     </div>
   );
