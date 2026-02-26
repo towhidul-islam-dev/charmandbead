@@ -2,16 +2,16 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, UserPlus, Loader2 } from 'lucide-react';
+import { signIn } from 'next-auth/react'; // 🟢 Added
+import { Eye, EyeOff, UserPlus, Loader2, CheckCircle2, Sparkles } from 'lucide-react'; // 🟢 Added UI icons
 
 export default function RegisterPage() {
     const [formData, setFormData] = useState({ name: '', email: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
-    const [loading, setLoading] = useState(false);
+    const [status, setStatus] = useState("idle"); // 🟢 Changed from just loading
     const [error, setError] = useState(null); 
     const router = useRouter(); 
 
-    // 🟢 1. Password Strength Calculation (Integrated)
     const strength = useMemo(() => {
         const password = formData.password;
         let score = 0;
@@ -27,8 +27,8 @@ export default function RegisterPage() {
         switch (strength) {
             case 1: return { label: "WEAK", color: "#FF4D4D" };
             case 2: return { label: "FAIR", color: "#FFA500" };
-            case 3: return { label: "GOOD", color: "#EA638C" }; // Brand Pink
-            case 4: return { label: "STRONG", color: "#3E442B" }; // Brand Green
+            case 3: return { label: "GOOD", color: "#EA638C" }; 
+            case 4: return { label: "STRONG", color: "#3E442B" }; 
             default: return { label: "EMPTY", color: "#E5E7EB" };
         }
     };
@@ -42,22 +42,22 @@ export default function RegisterPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null); 
-        setLoading(true);
+        setStatus("loading");
 
         if (!formData.name.trim()) {
             setError("Please enter your full name.");
-            setLoading(false);
+            setStatus("idle");
             return;
         }
 
-        // Security Check: Only allow registration for "Good" or "Strong" passwords
         if (formData.password && strength < 3) {
             setError("Security Requirement: Password must be 'Good' or 'Strong'.");
-            setLoading(false);
+            setStatus("idle");
             return;
         }
 
         try {
+            // 1. Register Account
             const response = await fetch('/api/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -67,22 +67,65 @@ export default function RegisterPage() {
             const data = await response.json();
 
             if (response.ok) {
-                router.push('/login?registered=true');
+                // 🟢 2. Start Auto-Login Flow
+                setStatus("logging-in");
+                
+                const loginResult = await signIn("credentials", {
+                    email: formData.email.toLowerCase().trim(),
+                    password: formData.password,
+                    redirect: false,
+                });
+
+                if (loginResult?.error) {
+                    router.push('/login?registered=true'); // Fallback if auto-login fails
+                } else {
+                    setStatus("success");
+                    setTimeout(() => {
+                        router.push('/');
+                        router.refresh();
+                    }, 2000);
+                }
             } else {
-                setError(data.message || "Registration failed. Please try again.");
+                setError(data.message || "Registration failed.");
+                setStatus("idle");
             }
         } catch (networkError) {
             setError("Network error. Please check your connection.");
-        } finally {
-            setLoading(false);
+            setStatus("idle");
         }
     };
 
+    // --- SUCCESS / LOGGING IN VIEW ---
+    if (status === "success" || status === "logging-in") {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
+                <div className="w-full max-w-md p-12 text-center bg-white shadow-2xl rounded-[3rem] animate-in fade-in zoom-in duration-500">
+                    <div className="relative inline-block mb-6">
+                        {status === "success" ? (
+                            <CheckCircle2 size={80} className="text-[#EA638C] animate-bounce" strokeWidth={1.5} />
+                        ) : (
+                            <Loader2 size={80} className="text-[#3E442B] animate-spin" strokeWidth={1.5} />
+                        )}
+                        <Sparkles className="absolute -top-2 -right-2 text-[#FBB6E6] animate-pulse" />
+                    </div>
+                    <h2 className="text-2xl font-black text-[#3E442B] uppercase tracking-[0.2em] mb-3">
+                        {status === "success" ? "Welcome!" : "Finalizing..."}
+                    </h2>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] leading-relaxed">
+                        {status === "success" 
+                            ? "Your wholesale access is ready. Redirecting..." 
+                            : "Creating your secure session..."}
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    // --- STANDARD FORM VIEW ---
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
             <div className="w-full max-w-md p-10 space-y-8 bg-white border border-gray-100 shadow-2xl rounded-[3rem] animate-in fade-in slide-in-from-bottom-4 duration-500">
                 
-                {/* Header Section - Branded */}
                 <div className="text-center">
                     <div className="inline-flex p-4 bg-[#3E442B]/5 rounded-full mb-4 text-[#3E442B]">
                         <UserPlus size={32} strokeWidth={1.5} />
@@ -100,7 +143,6 @@ export default function RegisterPage() {
                 )}
 
                 <form className="space-y-6" onSubmit={handleSubmit}>
-                    
                     <div className="space-y-1">
                         <label className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.2em] ml-2">Full Name</label>
                         <input
@@ -148,7 +190,6 @@ export default function RegisterPage() {
                             </button>
                         </div>
 
-                        {/* 🟢 Strength Meter Bar Integration */}
                         <div className="flex gap-1.5 px-2 mt-2">
                             {[1, 2, 3, 4].map((s) => (
                                 <div 
@@ -164,10 +205,10 @@ export default function RegisterPage() {
 
                     <button
                         type="submit"
-                        disabled={loading || (formData.password && strength < 3)}
+                        disabled={status !== "idle" || (formData.password && strength < 3)}
                         className="w-full py-4 text-white font-black text-[10px] uppercase tracking-[0.4em] bg-[#3E442B] rounded-2xl hover:bg-black active:scale-[0.98] transition-all disabled:opacity-30 shadow-xl shadow-[#3E442B]/10 flex items-center justify-center gap-2"
                     >
-                        {loading ? (
+                        {status === "loading" ? (
                             <><Loader2 className="w-4 h-4 animate-spin" /> PROCESSING</>
                         ) : 'Register Account'}
                     </button>

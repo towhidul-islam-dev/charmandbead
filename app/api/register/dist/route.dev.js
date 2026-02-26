@@ -88,8 +88,7 @@ function POST(request) {
             name: name.trim(),
             email: cleanEmail,
             password: password,
-            role: "user" // Explicitly set default role
-
+            role: "user"
           }));
 
         case 19:
@@ -117,21 +116,30 @@ function POST(request) {
           return regeneratorRuntime.awrap(resend.emails.send({
             from: "Charm & Bead Registry <onboarding@resend.dev>",
             to: ["towhidulislam12@gmail.com"],
-            // Using your super admin email
             subject: "New Partner Registration: " + name.trim(),
-            html: "\n          <div style=\"font-family: sans-serif; border: 1px solid #FBB6E6; border-radius: 30px; padding: 40px; max-width: 500px; margin: auto;\">\n            <h2 style=\"color: #3E442B; font-style: italic;\">New <span style=\"color: #EA638C;\">Wholesale</span> Lead</h2>\n            <p style=\"font-size: 14px; color: #3E442B;\">A new partner has registered on the <strong>Charm & Bead Registry</strong>.</p>\n            \n            <div style=\"background: #FAFAFA; padding: 20px; border-radius: 15px; border-left: 5px solid #EA638C; margin: 20px 0;\">\n              <p style=\"margin: 5px 0;\"><strong>Name:</strong> ".concat(name.trim(), "</p>\n              <p style=\"margin: 5px 0;\"><strong>Email:</strong> ").concat(cleanEmail, "</p>\n              <p style=\"margin: 5px 0;\"><strong>Date:</strong> ").concat(new Date().toLocaleDateString(), "</p>\n            </div>\n            \n            <p style=\"font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;\">Manage permissions in the admin dashboard.</p>\n          </div>\n        ")
+            html: "\n          <div style=\"font-family: sans-serif; border: 1px solid #FBB6E6; border-radius: 30px; padding: 40px; max-width: 500px; margin: auto;\">\n            <h2 style=\"color: #3E442B; font-style: italic;\">New <span style=\"color: #EA638C;\">Wholesale</span> Lead</h2>\n            <p style=\"font-size: 14px; color: #3E442B;\">A new partner has registered on the <strong>Charm & Bead Registry</strong>.</p>\n            <div style=\"background: #FAFAFA; padding: 20px; border-radius: 15px; border-left: 5px solid #EA638C; margin: 20px 0;\">\n              <p style=\"margin: 5px 0;\"><strong>Name:</strong> ".concat(name.trim(), "</p>\n              <p style=\"margin: 5px 0;\"><strong>Email:</strong> ").concat(cleanEmail, "</p>\n            </div>\n          </div>\n        ")
           }));
 
         case 31:
-          _context.next = 36;
-          break;
+          _context.next = 33;
+          return regeneratorRuntime.awrap(resend.emails.send({
+            from: "Charm & Bead <onboarding@resend.dev>",
+            to: [cleanEmail],
+            // Dynamic email from user input
+            subject: "Welcome to the Registry, ".concat(name.split(' ')[0], "!"),
+            html: "\n          <div style=\"font-family: sans-serif; border: 1px solid #FBB6E6; border-radius: 30px; padding: 40px; max-width: 500px; margin: auto; text-align: center;\">\n            <h2 style=\"color: #3E442B; font-style: italic;\">Welcome to <span style=\"color: #EA638C;\">Charm & Bead</span></h2>\n            <p style=\"color: #3E442B;\">Hi ".concat(name.trim(), ", your account has been created successfully. You now have access to our wholesale partner portal.</p>\n            <div style=\"margin: 30px 0;\">\n                <a href=\"").concat(process.env.NEXTAUTH_URL, "\" style=\"background: #3E442B; color: #FBB6E6; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 12px; letter-spacing: 1px; text-transform: uppercase;\">Start Exploring</a>\n            </div>\n            <p style=\"font-size: 11px; color: #999; text-transform: uppercase;\">Unlock Creativity with every bead.</p>\n          </div>\n        ")
+          }));
 
         case 33:
-          _context.prev = 33;
-          _context.t1 = _context["catch"](28);
-          console.error("ADMIN_NOTIFY_ERROR:", _context.t1);
+          _context.next = 38;
+          break;
 
-        case 36:
+        case 35:
+          _context.prev = 35;
+          _context.t1 = _context["catch"](28);
+          console.error("EMAIL_ERROR:", _context.t1);
+
+        case 38:
           return _context.abrupt("return", _server.NextResponse.json({
             message: "Account created successfully!",
             user: {
@@ -143,8 +151,8 @@ function POST(request) {
             status: 201
           }));
 
-        case 39:
-          _context.prev = 39;
+        case 41:
+          _context.prev = 41;
           _context.t2 = _context["catch"](0);
           console.error("CRITICAL_REGISTRATION_ERROR:", _context.t2);
           return _context.abrupt("return", _server.NextResponse.json({
@@ -153,10 +161,10 @@ function POST(request) {
             status: 500
           }));
 
-        case 43:
+        case 45:
         case "end":
           return _context.stop();
       }
     }
-  }, null, null, [[0, 39], [20, 25], [28, 33]]);
+  }, null, null, [[0, 41], [20, 25], [28, 35]]);
 }

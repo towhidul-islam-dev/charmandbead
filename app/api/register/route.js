@@ -30,15 +30,14 @@ export async function POST(request) {
     }
 
     // 3. Create User 
-    // (Ensure your User model has the pre-save hook to hash the password!)
     const newUser = await User.create({
       name: name.trim(),
       email: cleanEmail,
       password,
-      role: "user", // Explicitly set default role
+      role: "user", 
     });
 
-    // 4. Internal Dashboard Notification
+    // 4. Internal Dashboard Notification (For your admin panel)
     try {
       await Notification.create({
         title: "New Partner Joined",
@@ -49,29 +48,43 @@ export async function POST(request) {
       console.error("NOTIFICATION_DB_ERROR:", nErr);
     }
 
-    // 5. Admin Email Alert (Styled with your brand pink #EA638C)
+    // 5. Email Alerts (Admin Notify + User Welcome)
     try {
+      // 🟢 A. NOTIFY ADMIN (You)
       await resend.emails.send({
         from: "Charm & Bead Registry <onboarding@resend.dev>", 
-        to: ["towhidulislam12@gmail.com"], // Using your super admin email
+        to: ["towhidulislam12@gmail.com"], 
         subject: "New Partner Registration: " + name.trim(),
         html: `
           <div style="font-family: sans-serif; border: 1px solid #FBB6E6; border-radius: 30px; padding: 40px; max-width: 500px; margin: auto;">
             <h2 style="color: #3E442B; font-style: italic;">New <span style="color: #EA638C;">Wholesale</span> Lead</h2>
             <p style="font-size: 14px; color: #3E442B;">A new partner has registered on the <strong>Charm & Bead Registry</strong>.</p>
-            
             <div style="background: #FAFAFA; padding: 20px; border-radius: 15px; border-left: 5px solid #EA638C; margin: 20px 0;">
               <p style="margin: 5px 0;"><strong>Name:</strong> ${name.trim()}</p>
               <p style="margin: 5px 0;"><strong>Email:</strong> ${cleanEmail}</p>
-              <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
             </div>
-            
-            <p style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Manage permissions in the admin dashboard.</p>
+          </div>
+        `,
+      });
+
+      // 🟢 B. WELCOME USER (The Customer)
+      await resend.emails.send({
+        from: "Charm & Bead <onboarding@resend.dev>", 
+        to: [cleanEmail], // Dynamic email from user input
+        subject: `Welcome to the Registry, ${name.split(' ')[0]}!`,
+        html: `
+          <div style="font-family: sans-serif; border: 1px solid #FBB6E6; border-radius: 30px; padding: 40px; max-width: 500px; margin: auto; text-align: center;">
+            <h2 style="color: #3E442B; font-style: italic;">Welcome to <span style="color: #EA638C;">Charm & Bead</span></h2>
+            <p style="color: #3E442B;">Hi ${name.trim()}, your account has been created successfully. You now have access to our wholesale partner portal.</p>
+            <div style="margin: 30px 0;">
+                <a href="${process.env.NEXTAUTH_URL}" style="background: #3E442B; color: #FBB6E6; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 12px; letter-spacing: 1px; text-transform: uppercase;">Start Exploring</a>
+            </div>
+            <p style="font-size: 11px; color: #999; text-transform: uppercase;">Unlock Creativity with every bead.</p>
           </div>
         `,
       });
     } catch (mailError) {
-      console.error("ADMIN_NOTIFY_ERROR:", mailError);
+      console.error("EMAIL_ERROR:", mailError);
     }
 
     return NextResponse.json(
