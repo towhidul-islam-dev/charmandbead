@@ -2,19 +2,23 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Loader2, FileText } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 const HeroCarousel = () => {
   const [slides, setSlides] = useState([]);
   const [current, setCurrent] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // 1. Fetch slides from your MongoDB API
   const fetchSlides = useCallback(async () => {
     try {
-      const res = await fetch("/api/hero-slides");
+      // 🟢 Added a cache-busting timestamp to ensure you see fresh data
+      const res = await fetch(`/api/hero-slides?t=${Date.now()}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
+      
+      // 🟢 Debugging: Check your browser console (F12) to see if data arrives
+      console.log("HeroCarousel Data:", data);
+      
       setSlides(data);
     } catch (err) {
       console.error("Hero Carousel Load Error:", err);
@@ -27,7 +31,6 @@ const HeroCarousel = () => {
     fetchSlides();
   }, [fetchSlides]);
 
-  // 2. Navigation Logic
   const nextSlide = useCallback(() => {
     if (slides.length === 0) return;
     setCurrent((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
@@ -38,7 +41,6 @@ const HeroCarousel = () => {
     setCurrent((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
   }, [slides.length]);
 
-  // 3. Auto-play
   useEffect(() => {
     if (slides.length > 1) {
       const timer = setInterval(nextSlide, 5000);
@@ -54,6 +56,7 @@ const HeroCarousel = () => {
     );
   }
 
+  // If no slides are found after loading, the section won't render at all
   if (slides.length === 0) return null;
 
   return (
@@ -64,8 +67,11 @@ const HeroCarousel = () => {
       <div className="relative w-full h-full">
         {slides.map((slide, index) => {
           const isActive = index === current;
-          const isPdf = slide.image.toLowerCase().endsWith('.pdf') || slide.format === 'pdf';
-          const isSvg = slide.image.toLowerCase().endsWith('.svg') || slide.format === 'svg';
+          
+          // Improved check for PDF/SVG
+          const imageUrl = slide.image || "";
+          const isPdf = imageUrl.toLowerCase().endsWith('.pdf') || slide.format === 'pdf';
+          const isSvg = imageUrl.toLowerCase().endsWith('.svg') || slide.format === 'svg';
 
           return (
             <div
@@ -74,26 +80,23 @@ const HeroCarousel = () => {
                 isActive ? "opacity-100 z-10" : "opacity-0 z-0"
               }`}
             >
-              {/* PDF RENDERING */}
               {isPdf ? (
-                <div className="relative w-full h-full bg-gray-200 flex flex-col items-center justify-center">
+                <div className="relative w-full h-full bg-gray-200">
                   <iframe 
-                    src={`${slide.image}#toolbar=0&navpanes=0&scrollbar=0`} 
+                    src={`${imageUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
                     className="w-full h-full border-none pointer-events-none"
                     title={slide.title}
                   />
-                  {/* Overlay Link for PDF since iframe eats clicks */}
-                  <Link href={slide.link} className="absolute inset-0 z-20" />
+                  <Link href={slide.link || "#"} className="absolute inset-0 z-20" />
                 </div>
               ) : (
-                /* IMAGE/SVG RENDERING */
-                <Link href={slide.link} className="relative block w-full h-full">
+                <Link href={slide.link || "#"} className="relative block w-full h-full">
                   <Image
-                    src={slide.image}
-                    alt={slide.title}
+                    src={imageUrl}
+                    alt={slide.title || "Banner"}
                     fill
                     priority={index === 0}
-                    unoptimized={isSvg} // SVG optimization off to keep vectors sharp
+                    unoptimized={isSvg}
                     className="object-cover object-center"
                     sizes="100vw"
                   />
@@ -105,27 +108,23 @@ const HeroCarousel = () => {
         })}
       </div>
 
-      {/* Navigation Controls */}
       {slides.length > 1 && (
         <>
           <div className="absolute inset-0 z-30 flex items-center justify-between px-3 pointer-events-none md:px-6">
             <button 
               onClick={(e) => { e.preventDefault(); prevSlide(); }}
               className="p-1.5 md:p-2 transition-all rounded-full pointer-events-auto bg-white/40 backdrop-blur-md text-[#3E442B] hover:bg-white active:scale-95 shadow-sm"
-              aria-label="Previous slide"
             >
               <ChevronLeft size={20} className="md:w-6 md:h-6" />
             </button>
             <button 
               onClick={(e) => { e.preventDefault(); nextSlide(); }}
               className="p-1.5 md:p-2 transition-all rounded-full pointer-events-auto bg-white/40 backdrop-blur-md text-[#3E442B] hover:bg-white active:scale-95 shadow-sm"
-              aria-label="Next slide"
             >
               <ChevronRight size={20} className="md:w-6 md:h-6" />
             </button>
           </div>
 
-          {/* Indicators */}
           <div className="absolute z-30 flex gap-1.5 -translate-x-1/2 bottom-4 left-1/2">
             {slides.map((_, i) => (
               <button
@@ -134,7 +133,6 @@ const HeroCarousel = () => {
                 className={`h-1.5 transition-all rounded-full ${
                   current === i ? "w-8 bg-[#EA638C]" : "w-2 bg-white/60"
                 }`}
-                aria-label={`Go to slide ${i + 1}`}
               />
             ))}
           </div>
