@@ -8,7 +8,8 @@ import {
     SparklesIcon, ChatBubbleLeftRightIcon, GiftIcon, WrenchIcon,
     Bars3Icon, XMarkIcon, ArrowTopRightOnSquareIcon,
     BanknotesIcon,
-    FolderIcon // 🟢 Added for Categories
+    FolderIcon,
+    PhotoIcon // 🟢 Added for Carousel/Banners
 } from '@heroicons/react/24/outline';
 import AdminDesktopSidebar from './AdminDesktopSidebar';
 
@@ -20,8 +21,9 @@ export default function AdminSidebar({ user, globalData }) {
     const navItems = [
         { name: 'Dashboard', href: '/admin', icon: HomeIcon },
         { name: 'Products', href: '/admin/products', icon: CubeIcon },
-        // 🟢 Added Categories to the mobile list
         { name: 'Categories', href: '/admin/categories', icon: FolderIcon }, 
+        // 🟢 Added Carousel Banners here
+        { name: 'Carousel', href: '/admin/carousel', icon: PhotoIcon }, 
         { name: 'Inventory', href: '/admin/inventory', icon: WrenchIcon },
         { name: 'New Arrivals', href: '/admin/new-arrivals', icon: SparklesIcon }, 
         { name: 'Orders', href: '/admin/orders', icon: ShoppingCartIcon, badge: globalData?.newOrdersCount || 0 },
@@ -34,7 +36,6 @@ export default function AdminSidebar({ user, globalData }) {
     const isActive = (item) => {
         const isNewArrivalActive = searchParams ? searchParams.get('newArrival') === 'true' : false;
         if (item.href === '/admin') return pathname === '/admin';
-        // Logic to keep link active for sub-routes (like /admin/categories/edit)
         return pathname === item.href || pathname.startsWith(item.href + '/') || (item.name === 'New Arrivals' && isNewArrivalActive);
     };
 
@@ -60,8 +61,7 @@ export default function AdminSidebar({ user, globalData }) {
                             </button>
                         </div>
 
-                        {/* Navigation section */}
-                        <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-2">
+                        <nav className="flex-1 pr-2 space-y-2 overflow-y-auto custom-scrollbar">
                             {navItems.map((item) => {
                                 const Icon = item.icon;
                                 const active = isActive(item);
@@ -75,7 +75,7 @@ export default function AdminSidebar({ user, globalData }) {
                                         }`}
                                     >
                                         <Icon className="w-6 h-6" />
-                                        <span className="font-bold text-sm uppercase tracking-tight">{item.name}</span>
+                                        <span className="text-sm font-bold tracking-tight uppercase">{item.name}</span>
                                         {item.badge > 0 && (
                                             <span className="ml-auto bg-[#FBB6E6] text-[#3E442B] text-[10px] font-black px-2 py-0.5 rounded-full">
                                                 {item.badge}
@@ -87,16 +87,16 @@ export default function AdminSidebar({ user, globalData }) {
                         </nav>
 
                         {/* Mobile Sidebar Footer */}
-                        <div className="pt-4 mt-4 border-t border-white/10 space-y-4 shrink-0">
+                        <div className="pt-4 mt-4 space-y-4 border-t border-white/10 shrink-0">
                             <Link 
                                 href="/" 
                                 className="flex items-center gap-4 px-4 py-3 text-[#FBB6E6] hover:bg-white/10 rounded-xl transition-all group"
                             >
-                                <ArrowTopRightOnSquareIcon className="w-6 h-6 transition-transform group-hover:scale-110 shadow-sm" />
-                                <span className="font-black text-xs uppercase tracking-widest">View Site</span>
+                                <ArrowTopRightOnSquareIcon className="w-6 h-6 transition-transform shadow-sm group-hover:scale-110" />
+                                <span className="text-xs font-black tracking-widest uppercase">View Site</span>
                             </Link>
 
-                            <div className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/5">
+                            <div className="flex items-center gap-3 p-3 border bg-white/5 rounded-2xl border-white/5">
                                 <div className="w-10 h-10 rounded-xl bg-[#EA638C] flex items-center justify-center text-white font-black text-lg border border-[#FBB6E6]/20 shadow-lg">
                                     {user?.name?.charAt(0).toUpperCase()}
                                 </div>
@@ -116,10 +116,12 @@ export default function AdminSidebar({ user, globalData }) {
 
             {/* 3. Desktop Sidebar */}
             <div className="hidden md:block">
+                {/* 🟢 Passing the updated navItems list if your Desktop sidebar is generic */}
                 <AdminDesktopSidebar 
                     user={user} 
                     globalData={globalData} 
                     currentPath={pathname} 
+                    navItems={navItems} // Optional: if you've made the desktop one dynamic
                 />
             </div>
         </>

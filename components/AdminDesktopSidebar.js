@@ -11,15 +11,17 @@ import {
   GiftIcon,
   WrenchIcon,
   BanknotesIcon,
-  FolderIcon, // 🟢 New Icon for Categories
+  FolderIcon,
+  PhotoIcon, // 🟢 Added for Carousel/Banners
 } from "@heroicons/react/24/outline";
 
 export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
   const navItems = [
     { name: "Dashboard", href: "/admin", icon: HomeIcon },
     { name: "Products", href: "/admin/products", icon: CubeIcon },
-    // 🟢 Added Categories link here
-    { name: "Categories", href: "/admin/categories", icon: FolderIcon }, 
+    { name: "Categories", href: "/admin/categories", icon: FolderIcon },
+    // 🟢 Added Carousel link here
+    { name: "Carousel", href: "/admin/carousel", icon: PhotoIcon }, 
     { name: "Inventory", href: "/admin/inventory", icon: WrenchIcon },
     {
       name: "New Arrivals",
@@ -51,7 +53,8 @@ export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
 
   const isActive = (item) => {
     if (item.name === "New Arrivals") return currentPath === "/admin/new-arrivals";
-    // Ensures sub-paths of /admin/categories also highlight the link
+    
+    // Ensures sub-paths (like /admin/carousel/edit) also highlight the link
     if (item.href !== "/admin") {
         return currentPath.startsWith(item.href);
     }
