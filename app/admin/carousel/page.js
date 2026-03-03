@@ -12,6 +12,9 @@ export default function AdminCarousel() {
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [status, setStatus] = useState("");
+  
+  // 🟢 NEW STATE: Toast Notification
+  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
 
   // Form States
   const [file, setFile] = useState(null);
@@ -19,6 +22,12 @@ export default function AdminCarousel() {
   const [title, setTitle] = useState("");
   const [link, setLink] = useState("");
   const [priority, setPriority] = useState(0);
+
+  // 🟢 NEW HELPER: Show Toast
+  const triggerToast = (message, type = "success") => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: "", type: "success" }), 3000);
+  };
 
   // 1. Fetch all slides
   const fetchSlides = useCallback(async () => {
@@ -48,9 +57,12 @@ export default function AdminCarousel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !currentStatus }),
       });
-      if (res.ok) fetchSlides();
+      if (res.ok) {
+        await fetchSlides();
+        triggerToast(currentStatus ? "Banner Archived" : "Banner is now Live!");
+      }
     } catch (err) {
-      alert("Failed to update status");
+      triggerToast("Failed to update status", "error");
     }
   };
 
@@ -61,10 +73,11 @@ export default function AdminCarousel() {
     try {
       const res = await fetch(`/api/hero-slides/${id}`, { method: "DELETE" });
       if (res.ok) {
-        setSlides(slides.filter(s => s._id !== id));
+        setSlides(prev => prev.filter(s => s._id !== id));
+        triggerToast("Banner deleted successfully");
       }
     } catch (err) {
-      alert("Delete failed");
+      triggerToast("Delete failed", "error");
     } finally {
       setDeletingId(null);
     }
@@ -115,6 +128,7 @@ export default function AdminCarousel() {
         setLink("");
         setPriority(0);
         fetchSlides();
+        triggerToast("New Campaign Launched!");
         setTimeout(() => setStatus(""), 4000);
       } else {
         const errorData = await res.json();
@@ -122,13 +136,14 @@ export default function AdminCarousel() {
       }
     } catch (err) {
       setStatus(`Error: ${err.message}`);
+      triggerToast(err.message, "error");
     } finally {
       setUploading(false);
     }
   };
 
   return (
-    <div className="max-w-5xl min-h-screen p-6 mx-auto space-y-12 bg-white md:p-10">
+    <div className="max-w-5xl min-h-screen p-6 mx-auto space-y-12 bg-white md:p-10 relative">
       <header className="flex items-center justify-between pb-8 border-b border-gray-100">
         <div>
           <h1 className="text-4xl font-black italic tracking-tighter text-[#3E442B] uppercase">
@@ -246,7 +261,6 @@ export default function AdminCarousel() {
                       <p className="font-black text-[12px] text-[#3E442B] uppercase tracking-wider">{slide.title}</p>
                       
                       <div className="flex flex-wrap items-center gap-2 mt-2">
-                        {/* 🟢 ADDED: CREATION DATE BADGE */}
                         <span className="flex items-center gap-1 text-[8px] font-black text-[#3E442B] bg-[#FBB6E6] px-2 py-1 rounded-md uppercase tracking-tighter">
                           <Calendar size={10} /> 
                           {slide.createdAt ? new Date(slide.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'New'}
@@ -288,6 +302,25 @@ export default function AdminCarousel() {
           )}
         </section>
       </div>
+
+      {/* 🟢 BRANDED TOAST NOTIFICATION */}
+      {toast.show && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className={`flex items-center gap-3 px-8 py-4 rounded-[24px] shadow-2xl border ${
+            toast.type === "error" 
+              ? "bg-[#EA638C] text-white border-[#EA638C]" 
+              : "bg-[#3E442B] text-[#FBB6E6] border-[#FBB6E6]/20"
+          }`}>
+            {toast.type === "error" ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
+            <span className="text-[11px] font-black uppercase tracking-[0.2em]">
+              {toast.message}
+            </span>
+            <button onClick={() => setToast({ ...toast, show: false })} className="ml-2 hover:opacity-50">
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

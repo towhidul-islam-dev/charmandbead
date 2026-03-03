@@ -3,7 +3,6 @@ import HeroSlide from "@/models/HeroSlide";
 import { NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
 
-// 🟢 Configure Cloudinary for Server-Side Deletion
 cloudinary.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -14,7 +13,8 @@ cloudinary.config({
 export async function PATCH(req, { params }) {
   try {
     await dbConnect();
-    const { id } = params;
+    // 🟢 FIX: Await params in Next.js 14/15
+    const { id } = await params; 
     const { isActive } = await req.json();
 
     const updatedSlide = await HeroSlide.findByIdAndUpdate(
@@ -27,6 +27,7 @@ export async function PATCH(req, { params }) {
 
     return NextResponse.json(updatedSlide);
   } catch (error) {
+    console.error("PATCH Error:", error);
     return NextResponse.json({ error: "Failed to update status" }, { status: 500 });
   }
 }
@@ -35,34 +36,29 @@ export async function PATCH(req, { params }) {
 export async function DELETE(req, { params }) {
   try {
     await dbConnect();
-    const { id } = params;
+    // 🟢 FIX: Await params in Next.js 14/15
+    const { id } = await params; 
 
-    // 1. Find the slide record to get the image URL
     const slide = await HeroSlide.findById(id);
     if (!slide) return NextResponse.json({ error: "Slide not found" }, { status: 404 });
 
-    // 2. Extract the Public ID for Cloudinary
-    // This logic takes the URL and finds the folder/filename needed for deletion
+    // Cloudinary Deletion Logic
     try {
       const urlParts = slide.image.split("/");
       const fileNameWithExtension = urlParts[urlParts.length - 1];
       const [publicIdWithoutExtension] = fileNameWithExtension.split(".");
       
-      // If you are using folders in Cloudinary (recommended), use this:
       const folder = urlParts[urlParts.length - 2];
       const publicId = `${folder}/${publicIdWithoutExtension}`;
 
-      // Delete from Cloudinary
       await cloudinary.uploader.destroy(publicId);
     } catch (cloudErr) {
-      console.error("Cloudinary Deletion Error (File might not exist):", cloudErr);
-      // We continue to delete from DB even if Cloudinary file is already gone
+      console.error("Cloudinary Deletion Error:", cloudErr);
     }
 
-    // 3. Delete from MongoDB
     await HeroSlide.findByIdAndDelete(id);
 
-    return NextResponse.json({ message: "Successfully removed from Storage and Database" });
+    return NextResponse.json({ message: "Successfully removed" });
   } catch (error) {
     console.error("Critical Delete Error:", error);
     return NextResponse.json({ error: "Server error during deletion" }, { status: 500 });
