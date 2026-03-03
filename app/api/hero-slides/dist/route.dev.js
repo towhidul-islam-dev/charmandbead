@@ -27,9 +27,7 @@ function GET(req) {
 
         case 3:
           _ref = new URL(req.url), searchParams = _ref.searchParams;
-          isAdmin = searchParams.get("admin") === "true"; // 🟢 THE FIX: 
-          // For non-admins, we find slides where isActive is true 
-          // OR where isActive does not exist (for old data)
+          isAdmin = searchParams.get("admin") === "true"; // Matches active slides OR slides created before we added the isActive field
 
           query = isAdmin ? {} : {
             $or: [{
@@ -90,7 +88,7 @@ function POST(req) {
           }
 
           return _context2.abrupt("return", _server.NextResponse.json({
-            error: "Missing required fields"
+            error: "Image and Title are required"
           }, {
             status: 400
           }));
@@ -103,30 +101,31 @@ function POST(req) {
             image: body.image,
             priority: Number(body.priority) || 0,
             format: body.format || "image",
-            isActive: true // Force new banners to be active
-
+            isActive: true
           }));
 
         case 10:
           slide = _context2.sent;
+          console.log("✅ SAVED SLIDE TO DB:", slide); // Check your terminal for this!
+
           return _context2.abrupt("return", _server.NextResponse.json(slide, {
             status: 201
           }));
 
-        case 14:
-          _context2.prev = 14;
+        case 15:
+          _context2.prev = 15;
           _context2.t0 = _context2["catch"](0);
-          console.error("SAVE ERROR:", _context2.t0);
+          console.error("❌ MONGODB SAVE ERROR:", _context2.t0);
           return _context2.abrupt("return", _server.NextResponse.json({
-            error: "Failed to save to DB"
+            error: _context2.t0.message || "Failed to save to DB"
           }, {
             status: 500
           }));
 
-        case 18:
+        case 19:
         case "end":
           return _context2.stop();
       }
     }
-  }, null, null, [[0, 14]]);
+  }, null, null, [[0, 15]]);
 }

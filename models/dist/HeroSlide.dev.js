@@ -22,12 +22,12 @@ var HeroSlideSchema = new _mongoose["default"].Schema({
     type: String,
     required: true
   },
+  // 🟢 Added 'svg' and 'pdf' to support your new carousel logic
   format: {
     type: String,
     "enum": ['image', 'pdf', 'svg'],
     "default": 'image'
   },
-  // 🟢 NEW
   priority: {
     type: Number,
     "default": 0
@@ -38,8 +38,9 @@ var HeroSlideSchema = new _mongoose["default"].Schema({
   }
 }, {
   timestamps: true
-});
+}); // 🟢 THE FIX: Explicitly name the collection "heroslides"
+// This prevents Mongoose from creating a different collection by mistake.
 
-var _default = _mongoose["default"].models.HeroSlide || _mongoose["default"].model("HeroSlide", HeroSlideSchema);
+var _default = _mongoose["default"].models.HeroSlide || _mongoose["default"].model("HeroSlide", HeroSlideSchema, "heroslides");
 
 exports["default"] = _default;
