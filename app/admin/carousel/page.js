@@ -167,7 +167,7 @@ export default function AdminCarousel() {
       </header>
 
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
-        {/* CREATE FORM SECTION */}
+        {/* Form Section */}
         <section className="lg:col-span-1">
           <form onSubmit={handleSubmit} className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-xl shadow-gray-200/50 sticky top-10">
             <h2 className="text-[12px] font-black text-[#3E442B] uppercase tracking-widest mb-8 flex items-center gap-2">
@@ -229,7 +229,7 @@ export default function AdminCarousel() {
           </form>
         </section>
 
-        {/* INVENTORY LIST SECTION */}
+        {/* Inventory Section - FIXED UI OVERLAP */}
         <section className="space-y-6 lg:col-span-2">
           <div className="flex items-center justify-between px-4">
             <h2 className="text-[13px] font-black text-[#3E442B] uppercase tracking-[0.25em]">Live Inventory</h2>
@@ -247,62 +247,62 @@ export default function AdminCarousel() {
               {slides.map((slide) => (
                 <div 
                   key={slide._id} 
-                  className={`group flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 rounded-[32px] border transition-all duration-500 hover:scale-[1.01] gap-4 ${
+                  className={`group flex items-center justify-between p-4 rounded-[32px] border transition-all duration-500 hover:scale-[1.01] ${
                     slide.isActive ? 'bg-white border-gray-100 shadow-sm' : 'bg-gray-50/50 border-transparent opacity-60'
                   }`}
                 >
-                  <div className="flex items-center w-full min-w-0 gap-6">
-                    {/* Visual Preview */}
-                    <div className="relative w-32 h-20 bg-gray-100 rounded-[24px] overflow-hidden shadow-inner flex-shrink-0 border border-gray-100">
+                  <div className="flex items-center min-w-0 flex-1 gap-4">
+                    {/* Thumbnail */}
+                    <div className="relative w-28 h-16 bg-gray-100 rounded-[20px] overflow-hidden flex-shrink-0 border border-gray-100">
                       {slide.format === 'pdf' ? (
-                        <div className="w-full h-full flex items-center justify-center bg-red-50 text-[#EA638C] text-[10px] font-black">CATALOGUE</div>
+                        <div className="w-full h-full flex items-center justify-center bg-red-50 text-[#EA638C] text-[9px] font-black">CATALOGUE</div>
                       ) : (
-                        <img src={slide.image} className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${!slide.isActive && 'grayscale'}`} alt="" />
+                        <img src={slide.image} className={`w-full h-full object-cover ${!slide.isActive && 'grayscale'}`} alt="" />
                       )}
                     </div>
 
-                    {/* Content Details - Flex Column to prevent overlap */}
-                    <div className="flex flex-col min-w-0 gap-2">
-                      <p className="font-black text-[13px] text-[#3E442B] uppercase tracking-wider truncate leading-tight">
+                    {/* Content Group - Horizontal Layout with fixed spacing */}
+                    <div className="flex flex-col min-w-0">
+                      <p className="font-black text-[11px] text-[#3E442B] uppercase tracking-wider truncate mb-1.5">
                         {slide.title}
                       </p>
                       
-                      <div className="flex flex-wrap items-center gap-y-2 gap-x-3">
-                        <span className="flex items-center gap-1.5 text-[8px] font-black text-[#3E442B] bg-[#FBB6E6] px-2 py-1 rounded-lg uppercase tracking-tighter shrink-0">
-                          <Calendar size={12} /> 
-                          {slide.createdAt ? new Date(slide.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'New'}
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1 text-[8px] font-black text-[#3E442B] bg-[#FBB6E6] px-2 py-0.5 rounded-md uppercase shrink-0">
+                          <Calendar size={10} /> 
+                          {slide.createdAt ? new Date(slide.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'New'}
                         </span>
 
-                        <span className="text-[9px] text-[#EA638C] font-black uppercase tracking-tighter bg-[#EA638C]/10 px-2 py-1 rounded-lg shrink-0 border border-[#EA638C]/10">
+                        <span className="text-[8px] text-[#EA638C] font-black uppercase bg-[#EA638C]/5 px-1.5 py-0.5 rounded-md border border-[#EA638C]/10 shrink-0">
                             P: {slide.priority}
                         </span>
                         
-                        <span className="text-[9px] text-gray-400 font-bold tracking-tight truncate max-w-[150px] italic">
+                        <span className="text-[9px] text-gray-400 font-bold truncate max-w-[100px] hidden sm:inline-block">
                             {slide.link}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center self-end gap-3 pr-2 sm:self-center">
+                  {/* Actions - Shrunk Icons */}
+                  <div className="flex items-center gap-2 pr-1">
                     <button 
                       onClick={() => toggleStatus(slide._id, slide.isActive)}
-                      className={`p-4 rounded-2xl transition-all ${
+                      className={`p-3 rounded-xl transition-all ${
                         slide.isActive 
-                          ? 'text-[#3E442B] bg-[#FBB6E6] hover:bg-[#EA638C] hover:text-white shadow-sm' 
+                          ? 'text-[#3E442B] bg-[#FBB6E6] hover:bg-[#EA638C] hover:text-white' 
                           : 'text-gray-400 bg-gray-200 hover:bg-gray-300'
                       }`}
                     >
-                      {slide.isActive ? <Eye size={20} /> : <EyeOff size={20} />}
+                      {slide.isActive ? <Eye size={16} /> : <EyeOff size={16} />}
                     </button>
 
                     <button 
                       onClick={() => handleDelete(slide._id)}
                       disabled={deletingId === slide._id}
-                      className="p-4 text-gray-300 hover:text-white hover:bg-[#3E442B] rounded-2xl transition-all"
+                      className="p-3 text-gray-300 hover:text-white hover:bg-[#3E442B] rounded-xl transition-all"
                     >
-                      {deletingId === slide._id ? <Loader2 className="animate-spin" size={20} /> : <Trash2 size={20} />}
+                      {deletingId === slide._id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
                     </button>
                   </div>
                 </div>
@@ -312,7 +312,7 @@ export default function AdminCarousel() {
         </section>
       </div>
 
-      {/* BRANDED TOAST NOTIFICATION */}
+      {/* Toast Notification */}
       {toast.show && (
         <div className="fixed z-50 duration-300 -translate-x-1/2 bottom-10 left-1/2 animate-in fade-in slide-in-from-bottom-5">
           <div className={`flex items-center gap-3 px-8 py-4 rounded-[24px] shadow-2xl border ${
