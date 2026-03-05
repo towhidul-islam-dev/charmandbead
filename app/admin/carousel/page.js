@@ -13,7 +13,7 @@ export default function AdminCarousel() {
   const [deletingId, setDeletingId] = useState(null);
   const [status, setStatus] = useState("");
   
-  // 🟢 NEW STATE: Toast Notification
+  // Toast Notification State
   const [toast, setToast] = useState({ show: false, message: "", type: "success" });
 
   // Form States
@@ -23,7 +23,7 @@ export default function AdminCarousel() {
   const [link, setLink] = useState("");
   const [priority, setPriority] = useState(0);
 
-  // 🟢 NEW HELPER: Show Toast
+  // Helper: Show Toast
   const triggerToast = (message, type = "success") => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false, message: "", type: "success" }), 3000);
@@ -143,7 +143,7 @@ export default function AdminCarousel() {
   };
 
   return (
-    <div className="max-w-5xl min-h-screen p-6 mx-auto space-y-12 bg-white md:p-10 relative">
+    <div className="relative max-w-5xl min-h-screen p-6 mx-auto space-y-12 bg-white md:p-10">
       <header className="flex items-center justify-between pb-8 border-b border-gray-100">
         <div>
           <h1 className="text-4xl font-black italic tracking-tighter text-[#3E442B] uppercase">
@@ -167,6 +167,7 @@ export default function AdminCarousel() {
       </header>
 
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
+        {/* CREATE FORM SECTION */}
         <section className="lg:col-span-1">
           <form onSubmit={handleSubmit} className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-xl shadow-gray-200/50 sticky top-10">
             <h2 className="text-[12px] font-black text-[#3E442B] uppercase tracking-widest mb-8 flex items-center gap-2">
@@ -228,6 +229,7 @@ export default function AdminCarousel() {
           </form>
         </section>
 
+        {/* INVENTORY LIST SECTION */}
         <section className="space-y-6 lg:col-span-2">
           <div className="flex items-center justify-between px-4">
             <h2 className="text-[13px] font-black text-[#3E442B] uppercase tracking-[0.25em]">Live Inventory</h2>
@@ -245,43 +247,50 @@ export default function AdminCarousel() {
               {slides.map((slide) => (
                 <div 
                   key={slide._id} 
-                  className={`group flex items-center justify-between p-5 rounded-[32px] border transition-all duration-500 hover:scale-[1.01] ${
+                  className={`group flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 rounded-[32px] border transition-all duration-500 hover:scale-[1.01] gap-4 ${
                     slide.isActive ? 'bg-white border-gray-100 shadow-sm' : 'bg-gray-50/50 border-transparent opacity-60'
                   }`}
                 >
-                  <div className="flex items-center min-w-0 gap-6">
-                    <div className="relative w-36 h-20 bg-gray-100 rounded-[24px] overflow-hidden shadow-inner flex-shrink-0 border border-gray-100">
+                  <div className="flex items-center w-full min-w-0 gap-6">
+                    {/* Visual Preview */}
+                    <div className="relative w-32 h-20 bg-gray-100 rounded-[24px] overflow-hidden shadow-inner flex-shrink-0 border border-gray-100">
                       {slide.format === 'pdf' ? (
                         <div className="w-full h-full flex items-center justify-center bg-red-50 text-[#EA638C] text-[10px] font-black">CATALOGUE</div>
                       ) : (
                         <img src={slide.image} className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${!slide.isActive && 'grayscale'}`} alt="" />
                       )}
                     </div>
-                    <div className="truncate">
-                      <p className="font-black text-[12px] text-[#3E442B] uppercase tracking-wider">{slide.title}</p>
+
+                    {/* Content Details - Flex Column to prevent overlap */}
+                    <div className="flex flex-col min-w-0 gap-2">
+                      <p className="font-black text-[13px] text-[#3E442B] uppercase tracking-wider truncate leading-tight">
+                        {slide.title}
+                      </p>
                       
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <span className="flex items-center gap-1 text-[8px] font-black text-[#3E442B] bg-[#FBB6E6] px-2 py-1 rounded-md uppercase tracking-tighter">
-                          <Calendar size={10} /> 
+                      <div className="flex flex-wrap items-center gap-y-2 gap-x-3">
+                        <span className="flex items-center gap-1.5 text-[8px] font-black text-[#3E442B] bg-[#FBB6E6] px-2 py-1 rounded-lg uppercase tracking-tighter shrink-0">
+                          <Calendar size={12} /> 
                           {slide.createdAt ? new Date(slide.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'New'}
                         </span>
 
-                        <span className="text-[9px] text-[#EA638C] font-black uppercase tracking-tighter bg-[#EA638C]/5 px-2 py-1 rounded-md">
+                        <span className="text-[9px] text-[#EA638C] font-black uppercase tracking-tighter bg-[#EA638C]/10 px-2 py-1 rounded-lg shrink-0 border border-[#EA638C]/10">
                             P: {slide.priority}
                         </span>
-                        <span className="text-[9px] text-gray-400 font-bold tracking-tighter truncate max-w-[120px]">
+                        
+                        <span className="text-[9px] text-gray-400 font-bold tracking-tight truncate max-w-[150px] italic">
                             {slide.link}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 pr-2">
+                  {/* Actions */}
+                  <div className="flex items-center self-end gap-3 pr-2 sm:self-center">
                     <button 
                       onClick={() => toggleStatus(slide._id, slide.isActive)}
                       className={`p-4 rounded-2xl transition-all ${
                         slide.isActive 
-                          ? 'text-[#3E442B] bg-[#FBB6E6] hover:bg-[#EA638C] hover:text-white' 
+                          ? 'text-[#3E442B] bg-[#FBB6E6] hover:bg-[#EA638C] hover:text-white shadow-sm' 
                           : 'text-gray-400 bg-gray-200 hover:bg-gray-300'
                       }`}
                     >
@@ -303,9 +312,9 @@ export default function AdminCarousel() {
         </section>
       </div>
 
-      {/* 🟢 BRANDED TOAST NOTIFICATION */}
+      {/* BRANDED TOAST NOTIFICATION */}
       {toast.show && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed z-50 duration-300 -translate-x-1/2 bottom-10 left-1/2 animate-in fade-in slide-in-from-bottom-5">
           <div className={`flex items-center gap-3 px-8 py-4 rounded-[24px] shadow-2xl border ${
             toast.type === "error" 
               ? "bg-[#EA638C] text-white border-[#EA638C]" 
