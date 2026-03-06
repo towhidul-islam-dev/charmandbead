@@ -87,31 +87,31 @@ export async function saveProduct(prevState, formData) {
     }
 
     // --- 2. HANDLE DETAIL GALLERY ---
-    // Extract existing gallery and clean objects to just URL strings
     const rawExistingGallery = JSON.parse(formData.get("existingGallery") || "[]");
     const existingGalleryUrls = rawExistingGallery.map(item => 
       typeof item === 'string' ? item : (item.url || "")
     ).filter(url => url !== "");
 
     const newGalleryUploads = [];
-    // Process new gallery uploads from formData entries
     for (const [key, value] of formData.entries()) {
       if (key.startsWith("galleryFile_") && value instanceof File && value.size > 0) {
         const uploadedUrl = await uploadToCloudinary(value);
         if (uploadedUrl) newGalleryUploads.push(uploadedUrl);
       }
     }
-    
-    // Combine existing and new uploads
     const finalGallery = [...existingGalleryUrls, ...newGalleryUploads];
 
-    // --- 3. DNA CATEGORY LOGIC ---
+    // --- 3. DNA & NEW ARRIVAL / DISCOUNT LOGIC ---
     const categoryId = formData.get("categoryId");
     const subCategoryId = formData.get("subCategoryId");
     const mainCat = CATEGORY_DNA.find(c => String(c._id) === String(categoryId));
     const subCat = CATEGORY_DNA.find(c => String(c._id) === String(subCategoryId));
 
-    // Initialize product data object
+    // 🟢 EXTRACT NEW DISCOUNT/TIER FIELDS
+    const isOnSale = formData.get("isOnSale") === "true";
+    const discountPrice = Number(formData.get("discountPrice")) || 0;
+    const pricingTiers = JSON.parse(formData.get("pricingTiers") || "[]");
+
     let productData = {
       name: formData.get("name")?.trim(),
       description: formData.get("description"),
@@ -122,10 +122,15 @@ export async function saveProduct(prevState, formData) {
       isNewArrival: formData.get("isNewArrival") === "true",
       hasVariants: hasVariants,
       imageUrl: imageUrl,
-      gallery: finalGallery, // Array of strings matches your Schema
+      gallery: finalGallery,
       price: Number(formData.get("price")) || 0,
       stock: Number(formData.get("stock")) || 0,
       minOrderQuantity: Number(formData.get("minOrderQuantity")) || 1,
+      
+      // 🟢 SYNC NEW FIELDS TO DB
+      isOnSale: isOnSale,
+      discountPrice: discountPrice,
+      pricingTiers: pricingTiers,
     };
 
     // --- 4. HANDLE VARIANTS ---
@@ -134,14 +139,11 @@ export async function saveProduct(prevState, formData) {
       productData.variants = await Promise.all(
         rawVariants.map(async (v, i) => {
           let vImg = v.imageUrl || "";
-          
-          // Check for a new file for this specific variant index
           const vFile = formData.get(`variantFile_${i}`); 
           if (vFile && vFile instanceof File && vFile.size > 0) {
             const uploadedVImg = await uploadToCloudinary(vFile);
             if (uploadedVImg) vImg = uploadedVImg;
           }
-          
           return {
             sku: v.sku || "",
             size: v.size,
@@ -154,10 +156,7 @@ export async function saveProduct(prevState, formData) {
         }),
       );
       
-      // Auto-calculate total stock from variants to sync with the main product
       productData.stock = productData.variants.reduce((acc, v) => acc + (v.stock || 0), 0);
-      
-      // Sync main price to the lowest variant price
       const variantPrices = productData.variants.map(v => v.price).filter(p => p > 0);
       if (variantPrices.length > 0) {
         productData.price = Math.min(...variantPrices);
@@ -166,38 +165,24 @@ export async function saveProduct(prevState, formData) {
 
     // --- 5. DATABASE OPERATION ---
     let finalProduct;
-    // Check if ID exists to determine update vs create
     const isValidId = id && id !== "null" && id !== "" && id !== "undefined";
-console.log("FINAL GALLERY ARRAY TO SAVE:", finalGallery);
+
     if (isValidId) {
-  // We use the spread operator to ensure gallery is part of the top-level set
-  finalProduct = await Product.findByIdAndUpdate(
-    id,
-    { 
-      $set: {
-        ...productData,
-        gallery: productData.gallery // Explicitly pass the array
-      } 
-    },
-    { 
-      new: true, 
-      runValidators: true,
-      // This ensures Mongoose doesn't filter out fields not in its "cached" schema
-      strict: false 
+      finalProduct = await Product.findByIdAndUpdate(
+        id,
+        { $set: productData },
+        { new: true, runValidators: true, strict: false }
+      );
+    } else {
+      finalProduct = await Product.create(productData);
     }
-  );
-} else {
-  finalProduct = await Product.create(productData);
-}
 
     // --- 6. REVALIDATION ---
     revalidatePath("/admin/products");
     revalidatePath("/products");
     revalidatePath("/");
     revalidatePath("/new-arrivals");
-    if (finalProduct?._id) {
-      revalidatePath(`/product/${finalProduct._id}`);
-    }
+    if (finalProduct?._id) revalidatePath(`/product/${finalProduct._id}`);
 
     return { 
       success: true, 
@@ -207,10 +192,7 @@ console.log("FINAL GALLERY ARRAY TO SAVE:", finalGallery);
 
   } catch (error) {
     console.error("Save Error:", error);
-    return { 
-      success: false, 
-      message: error.message || "An unexpected error occurred during the save process." 
-    };
+    return { success: false, message: error.message || "An unexpected error occurred." };
   }
 }
 

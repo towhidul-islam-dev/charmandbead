@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useCart } from "@/Context/CartContext";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -16,6 +16,7 @@ import {
   Truck,
   Info,
   ChevronRight,
+  BadgePercent,
 } from "lucide-react";
 
 const DHAKA_ZONES = [
@@ -69,106 +70,111 @@ export default function CheckoutPage() {
     initCheckout();
   }, [cart, router, status, session]);
 
-  // --- CALCULATIONS ---
-  const subtotal = checkoutItems.reduce((acc, item) => {
-    return acc + (Number(item.price) || 0) * (Number(item.quantity) || 1);
-  }, 0);
+  // --- 🟢 DYNAMIC CALCULATIONS ---
+  const { subtotal, totalSavings } = useMemo(() => {
+    return checkoutItems.reduce(
+      (acc, item) => {
+        const itemPrice = Number(item.price) || 0;
+        const basePrice = Number(item.basePrice) || itemPrice;
+        const qty = Number(item.quantity) || 1;
+        
+        acc.subtotal += itemPrice * qty;
+        acc.totalSavings += (basePrice - itemPrice) * qty;
+        return acc;
+      },
+      { subtotal: 0, totalSavings: 0 }
+    );
+  }, [checkoutItems]);
 
   const finalTotal = subtotal + shippingCharge;
-  // Gateway fee logic: 1.5% as per your UI
   const baseForFee = paymentMethod === "COD" ? shippingCharge : finalTotal;
   const mobileBankingFee = baseForFee * 0.015;
   const payableNow = baseForFee + mobileBankingFee;
   const dueOnDelivery = paymentMethod === "COD" ? subtotal : 0;
 
-const handlePlaceOrder = async () => {
-  if (status === "unauthenticated") {
-    toast.error("Please login to place an order");
-    router.push("/login?callbackUrl=/dashboard/checkout");
-    return;
-  }
-  if (!userAddress) {
-    toast.error("Please add a shipping address");
-    return;
-  }
-  
-  const bdPhoneRegex = /^(?:\+88|88)?(01[3-9]\d{8})$/;
-  if (!phone || !bdPhoneRegex.test(phone)) {
-    toast.error("Valid BD phone number is required");
-    return;
-  }
-
-  try {
-    setLoading(true);
-
-    const orderData = {
-      userId: session?.user?.id,
-      items: checkoutItems.map((item) => ({
-        productId: item.productId || item._id,
-        productName: item.name || item.productName || "Product",
-        variant: {
-          name: item.color || item.variant?.name || "Default",
-          size: item.size || "N/A",
-          variantId: item.variantId || item.variant?._id || null,
-        },
-        quantity: Number(item.quantity),
-        price: Number(item.price),
-        sku: item.sku || "C&B-GEN",
-      })),
-      totalAmount: Number((finalTotal + mobileBankingFee).toFixed(2)),
-      paidAmount: Number(payableNow.toFixed(2)),
-      dueAmount: Number(dueOnDelivery.toFixed(2)),
-      deliveryCharge: Number(shippingCharge),
-      paymentMethod: paymentMethod === "Online" ? "bKash" : "COD", 
-      mobileBankingFee: Number(mobileBankingFee.toFixed(2)),
-      phone: phone,
-      // 🟢 This is just the "Draft" state. 
-      // The REAL details must be updated via the API Callback.
-      paymentDetails: {
-        sourcePhone: phone,
-        gatewayStatus: "PENDING_REDIRECT" 
-      },
-      paymentStatus: "Pending", // 👈 Ensure it starts as pending
-      shippingAddress: userAddress,
-    };
-
-    const result = await createOrder(orderData);
-
-    if (result.success) {
-      const safeOrderId = String(result.orderId);
-
-      // 2. Trigger Payment Gateway
-      const res = await fetch(`/api/payment?orderId=${safeOrderId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: safeOrderId,
-          amount: Number(payableNow.toFixed(2)),
-          customerName: userAddress.fullName || session?.user?.name,
-          customerEmail: session?.user?.email || "guest@mail.com",
-          customerPhone: phone,
-        }),
-      });
-
-      if (!res.ok) throw new Error("Gateway failed to respond");
-
-      const payData = await res.json();
-      if (payData.url) {
-        // 🚀 Redirect to bKash/SSLCommerz
-        window.location.replace(payData.url);
-      } else {
-        toast.error("Could not generate payment URL.");
-      }
-    } else {
-      toast.error(result.message || "Order creation failed.");
+  const handlePlaceOrder = async () => {
+    if (status === "unauthenticated") {
+      toast.error("Please login to place an order");
+      router.push("/login?callbackUrl=/dashboard/checkout");
+      return;
     }
-  } catch (error) {
-    console.error("CHECKOUT_ERROR:", error);
-    toast.error("Failed to initiate order. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
+    if (!userAddress) {
+      toast.error("Please add a shipping address");
+      return;
+    }
+    
+    const bdPhoneRegex = /^(?:\+88|88)?(01[3-9]\d{8})$/;
+    if (!phone || !bdPhoneRegex.test(phone)) {
+      toast.error("Valid BD phone number is required");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const orderData = {
+        userId: session?.user?.id,
+        items: checkoutItems.map((item) => ({
+          productId: item.productId || item._id,
+          productName: item.name || item.productName || "Product",
+          variant: {
+            name: item.color || item.variant?.name || "Default",
+            size: item.size || "N/A",
+            variantId: item.variantId || item.variant?._id || null,
+          },
+          quantity: Number(item.quantity),
+          price: Number(item.price), // 🟢 Discounted Price
+          sku: item.sku || "C&B-GEN",
+        })),
+        totalAmount: Number((finalTotal + mobileBankingFee).toFixed(2)),
+        paidAmount: Number(payableNow.toFixed(2)),
+        dueAmount: Number(dueOnDelivery.toFixed(2)),
+        deliveryCharge: Number(shippingCharge),
+        paymentMethod: paymentMethod === "Online" ? "bKash" : "COD", 
+        mobileBankingFee: Number(mobileBankingFee.toFixed(2)),
+        phone: phone,
+        paymentDetails: {
+          sourcePhone: phone,
+          gatewayStatus: "PENDING_REDIRECT" 
+        },
+        paymentStatus: "Pending",
+        shippingAddress: userAddress,
+      };
+
+      const result = await createOrder(orderData);
+
+      if (result.success) {
+        const safeOrderId = String(result.orderId);
+        const res = await fetch(`/api/payment?orderId=${safeOrderId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: safeOrderId,
+            amount: Number(payableNow.toFixed(2)),
+            customerName: userAddress.fullName || session?.user?.name,
+            customerEmail: session?.user?.email || "guest@mail.com",
+            customerPhone: phone,
+          }),
+        });
+
+        if (!res.ok) throw new Error("Gateway failed to respond");
+
+        const payData = await res.json();
+        if (payData.url) {
+          window.location.replace(payData.url);
+        } else {
+          toast.error("Could not generate payment URL.");
+        }
+      } else {
+        toast.error(result.message || "Order creation failed.");
+      }
+    } catch (error) {
+      console.error("CHECKOUT_ERROR:", error);
+      toast.error("Failed to initiate order.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (isInitializing)
     return (
@@ -243,22 +249,33 @@ const handlePlaceOrder = async () => {
       {/* --- SIDEBAR: SUMMARY --- */}
       <div className="h-auto lg:sticky lg:top-32">
         <div className="bg-[#3E442B] border-t-8 border-[#EA638C] rounded-[3rem] p-6 md:p-8 shadow-2xl w-full overflow-hidden">
-          <h2 className="mb-6 font-serif text-xl italic font-bold text-white uppercase">Summary</h2>
+          <h2 className="mb-6 font-serif text-xl italic font-bold text-white uppercase">Checkout Summary</h2>
           <div className="mb-8 space-y-4">
             <div className="flex justify-between items-center gap-2 text-[9px] font-black text-white/40 uppercase tracking-widest">
-              <span>Subtotal</span>
+              <span>Merchandise</span>
               <span className="font-serif text-xs italic text-white">৳{subtotal.toLocaleString()}</span>
             </div>
+
+            {/* 🟢 Wholesale Savings Badge */}
+            {totalSavings > 0 && (
+              <div className="flex justify-between items-center gap-2 text-[9px] font-black text-[#FBB6E6] uppercase tracking-widest bg-[#EA638C]/20 p-3 rounded-xl border border-[#EA638C]/30 animate-pulse">
+                <span className="flex items-center gap-1.5"><BadgePercent size={12} /> Wholesale Savings</span>
+                <span className="font-serif text-[11px] italic">- ৳{totalSavings.toLocaleString()}</span>
+              </div>
+            )}
+
             <div className="flex justify-between items-center gap-2 text-[9px] font-black text-white/40 uppercase tracking-widest">
               <span className="flex items-center gap-2"><Truck size={12} className="text-[#FBB6E6]" /> Logistics</span>
               <span className="font-serif text-xs italic text-white">৳{shippingCharge}</span>
             </div>
-            <div className="flex justify-between items-center gap-2 text-[9px] font-black text-[#EA638C] uppercase tracking-widest bg-white/5 p-3 rounded-xl border border-white/10">
-              <span className="flex items-center gap-1.5 text-white/60"><Info size={12} /> Gateway (1.5%)</span>
-              <span className="text-[#FBB6E6] font-serif text-[11px] italic">৳{mobileBankingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            
+            <div className="flex justify-between items-center gap-2 text-[9px] font-black text-white/30 uppercase tracking-widest bg-white/5 p-3 rounded-xl border border-white/10">
+              <span className="flex items-center gap-1.5"><Info size={12} /> Gateway Fee</span>
+              <span className="text-white/60 font-serif text-[11px] italic">৳{mobileBankingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
+
             <div className="flex items-center justify-between gap-2 pt-5 text-lg border-t border-dashed border-white/10">
-              <span className="font-black text-white/30 uppercase text-[8px] tracking-[0.2em]">Total Bill</span>
+              <span className="font-black text-white/30 uppercase text-[8px] tracking-[0.2em]">Final Invoice</span>
               <span className="font-serif text-lg italic font-bold text-white md:text-xl">
                 ৳{(finalTotal + mobileBankingFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
@@ -267,14 +284,14 @@ const handlePlaceOrder = async () => {
 
           <div className="rounded-[2rem] p-5 md:p-6 mb-8 bg-white/5 border border-white/10">
             <div className="flex flex-col mb-1">
-              <span className="text-[8px] font-black uppercase text-[#FBB6E6] tracking-[0.3em] mb-1">Payable Now</span>
+              <span className="text-[8px] font-black uppercase text-[#FBB6E6] tracking-[0.3em] mb-1">Advance Payable</span>
               <span className="font-serif text-xl italic font-bold text-white md:text-2xl">
                 ৳{payableNow.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
             </div>
             {paymentMethod === "COD" && (
               <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-white/5">
-                <span className="text-[8px] font-black uppercase text-white/20 tracking-widest">Due COD</span>
+                <span className="text-[8px] font-black uppercase text-white/20 tracking-widest">Due at Doorstep</span>
                 <span className="font-serif text-xs italic font-bold text-white/60">৳{dueOnDelivery.toLocaleString()}</span>
               </div>
             )}
@@ -288,7 +305,7 @@ const handlePlaceOrder = async () => {
             <div className="bg-white p-3 rounded-full text-[#EA638C] shadow-lg">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
             </div>
-            <span className="flex-1 font-black text-center">{loading ? "PROCESSING..." : `FINALIZE ORDER`}</span>
+            <span className="flex-1 font-black text-center">{loading ? "INITIATING..." : `SECURE CHECKOUT`}</span>
           </button>
         </div>
       </div>

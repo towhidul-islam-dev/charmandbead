@@ -30,7 +30,6 @@ export const CartProvider = ({ children }) => {
       let isNewAddition = false;
 
       // --- 🟢 STEP 1: NORMALIZE INPUTS ---
-      // Distinguish between updating quantity (Cart Page) and adding new (Product Page)
       if (product.uniqueKey && typeof variantOrDelta === "number") {
         targetUniqueKey = product.uniqueKey;
         qChange = variantOrDelta;
@@ -43,9 +42,7 @@ export const CartProvider = ({ children }) => {
         isNewAddition = true;
       }
 
-      const existingIndex = prev.findIndex(
-        (item) => item.uniqueKey === targetUniqueKey,
-      );
+      const existingIndex = prev.findIndex((item) => item.uniqueKey === targetUniqueKey);
 
       // --- 🟢 STEP 2: UPDATE EXISTING ---
       if (existingIndex !== -1) {
@@ -55,16 +52,9 @@ export const CartProvider = ({ children }) => {
         const availableStock = Number(item.stock) || 0;
 
         let newQty = item.quantity + qChange;
-
-        // 🛡️ Stock Boundary Protection
-        if (newQty > availableStock) {
-          newQty = availableStock; 
-        }
-        
-        // 🛡️ MOQ Protection
+        if (newQty > availableStock) newQty = availableStock;
         if (!isNewAddition && newQty < itemMoq) newQty = itemMoq;
 
-        // If no actual change in quantity, don't trigger a re-render
         if (item.quantity === newQty && !isNewAddition) return prev;
 
         updatedCart[existingIndex] = { ...item, quantity: newQty };
@@ -72,12 +62,9 @@ export const CartProvider = ({ children }) => {
       }
 
       // --- 🟢 STEP 3: ADD NEW ---
-      const itemMoq = Number(
-        product.minOrderQuantity || variantOrDelta?.minOrderQuantity || 1,
-      );
+      const itemMoq = Number(product.minOrderQuantity || variantOrDelta?.minOrderQuantity || 1);
       const availableStock = Number(variantOrDelta?.stock ?? product.stock ?? 0);
       
-      // Normalize IDs to plain strings for the Backend
       const finalProductId = (product._id?.$oid || product._id || product.productId).toString();
       const finalVariantId = (variantOrDelta?._id?.$oid || variantOrDelta?._id || product.variantId)?.toString() || null;
 
@@ -86,13 +73,15 @@ export const CartProvider = ({ children }) => {
         variantId: finalVariantId,
         uniqueKey: targetUniqueKey,
         name: product.name,
-        price: Number(variantOrDelta?.price || product.price || 0),
+        // Store base price and tiers for dynamic calculation
+        basePrice: Number(variantOrDelta?.price || product.price || 0),
+        price: Number(variantOrDelta?.price || product.price || 0), // Default price
+        pricingTiers: product.pricingTiers || [], 
         imageUrl: variantOrDelta?.image || variantOrDelta?.imageUrl || product.imageUrl || "/placeholder.png",
         size: variantOrDelta?.size || product.size || "N/A",
         color: variantOrDelta?.color || product.color || "Default",
         minOrderQuantity: itemMoq,
         stock: availableStock,
-        // Ensure initial quantity doesn't exceed stock or fall below MOQ
         quantity: Math.min(availableStock, Math.max(itemMoq, qChange)),
         sku: variantOrDelta?.sku || product.sku || "N/A",
       };
@@ -101,31 +90,59 @@ export const CartProvider = ({ children }) => {
     });
   };
 
+  // --- 🟢 NEW: DYNAMIC PRICE CALCULATION ---
+  // This memoized cart applies wholesale discounts based on TOTAL quantity per product
+  const processedCart = useMemo(() => {
+    // 1. Group quantities by productId
+    const productTotals = cart.reduce((acc, item) => {
+      acc[item.productId] = (acc[item.productId] || 0) + item.quantity;
+      return acc;
+    }, {});
+
+    // 2. Map cart items to their discounted prices
+    return cart.map(item => {
+      const totalQtyForThisProduct = productTotals[item.productId];
+      let activePrice = item.basePrice || item.price;
+
+      // Check if product has tiers and if total quantity hits any tier
+      if (item.pricingTiers && item.pricingTiers.length > 0) {
+        const sortedTiers = [...item.pricingTiers].sort((a, b) => b.minQuantity - a.minQuantity);
+        const applicableTier = sortedTiers.find(tier => totalQtyForThisProduct >= tier.minQuantity);
+        
+        if (applicableTier) {
+          activePrice = applicableTier.unitPrice;
+        }
+      }
+
+      return { ...item, price: activePrice };
+    });
+  }, [cart]);
+
   const removeFromCart = (uniqueKey) => {
     setCart((prev) => prev.filter((item) => item.uniqueKey !== uniqueKey));
   };
 
   const deleteSelectedItems = useCallback((selectedKeys) => {
     if (!selectedKeys || selectedKeys.length === 0) return;
-    setCart((prev) =>
-      prev.filter((item) => !selectedKeys.includes(item.uniqueKey)),
-    );
+    setCart((prev) => prev.filter((item) => !selectedKeys.includes(item.uniqueKey)));
   }, []);
 
   const clearCart = () => setCart([]);
 
+  // Use processedCart for totals so discounts are reflected
   const cartTotal = useMemo(() => {
-    return cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  }, [cart]);
+    return processedCart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  }, [processedCart]);
 
   const cartCount = useMemo(() => {
-    return cart.reduce((acc, item) => acc + item.quantity, 0);
-  }, [cart]);
+    return processedCart.reduce((acc, item) => acc + item.quantity, 0);
+  }, [processedCart]);
 
   return (
     <CartContext.Provider
       value={{
-        cart,
+        cart: processedCart, // Export the version with discounted prices
+        rawCart: cart,       // Export raw cart if ever needed
         addToCart,
         removeFromCart,
         deleteSelectedItems,

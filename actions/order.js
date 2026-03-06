@@ -16,25 +16,34 @@ export async function createOrder(orderData) {
   try {
     await dbConnect();
     const { 
-      items, phone, totalAmount, userId, shippingAddress, 
-      paidAmount, dueAmount, paymentMethod, 
-      tran_id, paymentDetails // 🟢 New inputs for ledger tracking
+      items, 
+      phone, 
+      totalAmount, 
+      userId, 
+      shippingAddress, 
+      paidAmount, 
+      dueAmount, 
+      paymentMethod, 
+      deliveryCharge,      // 🟢 Captured from frontend
+      mobileBankingFee: frontendFee, // 🟢 Captured from frontend (1.5%)
+      tran_id, 
+      paymentDetails 
     } = orderData;
 
     if (!userId) throw new Error("User ID is required.");
 
-    // --- 🟢 FINANCIAL CALCULATIONS (Ledger Support) ---
-    // Example: 2% fee for mobile banking, 0 for COD
-    let mobileBankingFee = 0;
-    if (["bKash", "Nagad", "Rocket", "Upay", "Card"].includes(paymentMethod)) {
-      mobileBankingFee = Number((totalAmount * 0.02).toFixed(2)); 
+    // --- 🟢 FINANCIAL CALCULATIONS ---
+    // Use the 1.5% fee from the frontend, or fallback to 1.5% calculation if missing
+    let finalMobileBankingFee = frontendFee || 0;
+    if (!finalMobileBankingFee && paymentMethod !== "COD") {
+      finalMobileBankingFee = Number((totalAmount * 0.015).toFixed(2)); 
     }
 
-    // 1. Idempotency Check
+    // 1. Idempotency Check (Prevent double orders on rapid clicks)
     const existingOrder = await Order.findOne({
-      "shippingAddress.phone": phone,
+      user: userId,
       totalAmount: totalAmount,
-      createdAt: { $gte: new Date(Date.now() - 60 * 1000) } 
+      createdAt: { $gte: new Date(Date.now() - 30 * 1000) } // 30 second window
     }).session(session);
 
     if (existingOrder) {
@@ -43,18 +52,19 @@ export async function createOrder(orderData) {
     }
 
     // 2. Create the Order
+    // Note: item.price here is already the Wholesale/Discounted price from the Cart Context
     const [newOrder] = await Order.create([{
         user: userId, 
         items: items.map(i => ({
           product: i.productId || i.product || i._id,
           productName: i.productName || i.name || "Unnamed Product",
           variant: {
-              name: i.variantName || i.color || i.variant?.name || "Default",
-              size: i.size || i.variant?.size || "N/A",
+              name: i.variant?.name || i.color || "Default",
+              size: i.size || "N/A",
               variantId: i.variantId || i.variant?._id
           },
           quantity: Number(i.quantity),
-          price: Number(i.price),
+          price: Number(i.price), // 🟢 Stores the specific price paid (wholesale or retail)
           sku: i.sku || "N/A"
         })),
         shippingAddress,
@@ -62,25 +72,29 @@ export async function createOrder(orderData) {
         paidAmount,
         dueAmount,
         paymentMethod,
-        mobileBankingFee, // 🟢 Saved for Financial Ledger
-        tran_id,          // 🟢 Saved for Reference tracking
+        deliveryCharge: Number(deliveryCharge || 0),
+        mobileBankingFee: Number(finalMobileBankingFee), 
+        tran_id,
         paymentDetails: {
-          source: phone, // Defaulting to order phone unless specified
+          source: phone,
           ...paymentDetails
         },
         status: "Pending",
         isStockReduced: false
     }], { session });
 
-    // 3. Inventory logic (Unchanged logic)
+    // 3. Inventory Logic (Reduces stock based on wholesale quantities)
     const productDeductions = items.reduce((acc, item) => {
       const pId = (item.productId || item.product || item._id).toString();
       const name = item.productName || item.name || "Product"; 
       if (!acc[pId]) acc[pId] = { totalQty: 0, variants: [], name: name };
+      
       const qty = Number(item.quantity);
       acc[pId].totalQty += qty;
+      
       const vId = item.variantId || item.variant?._id;
       if (vId) acc[pId].variants.push({ vId: vId.toString(), qty });
+      
       return acc;
     }, {});
 
@@ -89,19 +103,24 @@ export async function createOrder(orderData) {
     for (const [productId, data] of Object.entries(productDeductions)) {
       const product = await Product.findById(productId).session(session);
       if (!product) throw new Error(`Product ${data.name} not found.`);
+
       if (product.hasVariants) {
         data.variants.forEach(orderedVar => {
           const target = product.variants.id(orderedVar.vId);
           if (!target) throw new Error(`Variant not found for ${data.name}`);
-          if (target.stock < orderedVar.qty) throw new Error(`Low stock for ${data.name}`);
+          if (target.stock < orderedVar.qty) throw new Error(`Stock error for ${data.name}: ${target.color} is out of stock.`);
           target.stock -= orderedVar.qty;
         });
+        // Update master stock sum
         product.stock = product.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
       } else {
-        if (product.stock < data.totalQty) throw new Error(`Low stock for ${data.name}`);
+        if (product.stock < data.totalQty) throw new Error(`Stock error: ${data.name} is out of stock.`);
         product.stock -= data.totalQty;
       }
+
       await product.save({ session });
+
+      // Log the inventory change for admin tracking
       await InventoryLog.create([{
         productId,
         productName: data.name,
@@ -111,23 +130,31 @@ export async function createOrder(orderData) {
       }], { session });
     }
 
+    // Mark stock as successfully reduced
     await Order.updateOne({ _id: newOrder._id }, { isStockReduced: true }, { session });
     
+    // Send notification to the user
     await createInAppNotification({
       title: "Order Placed! 🎉",
-      message: `Your order ${orderRef} has been received and is being processed.`,
+      message: `Your wholesale-ready order ${orderRef} has been received.`,
       type: "order",
       recipientId: userId,
       link: "/dashboard/orders"
     });
 
     await session.commitTransaction();
+
+    // Revalidate paths for real-time admin updates
     revalidatePath("/admin/products");
     revalidatePath("/admin/orders");
+    revalidatePath("/dashboard/orders");
+
     return { success: true, orderId: newOrder._id.toString() };
 
   } catch (error) {
-    if (session.transaction.state !== 'TRANSACTION_ABORTED') await session.abortTransaction();
+    if (session.transaction.state !== 'TRANSACTION_ABORTED') {
+      await session.abortTransaction();
+    }
     console.error("CREATE ORDER ERROR:", error);
     return { success: false, message: error.message };
   } finally {

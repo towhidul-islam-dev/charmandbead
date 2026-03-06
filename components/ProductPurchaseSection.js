@@ -1,13 +1,14 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, Package, Zap, Info } from "lucide-react";
 import { useCart } from "@/Context/CartContext";
 import toast from "react-hot-toast";
-import Image from "next/image"; // Added for variant thumbnails
+import Image from "next/image";
 
 export default function ProductPurchaseSection({ product, onVariantChange }) {
   const { addToCart, cart } = useCart();
   const variants = product.variants || [];
+  const tiers = product.pricingTiers || [];
 
   const lastProductId = useRef(product._id);
   const [quantities, setQuantities] = useState({});
@@ -29,32 +30,19 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
     return itemInBag ? Number(itemInBag.quantity) : 0;
   };
 
-  // 🟢 FIXED LOGIC: Increments/Decrements by MOQ step
   const handleUpdateQty = (vKey, direction, moq, stock, variant) => {
     const currentSelection = quantities[vKey] || 0;
     const inBagQty = getQtyInBag(variant._id);
     const actuallyAvailable = stock - inBagQty;
-    const step = moq || 1; 
+    const step = moq || 1;
 
     let newQty;
-
     if (direction > 0) {
-      // INCREMENT LOGIC
-      if (currentSelection === 0) {
-        newQty = step; 
-      } else {
-        newQty = currentSelection + step; 
-      }
+      newQty = currentSelection === 0 ? step : currentSelection + step;
     } else {
-      // DECREMENT LOGIC
-      if (currentSelection <= step) {
-        newQty = 0; 
-      } else {
-        newQty = currentSelection - step; 
-      }
+      newQty = currentSelection <= step ? 0 : currentSelection - step;
     }
 
-    // Check if the new request exceeds available stock
     if (newQty > actuallyAvailable) {
       toast.error(`Cannot exceed ${actuallyAvailable} units (MOQ: ${step})`, {
         style: { border: `1px solid #EA638C`, color: '#3E442B', fontWeight: 'bold' }
@@ -63,10 +51,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
     }
 
     setQuantities((prev) => ({ ...prev, [vKey]: newQty }));
-    
-    if (onVariantChange) {
-      onVariantChange(variant);
-    }
+    if (onVariantChange) onVariantChange(variant);
   };
 
   const handleBulkAdd = () => {
@@ -95,12 +80,41 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
 
   return (
     <div className="flex flex-col gap-6 mt-10">
+      
+      {/* 🟢 NEW: WHOLESALE TIER TABLE SECTION */}
+      {tiers.length > 0 && (
+        <div className="mb-4 animate-in fade-in slide-in-from-top-4 duration-700">
+          <div className="flex items-center gap-2 mb-4 px-2">
+            <div className="p-2 bg-[#3E442B] rounded-xl">
+              <Package className="w-4 h-4 text-[#FBB6E6]" />
+            </div>
+            <div>
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#3E442B]">Bulk Savings Tiers</h3>
+              <p className="text-[8px] font-bold text-gray-400 uppercase">Combined variant quantities apply</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {tiers.sort((a,b) => a.minQuantity - b.minQuantity).map((tier, i) => (
+              <div key={i} className="bg-white border border-gray-100 rounded-[1.5rem] p-4 shadow-sm flex flex-col items-center justify-center text-center">
+                <span className="text-[9px] font-black text-gray-400 uppercase mb-1">{tier.minQuantity}+ Pcs</span>
+                <span className="text-lg font-black text-[#EA638C]">৳{tier.unitPrice}</span>
+                <div className="mt-1 px-2 py-0.5 bg-green-50 text-green-600 text-[7px] font-black rounded-full uppercase">
+                  Save ৳{product.price - tier.unitPrice}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* VARIANT TABLE (DESKTOP) */}
       <div className="hidden md:block overflow-hidden bg-white border border-gray-100 shadow-sm rounded-[2.5rem]">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-50/50 text-gray-400 text-[10px] uppercase font-black tracking-widest border-b border-gray-100">
             <tr>
               <th className="px-6 py-5">Variant</th>
-              <th className="px-6 py-5 text-center">Available Stock</th>
+              <th className="px-6 py-5 text-center">Stock</th>
               <th className="px-6 py-5 text-right">Qty (Step: MOQ)</th>
             </tr>
           </thead>
@@ -118,6 +132,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
         </table>
       </div>
 
+      {/* VARIANT CARDS (MOBILE) */}
       <div className="flex flex-col gap-4 md:hidden">
         {variants.map((v, idx) => (
           <VariantCard 
@@ -130,12 +145,16 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
         ))}
       </div>
 
+      {/* STICKY FOOTER */}
       <div className="sticky bottom-4 z-20 flex flex-col sm:flex-row items-center justify-between p-4 sm:p-5 bg-[#3E442B] rounded-[2rem] sm:rounded-[3rem] shadow-2xl mx-1 border border-white/10 gap-4 transition-all">
         <div className="flex flex-col items-center pl-0 sm:items-start sm:pl-4">
           <p className="text-white/50 text-[9px] font-black uppercase tracking-widest leading-none mb-1">Total Unit Count</p>
-          <p className="text-[#FBB6E6] text-[20px] font-black italic tracking-tighter">
-            {Object.values(quantities).reduce((a, b) => a + b, 0)} <span className="text-[12px] uppercase not-italic ml-1">Items</span>
-          </p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-[#FBB6E6] text-[20px] font-black italic tracking-tighter">
+              {Object.values(quantities).reduce((a, b) => a + b, 0)} 
+              <span className="text-[12px] uppercase not-italic ml-1 text-white">Items</span>
+            </p>
+          </div>
         </div>
         <button 
           onClick={handleBulkAdd}
@@ -149,7 +168,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
   );
 }
 
-/* --- Sub-components (Variant Images Integrated) --- */
+/* --- Sub-components --- */
 
 function VariantRow({ v, inBagQty, selectionQty, handleUpdateQty }) {
   const liveDisplayStock = Math.max(0, v.stock - inBagQty - selectionQty);
@@ -157,7 +176,6 @@ function VariantRow({ v, inBagQty, selectionQty, handleUpdateQty }) {
     <tr className="transition-colors hover:bg-gray-50/30">
       <td className="px-6 py-4">
         <div className="flex items-center gap-4">
-          {/* Variant Image Thumbnail */}
           <div className="relative w-12 h-12 overflow-hidden border border-gray-100 rounded-xl bg-gray-50 flex-shrink-0 shadow-sm">
             <Image 
               src={v.image || v.imageUrl || "/placeholder.png"} 
@@ -196,7 +214,6 @@ function VariantCard({ v, inBagQty, selectionQty, handleUpdateQty }) {
   return (
     <div className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm flex items-center justify-between active:border-[#FBB6E6] transition-all">
       <div className="flex items-center gap-4">
-        {/* Variant Image Thumbnail */}
         <div className="relative w-14 h-14 overflow-hidden border border-gray-100 rounded-2xl bg-gray-50 flex-shrink-0 shadow-sm">
           <Image 
             src={v.image || v.imageUrl || "/placeholder.png"} 

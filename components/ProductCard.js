@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image"; 
 import { useWishlist } from "@/Context/WishlistContext";
 import { useSession } from "next-auth/react"; 
-import { Heart, Sparkles, Share2, Package } from "lucide-react"; 
+import { Heart, Sparkles, Share2, Package, Tag } from "lucide-react"; 
 import toast from "react-hot-toast";
 
 const ProductCard = ({ product, index = 0 }) => {
@@ -14,6 +14,10 @@ const ProductCard = ({ product, index = 0 }) => {
   const isFavorite = wishlist?.some((item) => item._id === product?._id);
   const isOutOfStock = product?.stock <= 0;
   const isLowStock = product?.stock > 0 && product?.stock <= 5;
+
+  // 🟢 Sale & Pricing Logic
+  const hasSale = product?.isOnSale && product?.discountPrice > 0;
+  const hasWholesale = product?.pricingTiers && product?.pricingTiers.length > 0;
 
   // 🟢 Logic for MOQ
   const moqValue = product?.minOrderQuantity || product?.variants?.[0]?.minOrderQuantity || 0;
@@ -91,6 +95,11 @@ const ProductCard = ({ product, index = 0 }) => {
               <Sparkles size={10} /> NEW
             </div>
           )}
+          {hasWholesale && !isOutOfStock && (
+            <div className="flex items-center gap-1 px-3 py-1 text-[9px] font-black text-white bg-[#3E442B] rounded-lg shadow-md uppercase">
+              <Package size={10} /> WHOLESALE
+            </div>
+          )}
           {isOutOfStock && (
             <div className="px-3 py-1 text-[9px] font-black text-white bg-gray-500 rounded-lg uppercase">SOLD</div>
           )}
@@ -122,12 +131,12 @@ const ProductCard = ({ product, index = 0 }) => {
       <div className="flex flex-col flex-grow p-4">
         <div className="mb-3">
           <div className="flex items-start justify-between">
-            <div className="flex flex-col min-w-0 flex-1">
-              {/* 🟢 CATEGORY NAME FIX */}
+            <div className="flex flex-col flex-1 min-w-0">
               <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate">
                 {product.categoryName || product.subCategoryName || "Collection"}
               </p>
               
+              {/* MOBILE MOQ */}
               {moqValue > 0 && (
                 <div className="flex items-center gap-1 mt-1 md:hidden">
                     <Package size={10} className="text-[#3E442B]" />
@@ -135,8 +144,20 @@ const ProductCard = ({ product, index = 0 }) => {
                 </div>
               )}
             </div>
-            <span className="text-lg font-black text-[#3E442B] ml-2 shrink-0">৳{product.price}</span>
+
+            {/* 🟢 PRICE LOGIC: Sale vs Regular */}
+            <div className="flex flex-col items-end shrink-0 ml-2">
+              {hasSale ? (
+                <>
+                  <span className="text-lg font-black text-[#EA638C]">৳{product.discountPrice}</span>
+                  <span className="text-[10px] font-bold text-gray-300 line-through -mt-1">৳{product.price}</span>
+                </>
+              ) : (
+                <span className="text-lg font-black text-[#3E442B]">৳{product.price}</span>
+              )}
+            </div>
           </div>
+
           <h3 className="font-bold text-base text-[#3E442B] mt-1 truncate group-hover:text-[#EA638C] transition-colors leading-tight">
             {product.name}
           </h3>
@@ -151,9 +172,17 @@ const ProductCard = ({ product, index = 0 }) => {
                 style={{ width: `${Math.min((product.stock / 20) * 100, 100)}%` }} 
               />
             </div>
-            <p className={`text-[8px] font-black uppercase mt-1 ${isLowStock ? 'text-[#EA638C]' : 'text-gray-400'}`}>
-              {isLowStock ? `Only ${product.stock} Left` : `${product.stock} in stock`}
-            </p>
+            <div className="flex justify-between items-center mt-1">
+                <p className={`text-[8px] font-black uppercase ${isLowStock ? 'text-[#EA638C]' : 'text-gray-400'}`}>
+                {isLowStock ? `Only ${product.stock} Left` : `${product.stock} in stock`}
+                </p>
+                {/* 🟢 Wholesale tag in info section */}
+                {hasWholesale && (
+                   <span className="text-[7px] font-black bg-gray-100 text-[#3E442B] px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
+                     Bulk Available
+                   </span>
+                )}
+            </div>
           </div>
         )}
 
