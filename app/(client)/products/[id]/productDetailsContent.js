@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image"; // Added Next.js Image
+import Image from "next/image";
 import {
   Truck,
   ShieldCheck,
@@ -13,6 +13,7 @@ import {
   X,
   MousePointer2,
   Images,
+  TrendingDown,
 } from "lucide-react";
 import ProductPurchaseSection from "@/components/ProductPurchaseSection";
 import { useRouter } from "next/navigation";
@@ -230,7 +231,6 @@ export default function ProductDetailsContent({ product }) {
           </div>
         )}
 
-        {/* 🖼️ DETAIL GALLERY */}
         {/* 🖼️ DETAIL GALLERY WITH ZOOM ENABLED */}
         {product.gallery && product.gallery.length > 0 && (
           <div className="p-5 bg-[#FBB6E6]/10 rounded-[2rem] border border-[#FBB6E6]/20">
@@ -366,6 +366,35 @@ export default function ProductDetailsContent({ product }) {
             {product.name}
           </h1>
         </div>
+
+        {/* 🟢 WHOLESALE PRICING TIERS - Conditional Rendering */}
+        {product?.pricingTiers && product.pricingTiers.length > 0 && (
+          <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-[2.5rem]">
+            <div className="flex items-center gap-3 px-8 py-5 bg-gray-50/50">
+              <div className="p-2 bg-[#3E442B] rounded-xl text-white">
+                <TrendingDown size={18} />
+              </div>
+              <div>
+                <h4 className="text-[11px] font-black text-[#3E442B] uppercase tracking-[0.2em]">Wholesale Pricing</h4>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">Buy more, save more</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-px bg-gray-100 sm:grid-cols-3 md:grid-cols-4">
+              {product.pricingTiers.map((tier, index) => (
+                <div key={index} className="relative p-6 bg-white flex flex-col items-center justify-center transition-colors hover:bg-gray-50/50">
+                  <span className="text-[9px] font-black text-gray-400 uppercase mb-1">{tier.minQuantity}+ Units</span>
+                  <span className="text-xl font-black text-[#EA638C]">৳{tier.unitPrice}</span>
+                  {index === product.pricingTiers.length - 1 && product.pricingTiers.length > 1 && (
+                    <div className="absolute top-2 right-2 px-2 py-0.5 bg-[#3E442B] text-white text-[7px] font-black rounded-full uppercase">
+                      Best Value
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* DESCRIPTION */}
         <div className="p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
