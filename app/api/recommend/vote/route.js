@@ -7,12 +7,17 @@ export async function POST(req) {
     const { id } = await req.json();
     await dbConnect();
 
-    // 1. Get user's IP (Identity)
-    const headerList = headers();
-    const ip = headerList.get("x-forwarded-for") || "127.0.0.1";
+    // 1. AWAIT the headers function call
+    const headerList = await headers();
+    
+    // 2. Safeguard: Check if get exists (fixes some edge cases in Next dev mode)
+    let ip = "127.0.0.1";
+    if (typeof headerList.get === 'function') {
+        const forwarded = headerList.get("x-forwarded-for");
+        ip = forwarded ? forwarded.split(',')[0] : "127.0.0.1";
+    }
 
-    // 2. Find and Update ONLY if IP is not in votedBy
-    // $ne means "not equal" - we only proceed if the IP isn't there
+    // 3. Find and Update ONLY if IP is not in votedBy
     const updated = await Recommendation.findOneAndUpdate(
       { _id: id, votedBy: { $ne: ip } }, 
       { 
@@ -22,11 +27,10 @@ export async function POST(req) {
       { new: true }
     );
 
-    // 3. If 'updated' is null, it means the IP was already in the array
     if (!updated) {
-      return Response.json(
-        { error: "You've already voted for this trend!" }, 
-        { status: 403 }
+      return new Response(
+        JSON.stringify({ error: "You've already voted for this trend!" }), 
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
