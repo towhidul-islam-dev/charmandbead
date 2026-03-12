@@ -1,4 +1,4 @@
-import dbConnect from "@/lib/dbConnect";
+import dbConnect from "@/lib/mongodb";
 import Recommendation from "@/models/Recommendation";
 
 export async function PATCH(req) {

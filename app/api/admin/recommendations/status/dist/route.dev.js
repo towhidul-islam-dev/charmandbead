@@ -5,7 +5,7 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.PATCH = PATCH;
 
-var _dbConnect = _interopRequireDefault(require("@/lib/dbConnect"));
+var _mongodb = _interopRequireDefault(require("@/lib/mongodb"));
 
 var _Recommendation = _interopRequireDefault(require("@/models/Recommendation"));
 
@@ -27,7 +27,7 @@ function PATCH(req) {
           id = _ref.id;
           status = _ref.status;
           _context.next = 8;
-          return regeneratorRuntime.awrap((0, _dbConnect["default"])());
+          return regeneratorRuntime.awrap((0, _mongodb["default"])());
 
         case 8:
           _context.next = 10;
