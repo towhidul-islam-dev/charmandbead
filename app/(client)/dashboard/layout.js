@@ -17,7 +17,7 @@ export default function DashboardLayout({ children }) {
     { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'My Orders', href: '/dashboard/orders', icon: ShoppingBag },
     { name: 'Wishlist', href: '/dashboard/wishlist', icon: Heart },
-    { name: 'My Rewards', href: '/dashboard/rewards', icon: Gift }, 
+    // { name: 'My Rewards', href: '/dashboard/rewards', icon: Gift }, 
     { name: 'Addresses', href: '/dashboard/address', icon: MapPin },
     { name: 'Profile', href: '/dashboard/profile', icon: User },
   ];
@@ -74,7 +74,7 @@ export default function DashboardLayout({ children }) {
       {/* Mobile Drawer */}
       <aside className={`fixed top-0 left-0 z-[101] h-full w-[280px] bg-white p-6 shadow-2xl transition-transform duration-300 md:hidden
         ${isDrawerOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="flex items-center justify-between mb-8 px-2">
+        <div className="flex items-center justify-between px-2 mb-8">
           <h2 className="text-xl font-black text-[#3E442B] uppercase italic tracking-tighter">Menu</h2>
           <button onClick={() => setIsDrawerOpen(false)} className="p-2 text-gray-400">
             <X size={24} />

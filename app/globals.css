@@ -82,3 +82,7 @@ body {
 [data-sonner-toaster] {
   margin-top: 80px !important; /* This keeps toasts below your 20rem Navbar height */
 }
+.modal-arrow {
+  @apply absolute w-4 h-4 rotate-45 bg-[#3E442B] border-t border-l border-white/10 shadow-[-2px_-2px_5px_rgba(0,0,0,0.1)];
+  content: '';
+}

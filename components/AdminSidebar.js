@@ -9,7 +9,8 @@ import {
     Bars3Icon, XMarkIcon, ArrowTopRightOnSquareIcon,
     BanknotesIcon,
     FolderIcon,
-    PhotoIcon // 🟢 Added for Carousel/Banners
+    PhotoIcon,
+    BeakerIcon // 🟢 Added for Product Lab
 } from '@heroicons/react/24/outline';
 import AdminDesktopSidebar from './AdminDesktopSidebar';
 
@@ -22,7 +23,15 @@ export default function AdminSidebar({ user, globalData }) {
         { name: 'Dashboard', href: '/admin', icon: HomeIcon },
         { name: 'Products', href: '/admin/products', icon: CubeIcon },
         { name: 'Categories', href: '/admin/categories', icon: FolderIcon }, 
-        // 🟢 Added Carousel Banners here
+        
+        // 🟢 Added Lab Approval here for Mobile menu consistency
+        { 
+            name: 'Lab Approval', 
+            href: '/admin/product-lab', 
+            icon: BeakerIcon, 
+            badge: globalData?.pendingLabCount || 0 
+        },
+
         { name: 'Carousel', href: '/admin/carousel', icon: PhotoIcon }, 
         { name: 'Inventory', href: '/admin/inventory', icon: WrenchIcon },
         { name: 'New Arrivals', href: '/admin/new-arrivals', icon: SparklesIcon }, 
@@ -116,12 +125,10 @@ export default function AdminSidebar({ user, globalData }) {
 
             {/* 3. Desktop Sidebar */}
             <div className="hidden md:block">
-                {/* 🟢 Passing the updated navItems list if your Desktop sidebar is generic */}
                 <AdminDesktopSidebar 
                     user={user} 
                     globalData={globalData} 
                     currentPath={pathname} 
-                    navItems={navItems} // Optional: if you've made the desktop one dynamic
                 />
             </div>
         </>

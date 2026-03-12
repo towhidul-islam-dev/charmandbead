@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/admin/recommendations/smart-merge",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

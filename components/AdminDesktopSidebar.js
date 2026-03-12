@@ -12,7 +12,8 @@ import {
   WrenchIcon,
   BanknotesIcon,
   FolderIcon,
-  PhotoIcon, // 🟢 Added for Carousel/Banners
+  PhotoIcon,
+  BeakerIcon, // 🟢 Added for Product Lab management
 } from "@heroicons/react/24/outline";
 
 export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
@@ -20,7 +21,15 @@ export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
     { name: "Dashboard", href: "/admin", icon: HomeIcon },
     { name: "Products", href: "/admin/products", icon: CubeIcon },
     { name: "Categories", href: "/admin/categories", icon: FolderIcon },
-    // 🟢 Added Carousel link here
+    
+    // 🟢 Product Lab Management Link
+    { 
+      name: "Lab Approval", 
+      href: "/admin/product-lab", 
+      icon: BeakerIcon,
+      badge: globalData?.pendingLabCount || 0, // Optional: show count of new uploads
+    },
+
     { name: "Carousel", href: "/admin/carousel", icon: PhotoIcon }, 
     { name: "Inventory", href: "/admin/inventory", icon: WrenchIcon },
     {
@@ -54,7 +63,6 @@ export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
   const isActive = (item) => {
     if (item.name === "New Arrivals") return currentPath === "/admin/new-arrivals";
     
-    // Ensures sub-paths (like /admin/carousel/edit) also highlight the link
     if (item.href !== "/admin") {
         return currentPath.startsWith(item.href);
     }
