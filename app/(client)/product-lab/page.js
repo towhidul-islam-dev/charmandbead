@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { 
-  Upload, Sparkles, Trophy, ArrowUp, Zap, 
-  Package, CheckCircle, Heart, ExternalLink,
-  Loader2, Check
+  Upload, Sparkles, Trophy, Zap, 
+  Package, Heart, ExternalLink,
+  Loader2, Check, Fingerprint, X
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -17,13 +17,13 @@ export default function ProductLabPage() {
   const [statusStep, setStatusStep] = useState(0); 
   const [trends, setTrends] = useState([]);
   const [userNote, setUserNote] = useState(""); 
-  const [lastSync, setLastSync] = useState(null); // NEW: Track last AI merge
+  const [lastSync, setLastSync] = useState(null);
 
   const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
 
   useEffect(() => {
     fetchTrends();
-    fetchSyncStatus(); // NEW: Fetch the midnight merge timestamp
+    fetchSyncStatus();
   }, []);
 
   const fetchTrends = async () => {
@@ -36,7 +36,6 @@ export default function ProductLabPage() {
     }
   };
 
-  // NEW: Fetch the timestamp from our new status API
   const fetchSyncStatus = async () => {
     try {
       const res = await fetch("/api/admin/system/status");
@@ -50,20 +49,22 @@ export default function ProductLabPage() {
   const activeTrends = trends.filter(t => t.status !== "Stocked");
   const stockedItems = trends.filter(t => t.status === "Stocked");
 
-  const handleVote = async (id) => {
+  // UPDATED: Now accepts 'choice' (yes/no)
+  const handleVote = async (id, choice) => {
     try {
       const res = await fetch("/api/recommend/vote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id, choice }),
       });
       const data = await res.json();
 
       if (res.ok) {
-        toast.success("Vote registered!", { id: "vote-success", icon: "💖" });
+        const message = choice === 'yes' ? "Identity Verified!" : "Feedback Noted";
+        toast.success(message, { id: "vote-success", icon: choice === 'yes' ? "🧬" : "🖇️" });
         fetchTrends();
       } else {
-        toast.error(data.error || "Failed to vote.", {
+        toast.error(data.error || "Verification failed.", {
           id: "vote-error",
           icon: res.status === 403 ? "🚫" : "❌"
         });
@@ -145,7 +146,6 @@ export default function ProductLabPage() {
           From your moodboard to our store. Help us decide the next treasure drop.
         </p>
         
-        {/* NEW: LAST SYNC DISPLAY */}
         {lastSync && (
           <div className="flex items-center justify-center gap-1.5 opacity-60">
              <Sparkles size={10} className="text-[#EA638C]" />
@@ -156,7 +156,7 @@ export default function ProductLabPage() {
         )}
       </header>
 
-      {/* UPLOAD SECTION (Identical) */}
+      {/* UPLOAD SECTION */}
       <div className="relative bg-[#FBB6E6]/10 border-4 border-dashed border-[#FBB6E6]/30 rounded-[4rem] p-8 md:p-16 overflow-hidden shadow-inner">
         {uploading && (
           <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-white/95 backdrop-blur-md animate-in fade-in">
@@ -200,7 +200,7 @@ export default function ProductLabPage() {
         </div>
       </div>
 
-      {/* TRENDING SECTION (Identical) */}
+      {/* TRENDING SECTION */}
       <section className="space-y-8">
         <div className="flex items-center gap-3 pb-6 border-b-2 border-gray-50">
           <div className="p-3 bg-[#3E442B] rounded-2xl text-white shadow-lg shadow-[#3E442B]/20">
@@ -215,7 +215,7 @@ export default function ProductLabPage() {
         </div>
       </section>
 
-      {/* SUCCESS GALLERY (Identical) */}
+      {/* SUCCESS GALLERY */}
       {stockedItems.length > 0 && (
         <section className="pt-12 pb-20">
           <div className="bg-[#3E442B] rounded-[4rem] p-10 md:p-20 text-white relative shadow-2xl overflow-hidden">
@@ -237,7 +237,7 @@ export default function ProductLabPage() {
   );
 }
 
-// SHARED COMPONENTS (Identical)
+// COMPONENTS
 function StatusItem({ label, active, done }) {
   return (
     <div className={`flex items-center gap-3 transition-all duration-500 ${active ? 'opacity-100 scale-105' : 'opacity-40'}`}>
@@ -250,10 +250,18 @@ function StatusItem({ label, active, done }) {
 }
 
 function TrendCard({ trend, rank, onVote }) {
+  const [showOptions, setShowOptions] = useState(false);
+  
   const statusColors = {
     "Coming Soon": "bg-[#EA638C] text-white",
     "Sourcing": "bg-[#3E442B] text-white",
     "default": "bg-white/90 text-[#3E442B] border border-gray-100"
+  };
+
+  const handleChoice = (choice) => {
+    // UPDATED: Pass the choice up to parent handleVote
+    onVote(trend._id, choice);
+    setShowOptions(false);
   };
 
   return (
@@ -263,15 +271,52 @@ function TrendCard({ trend, rank, onVote }) {
            {trend.status || "Pending"}
         </div>
         <div className="absolute top-3 left-3 bg-[#3E442B] text-white text-[10px] font-black px-3 py-1.5 rounded-full z-10">#{rank}</div>
+        
+        {/* BINARY VOTING OVERLAY */}
+        {showOptions && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-6 bg-[#3E442B]/95 backdrop-blur-md animate-in fade-in zoom-in duration-300">
+            <div className="mb-4 p-2 bg-white/10 rounded-full">
+              <Fingerprint size={20} className="text-[#EA638C]" />
+            </div>
+            <p className="mb-5 text-[10px] font-black text-center text-white uppercase tracking-[0.2em]">Should we bring this item?</p>
+            
+            <div className="flex flex-col w-full gap-2">
+              <button 
+                onClick={() => handleChoice('yes')}
+                className="flex items-center justify-center gap-2 w-full py-3.5 bg-[#EA638C] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-lg"
+              >
+                <Heart size={14} fill="currentColor" /> Yes
+              </button>
+              <button 
+                onClick={() => handleChoice('no')}
+                className="flex items-center justify-center gap-2 w-full py-3 text-white/40 border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/5 transition-all"
+              >
+                <X size={14} /> Skip
+              </button>
+            </div>
+          </div>
+        )}
+
         <img src={trend.imageUrl} className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-110" alt="trend" />
       </div>
+
       <div className="px-1">
         <h3 className="font-black text-lg uppercase text-[#3E442B] truncate">{trend.aiAnalysis.category}</h3>
         <p className="text-[10px] font-bold text-[#EA638C] uppercase tracking-widest">{trend.aiAnalysis.style}</p>
         <div className="flex items-center justify-between mt-6">
-          <div className="px-4 py-2 border border-gray-100 rounded-full bg-gray-50 font-black text-xs text-[#3E442B]">{trend.votes} Votes</div>
-          <button onClick={() => onVote(trend._id)} className="p-3.5 bg-[#3E442B] text-white rounded-2xl hover:bg-[#EA638C] transition-all shadow-lg active:scale-90">
-            <ArrowUp size={18} />
+          <div className="px-4 py-2 border border-gray-100 rounded-full bg-gray-50 font-black text-[10px] text-[#3E442B] uppercase tracking-widest">
+            {trend.votes} Marks
+          </div>
+          
+          <button 
+            onClick={() => setShowOptions(!showOptions)} 
+            className={`relative p-3.5 rounded-2xl transition-all shadow-xl active:scale-90 z-40 ${
+              showOptions 
+                ? 'bg-white text-[#EA638C] rotate-90' 
+                : 'bg-[#3E442B] text-white hover:bg-[#EA638C]'
+            }`}
+          >
+            {showOptions ? <X size={20} /> : <Fingerprint size={20} className="animate-pulse" />}
           </button>
         </div>
       </div>

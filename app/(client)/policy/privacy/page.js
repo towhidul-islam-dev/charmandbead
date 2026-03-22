@@ -1,115 +1,144 @@
 "use client";
-import React, { useState } from "react";
-import { ShieldCheck, Lock, Eye, Cookie, ChevronDown } from "lucide-react";
-
-const POLICY_CONTENT = {
-  en: {
-    title: "Privacy Policy",
-    subtitle: "Your privacy is our priority. Learn how we handle your data with transparency.",
-    lastUpdated: "Amended: January 2026",
-    sections: [
-      {
-        id: 1,
-        title: "Information We Collect",
-        icon: <Eye size={22} />,
-        content: "We collect information you provide directly to us, such as when you create a registry account, make a purchase (name, email, phone number, shipping address), or communicate with our support team."
-      },
-      {
-        id: 2,
-        title: "How We Use Your Data",
-        icon: <ShieldCheck size={22} />,
-        content: "Your data is used to process orders, ensure timely delivery, and send automated invoices. We do not sell your personal data to third parties; it is used only for logistics and internal registry management."
-      },
-      {
-        id: 3,
-        title: "Payment Security",
-        icon: <Lock size={22} />,
-        content: "All payments are processed through secure, encrypted gateways. We do not store your credit card or mobile banking PIN details on our servers."
-      },
-      {
-        id: 4,
-        title: "Cookies & Tracking",
-        icon: <Cookie size={22} />,
-        content: "We use cookies to remember your login session and cart items. You can disable cookies in your browser settings, but some features of the registry may not function correctly."
-      }
-    ]
-  },
-  bn: {
-    title: "গোপনীয়তা নীতি",
-    subtitle: "আপনার গোপনীয়তা আমাদের অগ্রাধিকার। আমরা কীভাবে আপনার তথ্য ব্যবহার করি তা জানুন।",
-    lastUpdated: "সর্বশেষ সংশোধন: জানুয়ারি ২০২৬",
-    sections: [
-      {
-        id: 1,
-        title: "আমরা যে তথ্য সংগ্রহ করি",
-        icon: <Eye size={22} />,
-        content: "আপনি যখন আমাদের সাইটে অ্যাকাউন্ট তৈরি করেন বা কেনাকাটা করেন, তখন আমরা আপনার নাম, ইমেল, ফোন নম্বর এবং শিপিং ঠিকানার মতো তথ্য সংগ্রহ করি।"
-      },
-      {
-        id: 2,
-        title: "আপনার তথ্যের ব্যবহার",
-        icon: <ShieldCheck size={22} />,
-        content: "আপনার তথ্য অর্ডার প্রসেস করতে এবং সঠিক সময়ে ডেলিভারি নিশ্চিত করতে ব্যবহৃত হয়। আমরা কোনো তৃতীয় পক্ষের কাছে আপনার তথ্য বিক্রি করি না।"
-      },
-      {
-        id: 3,
-        title: "পেমেন্ট নিরাপত্তা",
-        icon: <Lock size={22} />,
-        content: "সমস্ত পেমেন্ট সুরক্ষিত এনক্রিপ্টেড গেটওয়ের মাধ্যমে সম্পন্ন হয়। আমরা আপনার ক্রেডিট কার্ড বা মোবাইল ব্যাংকিং পিন আমাদের সার্ভারে সংরক্ষণ করি না।"
-      },
-      {
-        id: 4,
-        title: "কুকিজ এবং ট্র্যাকিং",
-        icon: <Cookie size={22} />,
-        content: "আপনার লগইন সেশন মনে রাখার জন্য আমরা কুকিজ ব্যবহার করি। আপনি চাইলে ব্রাউজার সেটিংসে কুকিজ বন্ধ করতে পারেন।"
-      }
-    ]
-  }
-};
+import React, { useState, useEffect } from "react";
+import { ShieldCheck, Lock, Eye, Cookie, Loader2, AlertCircle } from "lucide-react";
 
 export default function PrivacyPolicy() {
   const [lang, setLang] = useState("en");
-  const [openSection, setOpenSection] = useState(null);
-  const t = POLICY_CONTENT[lang];
+  const [policy, setPolicy] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  // 1. Fetch dynamic policy from API
+  useEffect(() => {
+    const fetchPolicy = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch('/api/admin/content');
+        if (!res.ok) throw new Error("Failed to fetch");
+        
+        const json = await res.json();
+        // Find the 'privacy' type from the policies array
+        const privacyData = json.policies?.find(p => p.type === 'privacy');
+        setPolicy(privacyData);
+      } catch (err) {
+        console.error("Failed to load policy", err);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPolicy();
+  }, []);
+
+  const ui = {
+    en: {
+      title: "Privacy Policy",
+      subtitle: "Your privacy is our priority. Learn how we handle your data with transparency.",
+      lastUpdated: policy?.updatedAt 
+        ? `Amended: ${new Date(policy.updatedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}` 
+        : "Amended: March 2026",
+      empty: "Policy content is currently being updated...",
+      error: "Unable to load policy. Please refresh."
+    },
+    bn: {
+      title: "গোপনীয়তা নীতি",
+      subtitle: "আপনার গোপনীয়তা আমাদের অগ্রাধিকার। আমরা কীভাবে আপনার তথ্য ব্যবহার করি তা জানুন।",
+      lastUpdated: policy?.updatedAt 
+        ? `সর্বশেষ সংশোধন: ${new Date(policy.updatedAt).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}` 
+        : "সর্বশেষ সংশোধন: মার্চ ২০২৬",
+      empty: "নীতিমালা বর্তমানে আপডেট করা হচ্ছে...",
+      error: "পলিসি লোড করা সম্ভব হয়নি। অনুগ্রহ করে রিফ্রেশ করুন।"
+    }
+  }[lang];
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-white">
+      <Loader2 className="animate-spin text-[#EA638C] mb-4" size={48} />
+      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#3E442B]/40">Loading Secure Data</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-white px-6 text-center">
+      <AlertCircle className="text-red-400 mb-4" size={48} />
+      <p className="font-black uppercase tracking-widest text-[#3E442B]">{ui.error}</p>
+    </div>
+  );
+
+  // Get the content based on current language
+  const activeContent = lang === 'en' ? policy?.content_en : policy?.content_bn;
 
   return (
-    <div className="min-h-screen px-6 py-24 bg-white">
+    <div className="bg-white min-h-screen py-24 px-6 selection:bg-[#EA638C] selection:text-white">
       <div className="max-w-4xl mx-auto">
+        
+        {/* 🌐 Language Switcher */}
         <div className="flex justify-center mb-20">
           <div className="bg-[#3E442B]/5 p-1.5 rounded-full flex items-center relative w-72 border border-[#3E442B]/10">
-            <button onClick={() => setLang("en")} className={`flex-1 py-3 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all z-10 ${lang === 'en' ? 'text-white' : 'text-[#3E442B]/40'}`}>English</button>
-            <button onClick={() => setLang("bn")} className={`flex-1 py-3 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all z-10 ${lang === 'bn' ? 'text-white' : 'text-[#3E442B]/40'}`}>বাংলা</button>
-            <div className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-[#EA638C] rounded-full transition-all duration-500 shadow-lg shadow-[#EA638C]/30 ${lang === 'en' ? 'left-1.5' : 'left-[calc(50%+1.5px)]'}`} />
+            <button 
+              onClick={() => setLang("en")}
+              className={`flex-1 py-3 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all z-10 ${lang === 'en' ? 'text-white' : 'text-[#3E442B]/40'}`}
+            >
+              English
+            </button>
+            <button 
+              onClick={() => setLang("bn")}
+              className={`flex-1 py-3 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all z-10 ${lang === 'bn' ? 'text-white' : 'text-[#3E442B]/40'}`}
+            >
+              বাংলা
+            </button>
+            <div 
+              className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-[#EA638C] rounded-full transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] shadow-lg shadow-[#EA638C]/30 ${lang === 'en' ? 'left-1.5' : 'left-[calc(50%+1.5px)]'}`}
+            />
           </div>
         </div>
 
-        <div className="mb-24 text-center">
-          <div className="inline-flex p-6 bg-[#EA638C]/5 rounded-[3rem] text-[#EA638C] mb-8 border border-[#EA638C]/10 shadow-sm">
+        {/* Header Section */}
+        <div className="text-center mb-24">
+          <div className="inline-flex p-6 bg-[#EA638C]/5 rounded-[3rem] text-[#EA638C] mb-8 border border-[#EA638C]/10 shadow-sm animate-pulse">
             <ShieldCheck size={44} strokeWidth={1.5} />
           </div>
-          <h1 className="text-5xl md:text-6xl font-black text-[#3E442B] tracking-tighter uppercase italic mb-6">{t.title}</h1>
-          <p className="text-[#3E442B]/50 font-bold max-w-lg mx-auto leading-relaxed uppercase text-[11px] tracking-widest">{t.subtitle}</p>
-          <div className="mt-8 inline-block px-6 py-2.5 bg-[#3E442B] text-white rounded-full text-[9px] font-black uppercase tracking-[0.3em]">{t.lastUpdated}</div>
+          <h1 className="text-5xl md:text-7xl font-black text-[#3E442B] tracking-tighter uppercase italic mb-6">
+            {ui.title}
+          </h1>
+          <p className="text-[#3E442B]/50 font-bold max-w-lg mx-auto leading-relaxed uppercase text-[11px] tracking-widest px-4">
+            {ui.subtitle}
+          </p>
+          <div className="mt-10 inline-block px-8 py-3 bg-[#3E442B] text-white rounded-full text-[9px] font-black uppercase tracking-[0.4em] shadow-xl shadow-[#3E442B]/20">
+            {ui.lastUpdated}
+          </div>
         </div>
 
-        <div className="space-y-6">
-          {t.sections.map((section) => {
-            const isOpen = openSection === section.id;
-            return (
-              <div key={section.id} className={`group border-2 transition-all duration-500 rounded-[3rem] overflow-hidden ${isOpen ? "border-[#EA638C]/20 bg-[#EA638C]/[0.02] shadow-xl shadow-[#EA638C]/5" : "border-gray-50 bg-white hover:border-[#EA638C]/10"}`}>
-                <button onClick={() => setOpenSection(isOpen ? null : section.id)} className="flex items-center justify-between w-full p-8 text-left outline-none md:p-10">
-                  <div className="flex items-center gap-6">
-                    <div className={`p-4 rounded-2xl transition-all duration-500 ${isOpen ? "bg-[#EA638C] text-white shadow-lg shadow-[#EA638C]/30" : "bg-[#3E442B]/5 text-[#3E442B]/40"}`}>{section.icon}</div>
-                    <span className={`font-black text-xl md:text-2xl tracking-tight transition-colors ${isOpen ? "text-[#EA638C]" : "text-[#3E442B]"}`}>{section.title}</span>
-                  </div>
-                  <div className={`p-2.5 rounded-xl transition-all duration-500 ${isOpen ? "bg-[#EA638C] text-white rotate-180" : "bg-[#3E442B]/5 text-[#3E442B]/20"}`}><ChevronDown size={22} strokeWidth={3} /></div>
-                </button>
-                <div className={`px-10 md:px-14 overflow-hidden transition-all duration-700 ${isOpen ? "max-h-[500px] pb-12 opacity-100" : "max-h-0 opacity-0"}`}>
-                  <div className="pt-8 border-t border-[#EA638C]/10 text-[#3E442B]/70 font-medium leading-relaxed text-lg">{section.content}</div>
-                </div>
+        {/* Dynamic Policy Content */}
+        <div className="bg-white border-2 border-gray-50 rounded-[4rem] p-10 md:p-20 shadow-2xl shadow-gray-200/50 relative overflow-hidden">
+          {/* Subtle Decorative Background Icon */}
+          <Lock className="absolute -bottom-10 -right-10 text-gray-50 size-64 -rotate-12" />
+          
+          <div className="relative z-10">
+            {activeContent ? (
+              <p className="text-[#3E442B]/80 font-medium leading-[2.2] text-lg md:text-xl whitespace-pre-line text-justify">
+                {activeContent}
+              </p>
+            ) : (
+              <div className="py-20 text-center">
+                <p className="text-[#3E442B]/30 font-black uppercase tracking-widest text-sm italic">
+                  {ui.empty}
+                </p>
               </div>
-            );
-          })}
+            )}
+          </div>
+        </div>
+
+        {/* Brand Shield & Footer Note */}
+        <div className="mt-32 pt-16 border-t border-gray-100 text-center flex flex-col items-center">
+          <div className="flex gap-2 mb-8">
+             <div className="w-2 h-2 rounded-full bg-[#EA638C]" />
+             <div className="w-12 h-2 rounded-full bg-[#3E442B]" />
+             <div className="w-2 h-2 rounded-full bg-[#FBB6E6]" />
+          </div>
+          <p className="text-[#3E442B]/30 font-black uppercase text-[10px] tracking-[0.6em]">
+            Charm & Bead Security Standards &bull; March 2026
+          </p>
         </div>
       </div>
     </div>

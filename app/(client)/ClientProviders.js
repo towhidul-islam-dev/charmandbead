@@ -13,6 +13,7 @@ export default function ClientProviders({
   children,
   globalData,
   fontVariable,
+  dbImage, // 🟢 Accept the database image from layout.js
 }) {
   return (
     <NotificationProvider>
@@ -41,7 +42,9 @@ export default function ClientProviders({
           <div
             className={`${fontVariable} flex flex-col min-h-screen font-serif selection:bg-[#FBB6E6] selection:text-[#3E442B]`}
           >
-            <Navbar globalData={globalData} />
+            {/* 🟢 Pass the live DB image to the Navbar */}
+            <Navbar globalData={globalData} dbImage={dbImage} />
+            
             <main className="flex flex-col flex-1">{children}</main>
             <Footer />
           </div>

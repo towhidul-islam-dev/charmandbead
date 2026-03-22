@@ -73,6 +73,20 @@ export default async function AdminUsersPage({ searchParams }) {
     return matchesTier && matchesSearch;
   });
 
+  // 🟢 FIXED IMAGE RESOLUTION LOGIC
+  const getProfileImage = (user) => {
+    if (user.image) {
+      // If it's a full URL (like Google/Facebook), return it directly
+      if (user.image.startsWith('http')) {
+        return user.image;
+      }
+      // If it's just a Cloudinary ID, prefix it
+      return `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'diabqgzyo'}/image/upload/${user.image}`;
+    }
+    // Fallback to UI Avatars
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=EA638C&color=fff&bold=true`;
+  };
+
   return (
     <div className="p-4 mx-auto duration-500 md:p-6 max-w-7xl animate-in fade-in overflow-x-hidden">
       
@@ -117,10 +131,7 @@ export default async function AdminUsersPage({ searchParams }) {
             {filteredUsers.map((user, index) => {
               const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(user.email);
               const isVIP = user.isVIP || (user.totalSpent >= VIP_THRESHOLD);
-              const displayImg = user.image 
-                ? (user.image.startsWith('http') ? user.image : `https://res.cloudinary.com/diabqgzyo/image/upload/${user.image}`)
-                : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=EA638C&color=fff&bold=true`;
-
+              const displayImg = getProfileImage(user);
               return (
                 <div 
                   key={user._id} 
@@ -130,7 +141,7 @@ export default async function AdminUsersPage({ searchParams }) {
                   <div className="flex items-start justify-between mb-6">
                     <div className="flex items-center gap-3">
                       <div className={`relative w-12 h-12 rounded-2xl overflow-hidden border-2 flex items-center justify-center bg-[#EA638C] ${isVIP ? 'border-yellow-400 shadow-md' : 'border-white shadow-sm'}`}>
-                         <Image src={displayImg} alt={user.name} width={48} height={48} className="object-cover w-full h-full" unoptimized />
+                         <Image src={displayImg} alt={user.name} fill className="object-cover" unoptimized />
                       </div>
                       <div className="min-w-0">
                         <h4 className="text-xs font-black text-[#3E442B] uppercase italic truncate max-w-[130px] leading-tight">{user.name}</h4>
@@ -143,13 +154,10 @@ export default async function AdminUsersPage({ searchParams }) {
                     </div>
                   </div>
 
-                  {/* Body Inset: Action Rows */}
                   <div className="space-y-5 p-5 bg-gray-50/80 rounded-[2.2rem] border border-gray-100/50 overflow-visible">
-                    
-                    {/* Surprise Reward Row */}
                     <div className="flex flex-col gap-2.5">
                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Surprise Reward</span>
-                       <div className="w-full pr-4 overflow-visible"> {/* pr-4 ensures Send button isn't on the edge */}
+                       <div className="w-full pr-4 overflow-visible">
                          {!isSuperAdmin ? (
                            <div className="relative scale-95 origin-left overflow-visible">
                              <UserGiftActions 
@@ -167,7 +175,6 @@ export default async function AdminUsersPage({ searchParams }) {
                        </div>
                     </div>
 
-                    {/* Access Level Row */}
                     <div className="flex items-center justify-between gap-4 border-t border-gray-200/60 pt-4">
                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Access Level</span>
                        <div className="scale-90 origin-right">
@@ -176,7 +183,6 @@ export default async function AdminUsersPage({ searchParams }) {
                     </div>
                   </div>
 
-                  {/* Card Footer Actions */}
                   <div className="flex items-center justify-end gap-3 mt-6 pr-2">
                       <UserDetailsModal user={user} orders={user.orders || []} totalSpent={user.totalSpent || 0} lastGiftAt={user.lastGiftAt} lastGiftTitle={user.lastGiftTitle} lastGiftValue={user.lastGiftValue} />
                       <DeleteUserButton userId={user._id.toString()} userName={user.name} isSuperAdmin={isSuperAdmin} />
@@ -202,9 +208,7 @@ export default async function AdminUsersPage({ searchParams }) {
                 {filteredUsers.map((user, index) => {
                   const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(user.email);
                   const isVIP = user.isVIP || (user.totalSpent >= VIP_THRESHOLD);
-                  const displayImg = user.image 
-                    ? (user.image.startsWith('http') ? user.image : `https://res.cloudinary.com/diabqgzyo/image/upload/${user.image}`)
-                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=EA638C&color=fff&bold=true`;
+                  const displayImg = getProfileImage(user);
 
                   return (
                     <tr 
@@ -215,7 +219,7 @@ export default async function AdminUsersPage({ searchParams }) {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <div className={`relative flex-shrink-0 w-10 h-10 rounded-xl overflow-hidden border bg-white flex items-center justify-center ${isVIP ? 'border-yellow-400 shadow-sm' : 'border-gray-100'}`}>
-                            <Image src={displayImg} alt={user.name} width={40} height={40} className="object-cover w-full h-full" unoptimized />
+                            <Image src={displayImg} alt={user.name} fill className="object-cover" unoptimized />
                           </div>
                           <div className="min-w-0">
                             <p className="text-[12px] italic font-black text-[#3E442B] uppercase leading-tight truncate max-w-[150px]">{user.name}</p>

@@ -43,7 +43,7 @@ export default function Footer() {
                                 <li><Link href="/faq" className="flex items-center gap-1 text-gray-200 hover:text-white">FAQ</Link></li>
                                 <li><Link href="/reviews" className="text-gray-200 hover:text-white">Community</Link></li>
                                 {/* 🟢 REFUND PAGE LINKED CORRECTLY HERE */}
-                                <li><Link href="/policy/refund" className="text-gray-200 hover:text-[#FBB6E6]">Returns Policy</Link></li>
+                                {<li><Link href="/policy/refund" className="text-gray-200 hover:text-[#FBB6E6]">Returns Policy</Link></li>}
                             </ul>
                         </div>
 
@@ -51,7 +51,7 @@ export default function Footer() {
                             <h4 className="text-xs font-black uppercase tracking-widest text-[#EA638C] mb-6 underline decoration-[#EA638C]/30 underline-offset-8">Concierge</h4>
                             <ul className="space-y-4 text-sm font-semibold text-gray-100">
                                 <li className="flex items-center gap-3"><MapPin size={16} className="text-[#EA638C]" /> Dhaka, BD</li>
-                                <li className="flex items-center gap-3"><Mail size={16} className="text-[#EA638C]" /> hello@charmandbead.com</li>
+                                <li className="flex items-center gap-3"><Mail size={16} className="text-[#EA638C]" /> charmandbeads.official@gmail.com</li>
                             </ul>
                             {/* ... Socials ... */}
                         </div>

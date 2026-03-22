@@ -4,39 +4,49 @@ import { headers } from "next/headers";
 
 export async function POST(req) {
   try {
-    const { id } = await req.json();
+    const { id, choice } = await req.json(); // Added 'choice' (yes/no)
     await dbConnect();
 
-    // 1. AWAIT the headers function call
     const headerList = await headers();
     
-    // 2. Safeguard: Check if get exists (fixes some edge cases in Next dev mode)
     let ip = "127.0.0.1";
     if (typeof headerList.get === 'function') {
         const forwarded = headerList.get("x-forwarded-for");
         ip = forwarded ? forwarded.split(',')[0] : "127.0.0.1";
     }
 
-    // 3. Find and Update ONLY if IP is not in votedBy
+    // Prepare the update object based on the user's choice
+    const updateQuery = {
+      $push: { votedBy: ip } // Always track the IP to prevent double-voting
+    };
+
+    // Only increment "Marks" if they chose 'yes'
+    if (choice === 'yes') {
+      updateQuery.$inc = { votes: 1 };
+    }
+
+    // Find and Update ONLY if IP is not in votedBy
     const updated = await Recommendation.findOneAndUpdate(
       { _id: id, votedBy: { $ne: ip } }, 
-      { 
-        $inc: { votes: 1 },
-        $push: { votedBy: ip } 
-      },
+      updateQuery,
       { new: true }
     );
 
     if (!updated) {
       return new Response(
-        JSON.stringify({ error: "You've already voted for this trend!" }), 
+        JSON.stringify({ error: "Identity already verified for this drop!" }), 
         { status: 403, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    return Response.json(updated);
+    return Response.json({ 
+      success: true, 
+      message: choice === 'yes' ? "Mark registered!" : "Drop skipped",
+      data: updated 
+    });
+
   } catch (error) {
     console.error("VOTE_ERROR:", error);
-    return Response.json({ error: "Vote failed" }, { status: 500 });
+    return Response.json({ error: "Verification failed" }, { status: 500 });
   }
 }

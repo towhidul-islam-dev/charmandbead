@@ -28,6 +28,7 @@ export default function ProductDetailsContent({ product }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [zoomStyle, setZoomStyle] = useState({ display: "none" });
 
+
   // --- 📸 MASTER IMAGE LOGIC ---
   const allImages = useMemo(() => {
     if (!product) return [];
@@ -43,23 +44,16 @@ export default function ProductDetailsContent({ product }) {
     }
 
     return Array.from(images).filter(
-      (img) => img && img !== "/placeholder.png" && !img.includes("undefined"),
+      (img) => img && img !== "/placeholder.png" && !img.includes("undefined")
     );
   }, [product]);
 
-  // Main Image State
-  const [mainImage, setMainImage] = useState(
-    allImages[0] || "/placeholder.png",
-  );
-
-  // ✨ NEW: Separate state for Detail Gallery images specifically
+  const [mainImage, setMainImage] = useState(allImages[0] || "/placeholder.png");
   const [detailGalleryImage, setDetailGalleryImage] = useState(null);
-
   const [activeSku, setActiveSku] = useState(product?.sku || null);
 
   useEffect(() => {
     if (allImages.length > 0) setMainImage(allImages[0]);
-    // Initialize detail gallery with first gallery image if available
     if (product?.gallery?.length > 0) setDetailGalleryImage(product.gallery[0]);
   }, [allImages, product?.gallery]);
 
@@ -70,12 +64,8 @@ export default function ProductDetailsContent({ product }) {
   // --- RECENTLY VIEWED TRACKING ---
   useEffect(() => {
     if (product?._id) {
-      const history = JSON.parse(
-        localStorage.getItem("recentlyViewed") || "[]",
-      );
-      const filteredHistory = history.filter(
-        (item) => item._id !== product._id,
-      );
+      const history = JSON.parse(localStorage.getItem("recentlyViewed") || "[]");
+      const filteredHistory = history.filter((item) => item._id !== product._id);
       const newHistory = [product, ...filteredHistory].slice(0, 10);
       localStorage.setItem("recentlyViewed", JSON.stringify(newHistory));
       window.dispatchEvent(new Event("recentlyViewedUpdated"));
@@ -85,10 +75,7 @@ export default function ProductDetailsContent({ product }) {
   // --- 🔍 ENHANCED ZOOM LOGIC ---
   const handleMouseMove = (e) => {
     if (typeof window !== "undefined" && window.innerWidth < 768) return;
-    const { left, top, width, height } =
-      e.currentTarget.getBoundingClientRect();
-
-    // Calculate precise cursor position in percentage
+    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - left) / width) * 100;
     const y = ((e.clientY - top) / height) * 100;
 
@@ -107,12 +94,7 @@ export default function ProductDetailsContent({ product }) {
     navigator.clipboard.writeText(shortlink);
     setCopied(true);
     toast.success("Link copied!", {
-      style: {
-        borderRadius: "10px",
-        background: "#3E442B",
-        color: "#fff",
-        fontSize: "12px",
-      },
+      style: { borderRadius: "10px", background: "#3E442B", color: "#fff", fontSize: "12px" },
     });
     setTimeout(() => setCopied(false), 2000);
   };
@@ -134,25 +116,30 @@ export default function ProductDetailsContent({ product }) {
   const isOutOfStock = currentStock <= 0;
   const isLowStock = !isOutOfStock && currentStock <= displayMoq * 3;
 
+  // --- ✨ ACTIVE PRICE TIER LOGIC ---
+  const activeTierIndex = useMemo(() => {
+    if (!product?.pricingTiers || inCartQtyTotal === 0) return -1;
+    let index = -1;
+    // Sorting ensure we check tiers in ascending order to find the highest qualified one
+    [...product.pricingTiers]
+      .sort((a, b) => a.minQuantity - b.minQuantity)
+      .forEach((tier, i) => {
+        if (inCartQtyTotal >= tier.minQuantity) {
+          index = i;
+        }
+      });
+    return index;
+  }, [product?.pricingTiers, inCartQtyTotal]);
+
   const ModalPortal = () => {
     if (!isMounted || !isModalOpen) return null;
     return createPortal(
-      <div
-        className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl z-[999999] p-4 md:p-12 cursor-pointer"
-        onClick={() => setIsModalOpen(false)}
-      >
+      <div className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl z-[999999] p-4 md:p-12 cursor-pointer" onClick={() => setIsModalOpen(false)}>
         <button className="absolute top-6 right-6 p-4 bg-[#EA638C] text-white rounded-full shadow-2xl transition-all hover:rotate-90">
           <X size={32} />
         </button>
         <div className="relative w-full h-full max-w-5xl max-h-[80vh]">
-          <Image
-            src={mainImage}
-            fill
-            className="object-contain rounded-lg"
-            alt="Enlarged"
-            onClick={(e) => e.stopPropagation()}
-            unoptimized
-          />
+          <Image src={mainImage} fill className="object-contain rounded-lg" alt="Enlarged" onClick={(e) => e.stopPropagation()} unoptimized />
         </div>
       </div>,
       document.body,
@@ -167,38 +154,18 @@ export default function ProductDetailsContent({ product }) {
 
       {/* LEFT COLUMN: IMAGES */}
       <div className="space-y-4 lg:col-span-5">
-        <div
-          className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-2xl aspect-square cursor-none group"
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-          onDoubleClick={() => setIsModalOpen(true)}
-        >
-          <Image
-            src={mainImage}
-            alt={product.name}
-            fill
-            priority
-            className="object-cover transition-opacity duration-300"
-            sizes="(max-width: 1024px) 100vw, 40vw"
-          />
-          {/* Zoom Overlay Layer */}
-          <div
-            className="absolute inset-0 z-30 transition-opacity duration-200 pointer-events-none opacity-0 group-hover:opacity-100"
-            style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }}
-          />
-          {/* Brand-Colored Cursor Tracker */}
+        <div className="relative rounded-[2.5rem] overflow-hidden bg-white border border-gray-100 shadow-2xl aspect-square cursor-none group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} onDoubleClick={() => setIsModalOpen(true)}>
+          <Image src={mainImage} alt={product.name} fill priority className="object-cover transition-opacity duration-300" sizes="(max-width: 1024px) 100vw, 40vw" />
+          <div className="absolute inset-0 z-30 transition-opacity duration-200 opacity-0 pointer-events-none group-hover:opacity-100" style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }} />
           <div className="absolute z-40 p-3 transition-all border border-gray-100 rounded-full shadow-lg opacity-0 pointer-events-none bottom-6 right-6 bg-white/90 backdrop-blur-sm group-hover:opacity-100">
             <MousePointer2 size={18} className="text-[#EA638C]" />
           </div>
         </div>
 
-        {/* THUMBNAIL GRID */}
         {allImages.length > 1 && (
           <div className="flex flex-wrap justify-center gap-2 px-1 md:gap-3 md:justify-start">
             {allImages.map((img, idx) => {
-              const matchingVariant = product.variants?.find(
-                (v) => (v.imageUrl || v.image) === img,
-              );
+              const matchingVariant = product.variants?.find((v) => (v.imageUrl || v.image) === img);
               return (
                 <button
                   key={idx}
@@ -207,19 +174,9 @@ export default function ProductDetailsContent({ product }) {
                     if (matchingVariant?.sku) setActiveSku(matchingVariant.sku);
                     else setActiveSku(product.sku);
                   }}
-                  className={`relative w-14 h-14 md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 transition-all active:scale-90 ${
-                    mainImage === img
-                      ? "border-[#EA638C] scale-105 shadow-xl z-10"
-                      : "border-gray-50 opacity-60 hover:opacity-100"
-                  }`}
+                  className={`relative w-14 h-14 md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 transition-all active:scale-90 ${mainImage === img ? "border-[#EA638C] scale-105 shadow-xl z-10" : "border-gray-50 opacity-60 hover:opacity-100"}`}
                 >
-                  <Image
-                    src={img}
-                    fill
-                    className="object-cover"
-                    alt="thumbnail"
-                    sizes="80px"
-                  />
+                  <Image src={img} fill className="object-cover" alt="thumbnail" sizes="80px" />
                   {matchingVariant && (
                     <div className="absolute top-0 right-0 p-1 bg-[#EA638C] rounded-bl-xl shadow-sm z-10">
                       <Check size={10} className="text-white stroke-[4]" />
@@ -231,26 +188,17 @@ export default function ProductDetailsContent({ product }) {
           </div>
         )}
 
-        {/* 🖼️ DETAIL GALLERY WITH ZOOM ENABLED */}
         {product.gallery && product.gallery.length > 0 && (
           <div className="p-5 bg-[#FBB6E6]/10 rounded-[2rem] border border-[#FBB6E6]/20">
             <div className="flex items-center gap-2 mb-4">
-              <div className="p-1.5 bg-white rounded-full shadow-sm">
-                <Images size={14} className="text-[#EA638C]" />
-              </div>
-              <span className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.3em]">
-                Detail Image Gallery
-              </span>
+              <div className="p-1.5 bg-white rounded-full shadow-sm"><Images size={14} className="text-[#EA638C]" /></div>
+              <span className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.3em]">Detail Image Gallery</span>
             </div>
-
-            {/* Active Detail Image with Zoom Logic */}
             <div
-              className="relative w-full aspect-video rounded-2xl overflow-hidden border-2 border-white shadow-sm mb-3 cursor-none group/gallery"
+              className="relative w-full mb-3 overflow-hidden border-2 border-white shadow-sm aspect-video rounded-2xl cursor-none group/gallery"
               onMouseMove={(e) => {
-                if (typeof window !== "undefined" && window.innerWidth < 768)
-                  return;
-                const { width, height } =
-                  e.currentTarget.getBoundingClientRect();
+                if (typeof window !== "undefined" && window.innerWidth < 768) return;
+                const { width, height } = e.currentTarget.getBoundingClientRect();
                 const x = (e.nativeEvent.offsetX / width) * 100;
                 const y = (e.nativeEvent.offsetY / height) * 100;
                 setZoomStyle({
@@ -258,73 +206,31 @@ export default function ProductDetailsContent({ product }) {
                   backgroundPosition: `${x}% ${y}%`,
                   backgroundImage: `url(${detailGalleryImage || product.gallery[0]})`,
                   backgroundSize: "250%",
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
+                  position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
                 });
               }}
               onMouseLeave={handleMouseLeave}
             >
-              <Image
-                src={detailGalleryImage || product.gallery[0]}
-                fill
-                className="object-cover z-10"
-                alt="Gallery Active"
-                sizes="(max-width: 1024px) 100vw, 40vw"
-              />
-
-              {/* Zoom Overlay for Gallery */}
-              <div
-                className="absolute inset-0 z-20 transition-opacity duration-200 pointer-events-none opacity-0 group-hover/gallery:opacity-100"
-                style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }}
-              />
-
-              {/* Brand-Colored Cursor Tracker for Gallery */}
+              <Image src={detailGalleryImage || product.gallery[0]} fill className="z-10 object-cover" alt="Gallery Active" sizes="(max-width: 1024px) 100vw, 40vw" />
+              <div className="absolute inset-0 z-20 transition-opacity duration-200 opacity-0 pointer-events-none group-hover/gallery:opacity-100" style={{ ...zoomStyle, backgroundRepeat: "no-repeat" }} />
               <div className="absolute z-30 p-2 transition-all border border-gray-100 rounded-full shadow-lg opacity-0 pointer-events-none bottom-4 right-4 bg-white/90 backdrop-blur-sm group-hover/gallery:opacity-100">
                 <MousePointer2 size={14} className="text-[#EA638C]" />
               </div>
             </div>
-
-            {/* Gallery Thumbnails */}
             <div className="grid grid-cols-3 gap-3">
               {product.gallery.map((url, idx) => (
-                <div
-                  key={idx}
-                  className={`group relative aspect-square rounded-2xl overflow-hidden border-2 shadow-sm cursor-pointer transition-all ${
-                    detailGalleryImage === url
-                      ? "border-[#EA638C]"
-                      : "border-white"
-                  }`}
-                  onClick={() => setDetailGalleryImage(url)}
-                >
-                  <Image
-                    src={url}
-                    fill
-                    alt={`Detail ${idx}`}
-                    className="object-cover"
-                    sizes="150px"
-                  />
+                <div key={idx} className={`group relative aspect-square rounded-2xl overflow-hidden border-2 shadow-sm cursor-pointer transition-all ${detailGalleryImage === url ? "border-[#EA638C]" : "border-white"}`} onClick={() => setDetailGalleryImage(url)}>
+                  <Image src={url} fill alt={`Detail ${idx}`} className="object-cover" sizes="150px" />
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* FEATURE ITEMS */}
         <div className="flex items-center justify-around p-4 border border-white bg-gray-50/80 rounded-[2rem] shadow-inner">
           <FeatureItem icon={<Truck size={16} />} text="Express" color="blue" />
-          <FeatureItem
-            icon={<ShieldCheck size={16} />}
-            text="Genuine"
-            color="brand"
-          />
-          <FeatureItem
-            icon={<RotateCcw size={16} />}
-            text="7-Day Return"
-            color="orange"
-          />
+          <FeatureItem icon={<ShieldCheck size={16} />} text="Genuine" color="brand" />
+          <FeatureItem icon={<RotateCcw size={16} />} text="7-Day Return" color="orange" />
         </div>
       </div>
 
@@ -332,28 +238,16 @@ export default function ProductDetailsContent({ product }) {
       <div className="space-y-6 md:space-y-8 lg:col-span-7">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <div
-              className={`flex items-center gap-2 px-5 py-2 rounded-full shadow-sm font-black text-[10px] uppercase tracking-widest ${isOutOfStock ? "bg-red-500 text-white" : isLowStock ? "bg-orange-100 text-orange-600 border border-orange-200" : "bg-gray-900 text-white"}`}
-            >
-              {!isOutOfStock && (
-                <div
-                  className={`w-2 h-2 rounded-full ${isLowStock ? "bg-orange-600 animate-pulse" : "bg-green-400"}`}
-                />
-              )}
-              {isOutOfStock
-                ? "Sold Out"
-                : isLowStock
-                  ? `Hurry Up! ${currentStock} Left`
-                  : "In Stock"}
+            <div className={`flex items-center gap-2 px-5 py-2 rounded-full shadow-sm font-black text-[10px] uppercase tracking-widest ${isOutOfStock ? "bg-red-500 text-white" : isLowStock ? "bg-orange-100 text-orange-600 border border-orange-200" : "bg-gray-900 text-white"}`}>
+              {!isOutOfStock && <div className={`w-2 h-2 rounded-full ${isLowStock ? "bg-orange-600 animate-pulse" : "bg-green-400"}`} />}
+              {isOutOfStock ? "Sold Out" : isLowStock ? `Hurry Up! ${currentStock} Left` : "In Stock"}
             </div>
-
             {displayMoq > 1 && (
               <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-5 py-2 rounded-full border border-pink-100">
                 <Zap size={12} className="fill-current" />
                 <span>MOQ : {displayMoq} Units</span>
               </div>
             )}
-
             {activeSku && (
               <div className="flex items-center gap-1.5 text-[#3E442B] font-black text-[10px] uppercase tracking-widest bg-gray-50 px-5 py-2 rounded-full border border-gray-100">
                 <Barcode size={12} />
@@ -361,92 +255,70 @@ export default function ProductDetailsContent({ product }) {
               </div>
             )}
           </div>
-
-          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-gray-900 uppercase">
-            {product.name}
-          </h1>
+          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-gray-900 uppercase">{product.name}</h1>
         </div>
-
-        {/* 🟢 WHOLESALE PRICING TIERS - Conditional Rendering */}
-        {product?.pricingTiers && product.pricingTiers.length > 0 && (
-          <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-[2.5rem]">
-            <div className="flex items-center gap-3 px-8 py-5 bg-gray-50/50">
-              <div className="p-2 bg-[#3E442B] rounded-xl text-white">
-                <TrendingDown size={18} />
-              </div>
-              <div>
-                <h4 className="text-[11px] font-black text-[#3E442B] uppercase tracking-[0.2em]">Wholesale Pricing</h4>
-                <p className="text-[10px] text-gray-400 font-bold uppercase">Buy more, save more</p>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-px bg-gray-100 sm:grid-cols-3 md:grid-cols-4">
-              {product.pricingTiers.map((tier, index) => (
-                <div key={index} className="relative p-6 bg-white flex flex-col items-center justify-center transition-colors hover:bg-gray-50/50">
-                  <span className="text-[9px] font-black text-gray-400 uppercase mb-1">{tier.minQuantity}+ Units</span>
-                  <span className="text-xl font-black text-[#EA638C]">৳{tier.unitPrice}</span>
-                  {index === product.pricingTiers.length - 1 && product.pricingTiers.length > 1 && (
-                    <div className="absolute top-2 right-2 px-2 py-0.5 bg-[#3E442B] text-white text-[7px] font-black rounded-full uppercase">
-                      Best Value
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* DESCRIPTION */}
         <div className="p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] block mb-6">
-            Product Essence
-          </span>
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] block mb-6">Product Essence</span>
           <div className="flex flex-col gap-y-4">
-            {product.description
-              ?.split(".")
-              .filter((p) => p.trim())
-              .map((point, i) => {
-                const parts = point.split(":");
+            {product.description?.split("\r\n").filter(p => p.trim()).map((line, i) => {
+              const parts = line.split(":");
+              return (
+                <div key={i} className="text-base leading-relaxed text-gray-600 md:text-lg">
+                  {parts.length > 1 ? (
+                    <p><span className="mr-2 text-sm font-black text-gray-900 uppercase">{parts[0].trim()} :</span>{parts.slice(1).join(":").trim()}</p>
+                  ) : (
+                    <p className="font-semibold">{line.trim()}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+{!product?.pricingTiers && <p className="text-red-500">No Pricing Tiers Data in Product Object</p>}
+
+{product?.pricingTiers?.length > 0 && (
+  <div className="p-4 mb-4 border-2 border-green-500 rounded-xl">
+    <h3 className="font-bold">Wholesale Section Found!</h3>
+    {product.pricingTiers.map((t, i) => (
+      <div key={i}>Qty: {t.minQuantity} - Price: {t.unitPrice}</div>
+    ))}
+  </div>
+)}
+        {/* 🟢 WHOLESALE PRICING TIERS - MOVED HERE (ABOVE PURCHASE SECTION) */}
+        {(product?.pricingTiers || product?._doc?.pricingTiers)?.length > 0 && (
+          <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-[2.5rem]">
+            <div className="flex items-center gap-3 px-8 py-5 bg-gray-50/50">
+              <div className="p-2 bg-[#3E442B] rounded-xl text-white"><TrendingDown size={18} /></div>
+              <div>
+                <h4 className="text-[11px] font-black text-[#3E442B] uppercase tracking-[0.2em]">Bulk Savings</h4>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">
+                  {activeTierIndex >= 0 ? `Current Discount: ${product.pricingTiers[activeTierIndex].minQuantity}+ Units` : "Select quantity to unlock wholesale rates"}
+                </p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-px bg-gray-100 sm:grid-cols-3">
+              {product.pricingTiers.map((tier, index) => {
+                const isActive = index === activeTierIndex;
                 return (
-                  <div
-                    key={i}
-                    className="text-base leading-relaxed text-gray-600 md:text-lg"
-                  >
-                    {parts.length > 1 ? (
-                      <p>
-                        <span className="mr-2 text-sm font-black text-gray-900 uppercase">
-                          {parts[0].trim()} :
-                        </span>
-                        {parts.slice(1).join(":").trim()}.
-                      </p>
-                    ) : (
-                      <p className="font-semibold">{point.trim()}.</p>
+                  <div key={index} className={`relative p-6 flex flex-col items-center justify-center transition-all duration-500 ${isActive ? "bg-[#EA638C] text-white z-10 scale-[1.02] shadow-lg" : "bg-white text-gray-900 hover:bg-gray-50/50"}`}>
+                    <span className={`text-[9px] font-black uppercase mb-1 ${isActive ? "text-white/80" : "text-gray-400"}`}>{tier.minQuantity}+ Units</span>
+                    <span className={`text-xl font-black ${isActive ? "text-white" : "text-[#EA638C]"}`}>৳{tier.unitPrice}</span>
+                    {isActive && (
+                      <div className="absolute p-1 bg-white rounded-full top-2 right-2">
+                        <Check size={8} className="text-[#EA638C] stroke-[4]" />
+                      </div>
                     )}
                   </div>
                 );
               })}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* SHARE LINK */}
-        <div className="p-5 border-2 border-dashed border-gray-100 bg-gray-50/30 rounded-[2rem] flex items-center gap-4">
-          <div className="flex-1 min-w-0 px-2">
-            <span className="text-[10px] font-black text-[#EA638C] uppercase tracking-widest block mb-1">
-              Share Treasure
-            </span>
-            <p className="font-mono text-xs text-gray-400 truncate">
-              {isMounted ? window.location.href : "..."}
-            </p>
-          </div>
-          <button
-            onClick={handleCopyLink}
-            className={`flex-shrink-0 flex items-center gap-2 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${copied ? "bg-[#3E442B] text-white" : "bg-white text-[#EA638C] border border-gray-200 shadow-xl hover:translate-y-[-2px]"}`}
-          >
-            {copied ? <Check size={16} /> : <Share2 size={16} />}
-            {copied ? "Copied" : "Copy Link"}
-          </button>
-        </div>
-
+        {/* VARIANT SECTION & CART ACTION */}
         <ProductPurchaseSection
           product={product}
           isOutOfStock={isOutOfStock}
@@ -455,27 +327,29 @@ export default function ProductDetailsContent({ product }) {
             if (variantData?.sku) setActiveSku(variantData.sku);
           }}
         />
+
+        {/* SHARE LINK */}
+        <div className="p-5 border-2 border-dashed border-gray-100 bg-gray-50/30 rounded-[2rem] flex items-center gap-4">
+          <div className="flex-1 min-w-0 px-2">
+            <span className="text-[10px] font-black text-[#EA638C] uppercase tracking-widest block mb-1">Share Treasure</span>
+            <p className="font-mono text-xs text-gray-400 truncate">{isMounted ? window.location.href : "..."}</p>
+          </div>
+          <button onClick={handleCopyLink} className={`flex-shrink-0 flex items-center gap-2 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${copied ? "bg-[#3E442B] text-white" : "bg-white text-[#EA638C] border border-gray-200 shadow-xl hover:translate-y-[-2px]"}`}>
+            {copied ? <Check size={16} /> : <Share2 size={16} />}
+            {copied ? "Copied" : "Copy Link"}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 function FeatureItem({ icon, text, color }) {
-  const colorMap = {
-    blue: "text-blue-500",
-    brand: "text-[#EA638C]",
-    orange: "text-orange-500",
-  };
+  const colorMap = { blue: "text-blue-500", brand: "text-[#EA638C]", orange: "text-orange-500" };
   return (
     <div className="flex flex-col items-center gap-2 md:flex-row">
-      <div
-        className={`${colorMap[color]} bg-white p-1.5 rounded-full shadow-sm`}
-      >
-        {icon}
-      </div>
-      <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">
-        {text}
-      </span>
+      <div className={`${colorMap[color]} bg-white p-1.5 rounded-full shadow-sm`}>{icon}</div>
+      <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{text}</span>
     </div>
   );
 }

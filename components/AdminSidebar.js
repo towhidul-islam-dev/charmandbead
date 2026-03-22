@@ -1,7 +1,8 @@
 'use client'; 
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // 🟢 Added useEffect
 import Link from 'next/link';
+import Image from 'next/image'; // 🟢 Added Image component
 import { usePathname, useSearchParams } from 'next/navigation';
 import { 
     HomeIcon, UserGroupIcon, CubeIcon, ShoppingCartIcon,
@@ -10,28 +11,39 @@ import {
     BanknotesIcon,
     FolderIcon,
     PhotoIcon,
-    BeakerIcon // 🟢 Added for Product Lab
+    BeakerIcon,
+    DocumentTextIcon 
 } from '@heroicons/react/24/outline';
 import AdminDesktopSidebar from './AdminDesktopSidebar';
 
-export default function AdminSidebar({ user, globalData }) {
+export default function AdminSidebar({ user, globalData, dbImage }) { // 🟢 Accept dbImage prop
     const [isOpen, setIsOpen] = useState(false);
+    const [displayImage, setDisplayImage] = useState("");
     const pathname = usePathname();
     const searchParams = useSearchParams();
+
+    // 🟢 Resolve Image Logic
+    useEffect(() => {
+        const activeImage = dbImage || user?.image;
+        if (activeImage) {
+            const finalUrl = activeImage.startsWith("http")
+                ? activeImage
+                : `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/${activeImage}`;
+            setDisplayImage(finalUrl);
+        }
+    }, [dbImage, user]);
 
     const navItems = [
         { name: 'Dashboard', href: '/admin', icon: HomeIcon },
         { name: 'Products', href: '/admin/products', icon: CubeIcon },
         { name: 'Categories', href: '/admin/categories', icon: FolderIcon }, 
-        
-        // 🟢 Added Lab Approval here for Mobile menu consistency
+        { name: 'Content', href: '/admin/content', icon: DocumentTextIcon },
         { 
             name: 'Lab Approval', 
             href: '/admin/product-lab', 
             icon: BeakerIcon, 
             badge: globalData?.pendingLabCount || 0 
         },
-
         { name: 'Carousel', href: '/admin/carousel', icon: PhotoIcon }, 
         { name: 'Inventory', href: '/admin/inventory', icon: WrenchIcon },
         { name: 'New Arrivals', href: '/admin/new-arrivals', icon: SparklesIcon }, 
@@ -106,8 +118,13 @@ export default function AdminSidebar({ user, globalData }) {
                             </Link>
 
                             <div className="flex items-center gap-3 p-3 border bg-white/5 rounded-2xl border-white/5">
-                                <div className="w-10 h-10 rounded-xl bg-[#EA638C] flex items-center justify-center text-white font-black text-lg border border-[#FBB6E6]/20 shadow-lg">
-                                    {user?.name?.charAt(0).toUpperCase()}
+                                {/* 🟢 Updated to show real Image */}
+                                <div className="relative w-10 h-10 overflow-hidden rounded-xl bg-[#EA638C] flex items-center justify-center text-white font-black text-lg border border-[#FBB6E6]/20 shadow-lg">
+                                    {displayImage ? (
+                                        <Image src={displayImage} alt="Admin" fill className="object-cover" unoptimized />
+                                    ) : (
+                                        user?.name?.charAt(0).toUpperCase()
+                                    )}
                                 </div>
                                 <div className="truncate">
                                     <p className="text-[11px] font-black text-white uppercase truncate leading-none mb-1">
@@ -129,6 +146,7 @@ export default function AdminSidebar({ user, globalData }) {
                     user={user} 
                     globalData={globalData} 
                     currentPath={pathname} 
+                    dbImage={dbImage} // 🟢 Pass down to desktop version
                 />
             </div>
         </>

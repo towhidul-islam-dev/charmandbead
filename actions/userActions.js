@@ -103,7 +103,6 @@ export async function syncVIPStatus(userId) {
     return { success: false };
   }
 }
-
 /**
  * Updated updateUserRole with automatic VIP sync check
  */
@@ -139,14 +138,10 @@ export async function updateUserRole(userId, newRole) {
   }
 }
 
-/**
- * Updated profile with better nesting support
- */
-// actions/userActions.js
 export async function updateProfile(formData) {
   try {
     const session = await auth();
-    if (!session) throw new Error("Unauthorized");
+    if (!session?.user?.email) throw new Error("Unauthorized");
 
     await dbConnect();
     const user = await User.findOne({ email: session.user.email });
@@ -156,38 +151,56 @@ export async function updateProfile(formData) {
     const phone = formData.get("phone");
     const imageBase64 = formData.get("image"); 
 
-    const updateData = { name, phone };
+    // Initialize update object
+    const updateData = { 
+      name: name || user.name, 
+      phone: phone || "" 
+    };
 
     // Handle Cloudinary Image Swap
     if (imageBase64 && imageBase64.startsWith("data:image")) {
-      // 1. Delete old image from Cloudinary
+      // 1. Delete old image if it exists
       if (user.imagePublicId) {
-        await deleteImage(user.imagePublicId);
+        try {
+          await deleteImage(user.imagePublicId);
+        } catch (err) {
+          console.error("Cloudinary Delete Error (Non-Fatal):", err);
+        }
       }
 
       // 2. Upload new image
       const uploadResult = await uploadImage(imageBase64, "user_profiles");
       if (uploadResult) {
-        updateData.image = uploadResult.url;
+        // Store the public_id in both fields for compatibility
+        updateData.image = uploadResult.public_id;
         updateData.imagePublicId = uploadResult.public_id;
       }
     }
 
-   const updatedUser = await User.findOneAndUpdate(
+    const updatedUser = await User.findOneAndUpdate(
       { email: session.user.email },
       { $set: updateData },
       { new: true }
     ).lean();
 
-    revalidatePath("/", "layout"); // Refresh Global Navbar
-    revalidatePath("/profile");    // Refresh Profile Page
-    revalidatePath("/admin/users"); // Refresh Admin User Table
+    // 🟢 REVALIDATION: Clears cache for Navbar and Profile components
+    revalidatePath("/", "layout"); 
+    revalidatePath("/profile");
     
+    // 🟢 RETURN DATA: Explicitly mapping to ensure the frontend update() 
+    // sees exactly what it needs for the session.
     return { 
       success: true, 
-      user: JSON.parse(JSON.stringify(updatedUser)) 
+      user: {
+        id: updatedUser._id.toString(),
+        name: updatedUser.name,
+        email: updatedUser.email,
+        image: updatedUser.image, // This is the Cloudinary public_id
+        role: updatedUser.role
+      }
     };
   } catch (error) {
+    console.error("Profile Update Error:", error);
     return { success: false, error: error.message };
   }
 }
@@ -210,7 +223,6 @@ export async function deleteAccount() {
     return { success: false, error: error.message };
   }
 }
-
 
 //it's delete the user account.
 export async function deleteUser(userId) {

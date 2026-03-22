@@ -20,18 +20,24 @@ const RecommendationSchema = new mongoose.Schema({
     category: { type: String, default: "Uncategorized" },
     style: { type: String, default: "Trend" },
     tags: [String],
-    // NEW: Standardized ID for visual grouping (e.g., "FLORAL-VASE")
+    // Standardized ID for visual grouping (e.g., "FLORAL-VASE")
     visualFingerprint: { 
       type: String, 
       trim: true 
     },
   },
+  // 🧬 COUNTERS
   votes: { 
     type: Number, 
-    default: 1 
+    default: 1 // Renamed to "Marks" in UI
   },
+  skips: { 
+    type: Number, 
+    default: 0 
+  },
+  // 🔒 IDENTITY TRACKING
   votedBy: {
-    type: [String], 
+    type: [String], // Stores IPs or UserIDs to prevent duplicate interaction
     default: [] 
   },
   status: {
@@ -43,9 +49,11 @@ const RecommendationSchema = new mongoose.Schema({
   timestamps: true 
 });
 
-// Added index for visualFingerprint to prevent slow queries as your Lab grows
+// INDEXES
+// Added index for skips to identify low-performing trends for AI cleanup
 RecommendationSchema.index({ "aiAnalysis.visualFingerprint": 1 });
 RecommendationSchema.index({ votes: -1, status: 1 });
+RecommendationSchema.index({ skips: -1 }); 
 RecommendationSchema.index({ userName: 1 });
 
 export default mongoose.models.Recommendation ||

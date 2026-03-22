@@ -79,11 +79,13 @@ export async function saveProduct(prevState, formData) {
     const id = formData.get("id");
     const hasVariants = formData.get("hasVariants") === "true";
 
-    // --- 1. HANDLE MAIN IMAGE ---
-    let imageUrl = formData.get("existingImage") || "";
-    const mainImageFile = formData.get("imageFile");
+    // --- 1. HANDLE MAIN IMAGE (Synchronized with Frontend) ---
+    let imageUrl = formData.get("imageUrl") || ""; // Default to existing URL string
+    const mainImageFile = formData.get("mainImage"); // 🟢 Matches frontend .append("mainImage")
+    
     if (mainImageFile && mainImageFile instanceof File && mainImageFile.size > 0) {
-      imageUrl = await uploadToCloudinary(mainImageFile);
+      const uploadedUrl = await uploadToCloudinary(mainImageFile);
+      if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
     // --- 2. HANDLE DETAIL GALLERY ---
@@ -101,13 +103,12 @@ export async function saveProduct(prevState, formData) {
     }
     const finalGallery = [...existingGalleryUrls, ...newGalleryUploads];
 
-    // --- 3. DNA & NEW ARRIVAL / DISCOUNT LOGIC ---
+    // --- 3. DNA & LOGIC ---
     const categoryId = formData.get("categoryId");
     const subCategoryId = formData.get("subCategoryId");
     const mainCat = CATEGORY_DNA.find(c => String(c._id) === String(categoryId));
     const subCat = CATEGORY_DNA.find(c => String(c._id) === String(subCategoryId));
 
-    // 🟢 EXTRACT NEW DISCOUNT/TIER FIELDS
     const isOnSale = formData.get("isOnSale") === "true";
     const discountPrice = Number(formData.get("discountPrice")) || 0;
     const pricingTiers = JSON.parse(formData.get("pricingTiers") || "[]");
@@ -126,8 +127,6 @@ export async function saveProduct(prevState, formData) {
       price: Number(formData.get("price")) || 0,
       stock: Number(formData.get("stock")) || 0,
       minOrderQuantity: Number(formData.get("minOrderQuantity")) || 1,
-      
-      // 🟢 SYNC NEW FIELDS TO DB
       isOnSale: isOnSale,
       discountPrice: discountPrice,
       pricingTiers: pricingTiers,
@@ -178,10 +177,8 @@ export async function saveProduct(prevState, formData) {
     }
 
     // --- 6. REVALIDATION ---
-    revalidatePath("/admin/products");
-    revalidatePath("/products");
-    revalidatePath("/");
-    revalidatePath("/new-arrivals");
+    const paths = ["/admin/products", "/products", "/", "/new-arrivals"];
+    paths.forEach(p => revalidatePath(p));
     if (finalProduct?._id) revalidatePath(`/product/${finalProduct._id}`);
 
     return { 
@@ -228,28 +225,17 @@ export async function deleteProduct(productId) {
     const product = await Product.findById(productId);
     if (!product) return { success: false, message: "Product not found" };
 
-    const extractPublicId = (url) => {
-      if (!url || !url.includes("cloudinary")) return null;
-      const parts = url.split("/");
-      const fileName = parts.pop();
-      const folder = parts.pop();
-      return `${folder}/${fileName.split(".")[0]}`;
-    };
-
     // 1. Delete Main Image
     const mainPublicId = extractPublicId(product.imageUrl);
     if (mainPublicId) await cloudinary.uploader.destroy(mainPublicId);
 
-    // 📸 2. NEW: Delete Gallery Images (Missing in your original file)
-if (product.gallery && product.gallery.length > 0) {
-  await Promise.all(product.gallery.map(async (url) => {
-    const gPid = extractPublicId(url);
-    if (gPid) {
-      console.log("☁️ Cloudinary: Deleting gallery image", gPid);
-      return cloudinary.uploader.destroy(gPid);
+    // 2. Delete Gallery Images
+    if (product.gallery && product.gallery.length > 0) {
+      await Promise.all(product.gallery.map(url => {
+        const gPid = extractPublicId(url);
+        return gPid ? cloudinary.uploader.destroy(gPid) : null;
+      }));
     }
-  }));
-}
 
     // 3. Delete Variant Images
     if (product.hasVariants && product.variants?.length > 0) {
@@ -260,8 +246,8 @@ if (product.gallery && product.gallery.length > 0) {
     }
 
     await Product.findByIdAndDelete(productId);
+    revalidatePath("/admin/products");
     
-    // ... rest of revalidatePath logic
     return { success: true, message: "Deleted successfully" };
   } catch (error) {
     return { success: false, message: error.message };

@@ -16,9 +16,6 @@ const HeroCarousel = () => {
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       
-      // 🟢 Debugging: Check your browser console (F12) to see if data arrives
-      console.log("HeroCarousel Data:", data);
-      
       setSlides(data);
     } catch (err) {
       console.error("Hero Carousel Load Error:", err);

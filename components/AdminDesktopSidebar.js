@@ -1,6 +1,8 @@
 "use client";
 
+import { useState, useEffect } from "react"; // 🟢 Added useEffect
 import Link from "next/link";
+import Image from "next/image"; // 🟢 Added Image component
 import {
   HomeIcon,
   UserGroupIcon,
@@ -13,23 +15,35 @@ import {
   BanknotesIcon,
   FolderIcon,
   PhotoIcon,
-  BeakerIcon, // 🟢 Added for Product Lab management
+  BeakerIcon,
+  DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 
-export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
+export default function AdminDesktopSidebar({ user, globalData, currentPath, dbImage }) { // 🟢 Added dbImage
+  const [displayImage, setDisplayImage] = useState("");
+
+  // 🟢 Resolve Image Logic
+  useEffect(() => {
+    const activeImage = dbImage || user?.image;
+    if (activeImage) {
+      const finalUrl = activeImage.startsWith("http")
+        ? activeImage
+        : `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/${activeImage}`;
+      setDisplayImage(finalUrl);
+    }
+  }, [dbImage, user]);
+
   const navItems = [
     { name: "Dashboard", href: "/admin", icon: HomeIcon },
     { name: "Products", href: "/admin/products", icon: CubeIcon },
     { name: "Categories", href: "/admin/categories", icon: FolderIcon },
-    
-    // 🟢 Product Lab Management Link
+    { name: "Content", href: "/admin/content", icon: DocumentTextIcon },
     { 
       name: "Lab Approval", 
       href: "/admin/product-lab", 
       icon: BeakerIcon,
-      badge: globalData?.pendingLabCount || 0, // Optional: show count of new uploads
+      badge: globalData?.pendingLabCount || 0,
     },
-
     { name: "Carousel", href: "/admin/carousel", icon: PhotoIcon }, 
     { name: "Inventory", href: "/admin/inventory", icon: WrenchIcon },
     {
@@ -45,11 +59,7 @@ export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
       icon: ShoppingCartIcon,
       badge: globalData?.newOrdersCount || 0,
     },
-    { 
-      name: "Transactions", 
-      href: "/admin/transactions", 
-      icon: BanknotesIcon 
-    },
+    { name: "Transactions", href: "/admin/transactions", icon: BanknotesIcon },
     { name: "Gifts", href: "/admin/gifts", icon: GiftIcon },
     {
       name: "Users",
@@ -61,12 +71,8 @@ export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
   ];
 
   const isActive = (item) => {
-    if (item.name === "New Arrivals") return currentPath === "/admin/new-arrivals";
-    
-    if (item.href !== "/admin") {
-        return currentPath.startsWith(item.href);
-    }
-    return currentPath === item.href;
+    if (item.href === "/admin") return currentPath === "/admin";
+    return currentPath.startsWith(item.href);
   };
 
   return (
@@ -113,12 +119,17 @@ export default function AdminDesktopSidebar({ user, globalData, currentPath }) {
       {/* User Profile Section */}
       <div className="p-4 border-t border-gray-100 shrink-0">
         <div className="flex items-center gap-3 p-3 border border-gray-100 bg-gray-50 rounded-2xl">
-          <div className="flex items-center justify-center w-8 h-8 font-black text-white bg-[#EA638C] rounded-xl shadow-sm shrink-0">
-            {user?.name?.charAt(0).toUpperCase()}
+          {/* 🟢 Updated Profile Image Logic */}
+          <div className="relative flex items-center justify-center w-8 h-8 overflow-hidden font-black text-white bg-[#EA638C] rounded-xl shadow-sm shrink-0 border border-[#FBB6E6]/20">
+            {displayImage ? (
+              <Image src={displayImage} alt="Admin" fill className="object-cover" unoptimized />
+            ) : (
+              user?.name?.charAt(0).toUpperCase() || "A"
+            )}
           </div>
           <div className="truncate">
             <p className="text-[10px] font-black text-[#3E442B] uppercase truncate leading-none">
-              {user?.name}
+              {user?.name || "Admin User"}
             </p>
             <p className="text-[8px] font-bold text-gray-400 uppercase mt-1">
               Administrator
