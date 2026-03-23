@@ -1,15 +1,30 @@
 "use client";
 import React, { useState, useMemo } from "react";
-import { MapPin, Home, Phone, User, Save, Trash2, CheckCircle2, Truck } from "lucide-react";
+import { MapPin, Home, Phone, User, Save, Trash2, CheckCircle2, Truck, Info } from "lucide-react";
 import toast from "react-hot-toast";
 import { updateAddress, deleteAddress } from "@/actions/userActions";
 import AddressDeleteModal from "@/components/AddressDeleteModal";
 
-const DHAKA_ZONES = [
-  "Badda", "Banani", "Banglamotor", "Bashundhara", "Cantonment", "Dhanmondi", 
-  "Gulshan", "Jatrabari", "Khilgaon", "Mirpur", "Mohakhali", "Savar","Mohammadpur", 
-  "Motijheel", "New Market", "Old Dhaka", "Pallabi", "Rampura", "Uttara"
+const DHAKA_ZONES_CORE = [
+  "uttara", "mirpur", "mohammadpur", "dhanmondi", "adabor", "gulshan",
+  "banani", "badda", "bashundhara", "baridhara", "mohakhali", "tejgaon",
+  "farmgate", "karwan bazar", "rampura", "khilgaon", "malibagh",
+  "motijheel", "paltan", "jatrabari", "old dhaka", "savar"
 ];
+
+const DHAKA_ALIASES = {
+  "uttora": "uttara",
+  "mirpur 10": "mirpur",
+  "mirpur-10": "mirpur",
+  "mirpur 1": "mirpur",
+  "bashundhara r/a": "bashundhara",
+  "bosundhora": "bashundhara",
+  "mohakhali dohs": "mohakhali",
+  "malibag": "malibagh",
+  "old town": "old dhaka",
+  "puraton dhaka": "old dhaka",
+  "karwanbazar": "karwan bazar"
+};
 
 export default function AddressPageClient({ initialData }) {
   const [loading, setLoading] = useState(false);
@@ -21,11 +36,19 @@ export default function AddressPageClient({ initialData }) {
 
   const deliveryCharge = useMemo(() => {
     if (!selectedCity) return null;
-    const isInsideDhaka = DHAKA_ZONES.some(zone => 
-        selectedCity.toLowerCase().includes(zone.toLowerCase()) || 
-        selectedCity.toLowerCase() === "dhaka"
-    );
-    return isInsideDhaka ? 80 : 130;
+    
+    const input = selectedCity.toLowerCase().trim();
+
+    // 1. Check if input contains "dhaka" directly
+    if (input.includes("dhaka")) return 80;
+
+    // 2. Check core zones
+    const isCoreZone = DHAKA_ZONES_CORE.some(zone => input.includes(zone));
+    
+    // 3. Check aliases
+    const isAlias = Object.keys(DHAKA_ALIASES).some(alias => input.includes(alias));
+
+    return (isCoreZone || isAlias) ? 80 : 130;
   }, [selectedCity]);
 
   async function handleConfirmDelete() {
@@ -70,7 +93,6 @@ export default function AddressPageClient({ initialData }) {
         loading={isDeleting}
       />
 
-      {/* Header UI */}
       <div className="flex items-end justify-between mb-6">
         <div>
           <h1 className="text-2xl italic font-black tracking-tight text-[#3E442B] uppercase">Shipping Address</h1>
@@ -83,20 +105,19 @@ export default function AddressPageClient({ initialData }) {
         )}
       </div>
 
-      {/* Saved Address Card - Themed to Pink/Olive */}
       {hasAddress && (
         <div className="mb-8 p-6 bg-pink-50/50 border border-pink-100 rounded-[2rem] relative overflow-hidden shadow-sm">
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-4">
-               <div className="flex items-center gap-2">
-                  <span className="bg-[#EA638C] text-white text-[10px] font-black uppercase px-2 py-1 rounded-md tracking-widest">Saved</span>
-                  <CheckCircle2 size={16} className="text-[#EA638C]" />
-               </div>
-               {deliveryCharge && (
+                <div className="flex items-center gap-2">
+                   <span className="bg-[#EA638C] text-white text-[10px] font-black uppercase px-2 py-1 rounded-md tracking-widest">Saved</span>
+                   <CheckCircle2 size={16} className="text-[#EA638C]" />
+                </div>
+                {deliveryCharge && (
                   <div className="flex items-center gap-1 text-[10px] font-black text-[#3E442B] uppercase tracking-wider">
                     <Truck size={14} className="text-[#EA638C]" /> Delivery: ৳{deliveryCharge}
                   </div>
-               )}
+                )}
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -117,7 +138,32 @@ export default function AddressPageClient({ initialData }) {
         </div>
       )}
 
-      {/* Form UI */}
+      {/* Coverage Info Section */}
+      <div className="mb-8 bg-[#3E442B] rounded-[2.5rem] p-6 text-white shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-10">
+          <Truck size={80} />
+        </div>
+        <div className="relative z-10">
+          <div className="flex items-center gap-2 mb-4">
+            <Info size={18} className="text-[#EA638C]" />
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#EA638C]">Inside Dhaka Coverage</h2>
+          </div>
+          <p className="mb-4 text-xs font-bold tracking-tight text-white/80">
+            Orders within these primary areas qualify for the <span className="text-[#EA638C]">৳80</span> rate:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {[...DHAKA_ZONES_CORE].sort().map((zone) => (
+              <span key={zone} className="px-3 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/5 hover:bg-[#EA638C] transition-all cursor-default">
+                {zone}
+              </span>
+            ))}
+          </div>
+          <p className="mt-4 text-[8px] italic text-white/40 font-medium">
+            * Variations like "Old Town" or "Bashundhara R/A" are also recognized.
+          </p>
+        </div>
+      </div>
+
       <form onSubmit={handleSave} className="space-y-6 bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-2xl shadow-gray-200/40">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="space-y-2">
@@ -146,7 +192,7 @@ export default function AddressPageClient({ initialData }) {
                 name="city" 
                 value={selectedCity}
                 onChange={(e) => setSelectedCity(e.target.value)}
-                placeholder="e.g. Dhaka" 
+                placeholder="e.g. Uttara" 
                 className="w-full py-4 pl-12 pr-4 border-none outline-none bg-gray-50 rounded-2xl focus:ring-2 focus:ring-[#EA638C] font-bold text-[#3E442B]" 
                 required 
               />
@@ -178,8 +224,10 @@ export default function AddressPageClient({ initialData }) {
         </div>
 
         {deliveryCharge && (
-          <div className="flex items-center justify-between p-4 border border-pink-100 bg-pink-50/30 rounded-2xl">
-            <span className="text-[10px] font-black text-[#EA638C] uppercase tracking-widest">Delivery Rate:</span>
+          <div className="flex items-center justify-between p-4 border border-pink-100 bg-pink-50/30 rounded-2xl animate-in fade-in slide-in-from-bottom-2">
+            <span className="text-[10px] font-black text-[#EA638C] uppercase tracking-widest flex items-center gap-2">
+              <Truck size={14} /> Shipping Rate ({deliveryCharge === 80 ? "Inside Dhaka" : "Outside Dhaka"})
+            </span>
             <span className="text-xl font-black text-[#3E442B]">৳{deliveryCharge}</span>
           </div>
         )}

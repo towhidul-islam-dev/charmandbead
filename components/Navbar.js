@@ -11,6 +11,7 @@ import {
   UserIcon,
   ShieldCheckIcon,
   ChevronDownIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import ShoppingCartIcon from "@heroicons/react/24/outline/ShoppingCartIcon";
 import { useSession, signOut } from "next-auth/react";
@@ -30,7 +31,6 @@ const moreLinks = [
   { name: "Contact", href: "/contact" },
 ];
 
-// Helper to resolve Image URL (Shared by both components)
 const resolveImageUrl = (img, name) => {
   if (!img) {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=EA638C&color=fff&bold=true`;
@@ -54,11 +54,18 @@ const ClientHeader = ({ pathname, dbImage }) => {
   const moreRef = useRef(null);
   const [displayImage, setDisplayImage] = useState("");
 
+  // Prevent scroll when mobile menu is open
   useEffect(() => {
-    // 🟢 Priority: 1. Live DB prop, 2. Session data
+    if (isMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  }, [isMenuOpen]);
+
+  useEffect(() => {
     const activeImage = dbImage || session?.user?.image;
     const finalUrl = resolveImageUrl(activeImage, session?.user?.name);
-    
     setDisplayImage(finalUrl);
     setIsImageLoaded(false); 
   }, [dbImage, session]);
@@ -174,16 +181,86 @@ const ClientHeader = ({ pathname, dbImage }) => {
                 <Link href="/register" className="text-[11px] font-black uppercase bg-[#3E442B] text-white px-5 py-2.5 rounded-xl hover:bg-[#EA638C] transition-colors">Register</Link>
               </div>
             )}
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 md:hidden text-[#3E442B]"><Bars3BottomRightIcon className="w-6 h-6" /></button>
+            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 md:hidden text-[#3E442B]">
+              <Bars3BottomRightIcon className="w-6 h-6" />
+            </button>
           </div>
         </div>
+
+        {/* 🟢 BLURRY GLASSMORPHISM MOBILE DRAWER */}
+        {isMenuOpen && (
+          <div className="fixed inset-0 z-[9999] md:hidden">
+            {/* Backdrop: Semi-transparent overlay with blur */}
+            <div 
+              className="fixed inset-0 bg-[#3E442B]/20 backdrop-blur-md transition-opacity duration-300 h-screen w-screen" 
+              onClick={() => setIsMenuOpen(false)} 
+            />
+            
+            {/* Drawer: White Semi-Transparent with Heavy Blur (backdrop-blur-2xl) */}
+            <div className="fixed inset-y-0 right-0 w-[300px] h-screen bg-white/70 backdrop-blur-2xl border-l border-white/20 shadow-[-10px_0_30px_rgba(0,0,0,0.1)] animate-in slide-in-from-right duration-300 flex flex-col z-[10000]">
+              
+              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
+                <span className="text-[10px] font-black text-[#EA638C] uppercase tracking-[0.3em]">Navigation</span>
+                <button onClick={() => setIsMenuOpen(false)} className="p-2 -mr-2 text-[#3E442B] bg-gray-50 rounded-full hover:bg-[#EA638C]/10 hover:text-[#EA638C] transition-colors">
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+
+              <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-1">
+                {[...mainLinks, { name: "Home", href: "/" }].reverse().map((link) => {
+                  const isActive = pathname === link.href;
+                  return (
+                    <Link 
+                      key={link.name} 
+                      href={link.href} 
+                      onClick={() => setIsMenuOpen(false)} 
+                      className={`font-black uppercase transition-all flex items-center gap-1 whitespace-nowrap text-[10px] tracking-widest px-4 py-3 w-full rounded-xl 
+                        ${isActive 
+                          ? "bg-[#EA638C] text-white shadow-lg shadow-[#EA638C]/20" 
+                          : "text-[#3E442B] hover:bg-[#EA638C]/5 hover:text-[#EA638C]"}`}
+                    >
+                      {link.name}
+                    </Link>
+                  );
+                })}
+                
+                <div className="pt-6 pb-2 mt-4 border-t border-gray-100">
+                  <p className="px-4 mb-3 text-[8px] font-black text-gray-400 uppercase tracking-widest">Discover More</p>
+                  {moreLinks.map((link) => (
+                    <Link 
+                      key={link.name} 
+                      href={link.href} 
+                      onClick={() => setIsMenuOpen(false)} 
+                      className="font-black uppercase transition-all flex items-center gap-1 whitespace-nowrap text-[10px] tracking-widest px-4 py-3 w-full text-[#3E442B] hover:bg-[#EA638C]/5 hover:text-[#EA638C]"
+                    >
+                      {link.name}
+                    </Link>
+                  ))}
+                </div>
+              </nav>
+
+              <div className="p-6 bg-white/40 border-t border-gray-100 shrink-0 pb-10">
+                {!session ? (
+                  <div className="flex flex-col gap-3">
+                    <Link href="/login" onClick={() => setIsMenuOpen(false)} className="w-full py-4 text-center text-[11px] font-black uppercase text-[#3E442B] border border-gray-200 rounded-2xl bg-white/80">Login</Link>
+                    <Link href="/register" onClick={() => setIsMenuOpen(false)} className="w-full py-4 text-center text-[11px] font-black uppercase bg-[#EA638C] text-white rounded-2xl shadow-lg shadow-[#EA638C]/20">Join Charm&Bead</Link>
+                  </div>
+                ) : (
+                  <button onClick={() => signOut({ callbackUrl: "/" })} className="flex items-center justify-center gap-3 w-full py-4 text-[11px] font-black uppercase text-red-500 bg-red-50 border border-red-100 rounded-2xl">
+                    <ArrowRightOnRectangleIcon className="w-5 h-5" /> Sign Out
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </header>
       <div className="h-16 md:h-20" />
     </>
   );
 };
 
-export default function Navbar({ dbImage }) { // 🟢 Accept dbImage here
+export default function Navbar({ dbImage }) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdminRoute = pathname.startsWith("/admin");

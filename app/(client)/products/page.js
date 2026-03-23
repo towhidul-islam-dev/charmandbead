@@ -43,7 +43,7 @@ export default async function ProductsServerPage({ searchParams }) {
             </section>
 
             {/* 🟢 Catalog Container */}
-            <div className="px-4 mx-auto md:px-8 max-w-7xl">
+            <div className="mx-auto md:px-8 max-w-7xl">
                 <Suspense fallback={<ProductSkeleton />}>
                     <ProductDataWrapper categorySlug={categorySlug} />
                 </Suspense>

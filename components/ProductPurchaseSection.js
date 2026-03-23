@@ -1,35 +1,48 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
-import { Minus, Plus, Package, Zap, Info } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { Minus, Plus, Package, Zap, Info, TrendingDown } from "lucide-react";
 import { useCart } from "@/Context/CartContext";
 import toast from "react-hot-toast";
 import Image from "next/image";
 
 export default function ProductPurchaseSection({ product, onVariantChange }) {
   const { addToCart, cart } = useCart();
-  const variants = product.variants || [];
-  const tiers = product.pricingTiers || [];
+  const variants = product?.variants || [];
+  
+  // 🟢 Fixed Data Path for tiers
+  const tiers = useMemo(() => {
+    const rawTiers = product?.pricingTiers || product?._doc?.pricingTiers || [];
+    return [...rawTiers].sort((a, b) => a.minQuantity - b.minQuantity);
+  }, [product]);
 
-  const lastProductId = useRef(product._id);
+  const lastProductId = useRef(product?._id);
   const [quantities, setQuantities] = useState({});
 
   useEffect(() => {
-    if (lastProductId.current !== product._id) {
+    if (lastProductId.current !== product?._id) {
       const initialQtys = {};
       variants.forEach((v, index) => {
         const vKey = v._id?.toString() || `v-${index}`;
         initialQtys[vKey] = 0;
       });
       setQuantities(initialQtys);
-      lastProductId.current = product._id;
+      lastProductId.current = product?._id;
     }
-  }, [product._id, variants]);
+  }, [product?._id, variants]);
+
+  // --- 🟢 CALCULATE TOTALS ---
+  const totalSelected = Object.values(quantities).reduce((a, b) => a + b, 0);
+  
+  const nextTier = tiers.find(tier => totalSelected < tier.minQuantity);
 
   const getQtyInBag = (vId) => {
     const itemInBag = cart?.find((item) => item.variantId === vId);
     return itemInBag ? Number(itemInBag.quantity) : 0;
   };
+console.log("hello");
+console.log(product);
 
+  // --- 🟢 UPDATED HANDLER: Syncs with Parent Table ---
   const handleUpdateQty = (vKey, direction, moq, stock, variant) => {
     const currentSelection = quantities[vKey] || 0;
     const inBagQty = getQtyInBag(variant._id);
@@ -50,8 +63,17 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
       return;
     }
 
-    setQuantities((prev) => ({ ...prev, [vKey]: newQty }));
-    if (onVariantChange) onVariantChange(variant);
+    // 1. Calculate new state locally
+    const updatedQuantities = { ...quantities, [vKey]: newQty };
+    const newTotal = Object.values(updatedQuantities).reduce((a, b) => a + b, 0);
+
+    // 2. Update local state
+    setQuantities(updatedQuantities);
+
+    // 3. 🟢 BRIDGE: Tell parent about the new total so the Tier Table highlights!
+    if (onVariantChange) {
+      onVariantChange(variant, newTotal);
+    }
   };
 
   const handleBulkAdd = () => {
@@ -75,13 +97,16 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
     toast.success("Bag Updated", { 
       style: { background: '#3E442B', color: '#fff', fontWeight: '900', borderRadius: '1rem' } 
     });
+
+    // 🟢 RESET: Clear quantities and let parent know total is now 0
     setQuantities({}); 
+    if (onVariantChange) onVariantChange(null, 0);
   };
 
   return (
     <div className="flex flex-col gap-6 mt-10">
       
-      {/* 🟢 NEW: WHOLESALE TIER TABLE SECTION */}
+      {/* WHOLESALE TIER TABLE (INTERNAL PREVIEW) */}
       {tiers.length > 0 && (
         <div className="mb-4 animate-in fade-in slide-in-from-top-4 duration-700">
           <div className="flex items-center gap-2 mb-4 px-2">
@@ -95,15 +120,18 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {tiers.sort((a,b) => a.minQuantity - b.minQuantity).map((tier, i) => (
-              <div key={i} className="bg-white border border-gray-100 rounded-[1.5rem] p-4 shadow-sm flex flex-col items-center justify-center text-center">
-                <span className="text-[9px] font-black text-gray-400 uppercase mb-1">{tier.minQuantity}+ Pcs</span>
-                <span className="text-lg font-black text-[#EA638C]">৳{tier.unitPrice}</span>
-                <div className="mt-1 px-2 py-0.5 bg-green-50 text-green-600 text-[7px] font-black rounded-full uppercase">
-                  Save ৳{product.price - tier.unitPrice}
+            {tiers.map((tier, i) => {
+              const isAchieved = totalSelected >= tier.minQuantity;
+              return (
+                <div key={i} className={`border rounded-[1.5rem] p-4 shadow-sm flex flex-col items-center justify-center text-center transition-all duration-500 ${isAchieved ? "bg-[#EA638C] border-[#EA638C] scale-105 shadow-md" : "bg-white border-gray-100"}`}>
+                  <span className={`text-[9px] font-black uppercase mb-1 ${isAchieved ? "text-white/70" : "text-gray-400"}`}>{tier.minQuantity}+ Pcs</span>
+                  <span className={`text-lg font-black ${isAchieved ? "text-white" : "text-[#EA638C]"}`}>৳{tier.unitPrice}</span>
+                  <div className={`mt-1 px-2 py-0.5 text-[7px] font-black rounded-full uppercase ${isAchieved ? "bg-white text-[#EA638C]" : "bg-green-50 text-green-600"}`}>
+                    {isAchieved ? "Tier Active" : `Save ৳${(product.price || variants[0]?.price || 0) - tier.unitPrice}`}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -145,20 +173,43 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
         ))}
       </div>
 
+      {/* DYNAMIC PROGRESS NOTIFICATION */}
+      {totalSelected > 0 && nextTier && (
+        <div className="mx-1 p-4 bg-white border border-[#FBB6E6] rounded-[1.5rem] shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <TrendingDown size={14} className="text-[#EA638C]" />
+              <span className="text-[10px] font-black text-[#3E442B] uppercase tracking-tighter">
+                Add <span className="text-[#EA638C]">{nextTier.minQuantity - totalSelected} more</span> to unlock ৳{nextTier.unitPrice} rate!
+              </span>
+            </div>
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+              {Math.round((totalSelected / nextTier.minQuantity) * 100)}% to Goal
+            </span>
+          </div>
+          <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-[#EA638C] transition-all duration-500 ease-out"
+              style={{ width: `${(totalSelected / nextTier.minQuantity) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* STICKY FOOTER */}
       <div className="sticky bottom-4 z-20 flex flex-col sm:flex-row items-center justify-between p-4 sm:p-5 bg-[#3E442B] rounded-[2rem] sm:rounded-[3rem] shadow-2xl mx-1 border border-white/10 gap-4 transition-all">
         <div className="flex flex-col items-center pl-0 sm:items-start sm:pl-4">
           <p className="text-white/50 text-[9px] font-black uppercase tracking-widest leading-none mb-1">Total Unit Count</p>
           <div className="flex items-baseline gap-2">
             <p className="text-[#FBB6E6] text-[20px] font-black italic tracking-tighter">
-              {Object.values(quantities).reduce((a, b) => a + b, 0)} 
+              {totalSelected} 
               <span className="text-[12px] uppercase not-italic ml-1 text-white">Items</span>
             </p>
           </div>
         </div>
         <button 
           onClick={handleBulkAdd}
-          disabled={Object.values(quantities).every(q => q === 0)}
+          disabled={totalSelected === 0}
           className="w-full sm:w-auto bg-[#EA638C] text-white px-10 py-4 rounded-full font-black text-[11px] uppercase tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:grayscale shadow-lg shadow-[#EA638C]/20"
         >
           Confirm & Add to Bag
@@ -167,8 +218,6 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
     </div>
   );
 }
-
-/* --- Sub-components --- */
 
 function VariantRow({ v, inBagQty, selectionQty, handleUpdateQty }) {
   const liveDisplayStock = Math.max(0, v.stock - inBagQty - selectionQty);
