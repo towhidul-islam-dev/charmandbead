@@ -23,10 +23,10 @@ export const viewport = {
 
 export const metadata = {
   title: {
-    default: 'Charm & Bead | Unlock Creativity',
-    template: '%s | Charm & Bead' 
+    default: 'CharmandBeads | Unlock Creativity | Premium Resin Charms & Beads | Wholesale Jewelry Materials Dhaka',
+    template: '%s | CharmandBeads' 
   },
-  description: 'Source the finest materials for your jewelry workshop.',
+  description: 'Shop high-quality resin charms, glass beads, and stainless steel findings at Charm & Bead. Best wholesale prices for jewelry makers in Bangladesh.',
   metadataBase: new URL(process.env.NODE_ENV === 'development' 
     ? 'http://localhost:3000' 
     : 'https://your-future-domain.com'), 
