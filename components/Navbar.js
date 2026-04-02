@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   HeartIcon,
   Bars3BottomRightIcon,
@@ -188,72 +189,108 @@ const ClientHeader = ({ pathname, dbImage }) => {
         </div>
 
         {/* 🟢 BLURRY GLASSMORPHISM MOBILE DRAWER */}
-        {isMenuOpen && (
-          <div className="fixed inset-0 z-[9999] md:hidden">
-            {/* Backdrop: Semi-transparent overlay with blur */}
-            <div 
-              className="fixed inset-0 bg-[#3E442B]/20 backdrop-blur-md transition-opacity duration-300 h-screen w-screen" 
-              onClick={() => setIsMenuOpen(false)} 
-            />
-            
-            {/* Drawer: White Semi-Transparent with Heavy Blur (backdrop-blur-2xl) */}
-            <div className="fixed inset-y-0 right-0 w-[300px] h-screen bg-white/70 backdrop-blur-2xl border-l border-white/20 shadow-[-10px_0_30px_rgba(0,0,0,0.1)] animate-in slide-in-from-right duration-300 flex flex-col z-[10000]">
-              
-              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
-                <span className="text-[10px] font-black text-[#EA638C] uppercase tracking-[0.3em]">Navigation</span>
-                <button onClick={() => setIsMenuOpen(false)} className="p-2 -mr-2 text-[#3E442B] bg-gray-50 rounded-full hover:bg-[#EA638C]/10 hover:text-[#EA638C] transition-colors">
-                  <XMarkIcon className="w-6 h-6" />
-                </button>
-              </div>
+<AnimatePresence>
+  {isMenuOpen && (
+    <div className="fixed inset-0 z-[9999] md:hidden">
+      {/* 🟢 Smooth Backdrop Fade */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.4, ease: "easeInOut" }}
+        className="fixed inset-0 bg-[#3E442B]/40 backdrop-blur-md h-screen w-screen"
+        onClick={() => setIsMenuOpen(false)}
+      />
 
-              <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-1">
-                {[...mainLinks, { name: "Home", href: "/" }].reverse().map((link) => {
-                  const isActive = pathname === link.href;
-                  return (
-                    <Link 
-                      key={link.name} 
-                      href={link.href} 
-                      onClick={() => setIsMenuOpen(false)} 
-                      className={`font-black uppercase transition-all flex items-center gap-1 whitespace-nowrap text-[10px] tracking-widest px-4 py-3 w-full rounded-xl 
-                        ${isActive 
-                          ? "bg-[#EA638C] text-white shadow-lg shadow-[#EA638C]/20" 
-                          : "text-[#3E442B] hover:bg-[#EA638C]/5 hover:text-[#EA638C]"}`}
-                    >
-                      {link.name}
-                    </Link>
-                  );
-                })}
-                
-                <div className="pt-6 pb-2 mt-4 border-t border-gray-100">
-                  <p className="px-4 mb-3 text-[8px] font-black text-gray-400 uppercase tracking-widest">Discover More</p>
-                  {moreLinks.map((link) => (
-                    <Link 
-                      key={link.name} 
-                      href={link.href} 
-                      onClick={() => setIsMenuOpen(false)} 
-                      className="font-black uppercase transition-all flex items-center gap-1 whitespace-nowrap text-[10px] tracking-widest px-4 py-3 w-full text-[#3E442B] hover:bg-[#EA638C]/5 hover:text-[#EA638C]"
-                    >
-                      {link.name}
-                    </Link>
-                  ))}
-                </div>
-              </nav>
+      {/* 🟢 Smooth Drawer Slide (Brand Green: #3E442B) */}
+      <motion.div
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        className="fixed inset-y-0 right-0 w-[300px] h-screen bg-[#3E442B] border-l border-white/10 shadow-2xl flex flex-col z-[10000]"
+      >
+        {/* Header Section */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 shrink-0">
+          <span className="text-[10px] font-black text-[#FBB6E6] uppercase tracking-[0.3em]">
+            Navigation
+          </span>
+          <button
+            onClick={() => setIsMenuOpen(false)}
+            className="p-2 -mr-2 text-white bg-white/10 rounded-full hover:bg-[#EA638C] transition-colors"
+          >
+            <XMarkIcon className="w-6 h-6" />
+          </button>
+        </div>
 
-              <div className="p-6 bg-white/40 border-t border-gray-100 shrink-0 pb-10">
-                {!session ? (
-                  <div className="flex flex-col gap-3">
-                    <Link href="/login" onClick={() => setIsMenuOpen(false)} className="w-full py-4 text-center text-[11px] font-black uppercase text-[#3E442B] border border-gray-200 rounded-2xl bg-white/80">Login</Link>
-                    <Link href="/register" onClick={() => setIsMenuOpen(false)} className="w-full py-4 text-center text-[11px] font-black uppercase bg-[#EA638C] text-white rounded-2xl shadow-lg shadow-[#EA638C]/20">Join Charm&Bead</Link>
-                  </div>
-                ) : (
-                  <button onClick={() => signOut({ callbackUrl: "/" })} className="flex items-center justify-center gap-3 w-full py-4 text-[11px] font-black uppercase text-red-500 bg-red-50 border border-red-100 rounded-2xl">
-                    <ArrowRightOnRectangleIcon className="w-5 h-5" /> Sign Out
-                  </button>
-                )}
-              </div>
-            </div>
+        {/* Navigation Links */}
+        <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-2">
+          {[...mainLinks, { name: "Home", href: "/" }].reverse().map((link) => {
+            const isActive = pathname === link.href;
+            return (
+              <Link
+                key={link.name}
+                href={link.href}
+                onClick={() => setIsMenuOpen(false)}
+                className={`font-black uppercase transition-all flex items-center gap-1 text-[11px] tracking-widest px-5 py-4 w-full rounded-xl 
+                  ${isActive 
+                    ? "bg-[#EA638C] text-white shadow-lg shadow-black/20" 
+                    : "text-white/90 hover:bg-white/5 hover:text-[#EA638C]"}`}
+              >
+                {link.name}
+              </Link>
+            );
+          })}
+
+          <div className="pt-8 pb-2 mt-4 border-t border-white/10">
+            <p className="px-4 mb-4 text-[9px] font-black text-white/30 uppercase tracking-widest">
+              Discover More
+            </p>
+            {moreLinks.map((link) => (
+              <Link
+                key={link.name}
+                href={link.href}
+                onClick={() => setIsMenuOpen(false)}
+                className="font-black uppercase transition-all flex items-center gap-1 text-[11px] tracking-widest px-5 py-3 w-full text-white/70 hover:text-[#EA638C]"
+              >
+                {link.name}
+              </Link>
+            ))}
           </div>
-        )}
+        </nav>
+
+        {/* Bottom Action Section */}
+        <div className="p-6 bg-black/20 border-t border-white/10 shrink-0 pb-10">
+          {!session ? (
+            <div className="flex flex-col gap-3">
+              <Link
+                href="/login"
+                onClick={() => setIsMenuOpen(false)}
+                className="w-full py-4 text-center text-[11px] font-black uppercase text-white border border-white/20 rounded-2xl"
+              >
+                Login
+              </Link>
+              <Link
+                href="/register"
+                onClick={() => setIsMenuOpen(false)}
+                className="w-full py-4 text-center text-[11px] font-black uppercase bg-[#EA638C] text-white rounded-2xl shadow-lg"
+              >
+                Join Charm&Bead
+              </Link>
+            </div>
+          ) : (
+            <button
+              onClick={() => signOut({ callbackUrl: "/" })}
+              className="flex items-center justify-center gap-3 w-full py-4 text-[11px] font-black uppercase text-red-400 bg-red-950/30 border border-red-900/50 rounded-2xl"
+            >
+              <ArrowRightOnRectangleIcon className="w-5 h-5" /> Sign Out
+            </button>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  )}
+</AnimatePresence>
       </header>
       <div className="h-16 md:h-20" />
     </>

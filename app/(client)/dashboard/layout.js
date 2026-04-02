@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion'; // 🟢 Added for animations
 import { 
   User, ShoppingBag, Heart, MapPin, 
-  LayoutDashboard, LogOut, Gift, Menu, X 
+  LayoutDashboard, LogOut, Menu, X 
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 
@@ -17,7 +18,6 @@ export default function DashboardLayout({ children }) {
     { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'My Orders', href: '/dashboard/orders', icon: ShoppingBag },
     { name: 'Wishlist', href: '/dashboard/wishlist', icon: Heart },
-    // { name: 'My Rewards', href: '/dashboard/rewards', icon: Gift }, 
     { name: 'Addresses', href: '/dashboard/address', icon: MapPin },
     { name: 'Profile', href: '/dashboard/profile', icon: User },
   ];
@@ -46,7 +46,7 @@ export default function DashboardLayout({ children }) {
               <item.icon size={18} className={`${!isActive && "group-hover:scale-110 transition-transform"}`} />
               {item.name}
             </div>
-            {isActive && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
+            {isActive && <motion.div layoutId="activeDot" className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
           </Link>
         );
       })}
@@ -66,30 +66,48 @@ export default function DashboardLayout({ children }) {
   return (
     <div className="flex flex-col gap-8 px-4 pb-20 mx-auto mt-20 max-w-7xl md:mt-28 md:flex-row">
       
-      {/* Drawer Overlay */}
-      {isDrawerOpen && (
-        <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm md:hidden" onClick={() => setIsDrawerOpen(false)} />
-      )}
+      {/* Mobile Drawer with AnimatePresence */}
+      <AnimatePresence>
+        {isDrawerOpen && (
+          <div className="fixed inset-0 z-[120] md:hidden">
+            {/* 🟢 Smooth Backdrop Fade */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
+              onClick={() => setIsDrawerOpen(false)} 
+            />
 
-      {/* Mobile Drawer */}
-      <aside className={`fixed top-0 left-0 z-[101] h-full w-[280px] bg-white p-6 shadow-2xl transition-transform duration-300 md:hidden
-        ${isDrawerOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="flex items-center justify-between px-2 mb-8">
-          <h2 className="text-xl font-black text-[#3E442B] uppercase italic tracking-tighter">Menu</h2>
-          <button onClick={() => setIsDrawerOpen(false)} className="p-2 text-gray-400">
-            <X size={24} />
-          </button>
-        </div>
-        <NavContent />
-      </aside>
+            {/* 🟢 Smooth Sidebar Slide */}
+            <motion.aside 
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="absolute top-0 left-0 h-full w-[280px] bg-white p-6 shadow-2xl flex flex-col"
+            >
+              <div className="flex items-center justify-between px-2 mb-8">
+                <h2 className="text-xl font-black text-[#3E442B] uppercase italic tracking-tighter">Menu</h2>
+                <button 
+                  onClick={() => setIsDrawerOpen(false)} 
+                  className="p-2 text-gray-400 hover:text-[#EA638C] transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              <NavContent />
+            </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>
 
-      {/* Sidebar Section */}
+      {/* Sidebar Section (Desktop) */}
       <aside className="w-full md:w-72">
         <div className="bg-white border border-gray-100 rounded-[2.5rem] p-6 shadow-sm md:sticky md:top-28">
           
-          {/* 🟢 SWAPPED HEADER: Trigger on Mobile, Static on Desktop */}
           <div className="px-4 mb-8">
-            {/* Mobile View: Shows "Menu" with Icon */}
+            {/* Mobile Trigger Button */}
             <button 
               onClick={() => setIsDrawerOpen(true)}
               className="flex items-center justify-between w-full md:hidden group"
@@ -102,12 +120,15 @@ export default function DashboardLayout({ children }) {
                   Tap to navigate
                 </p>
               </div>
-              <div className="p-2 bg-[#EA638C]/10 text-[#EA638C] rounded-xl group-active:scale-90 transition-transform">
+              <motion.div 
+                whileTap={{ scale: 0.9 }}
+                className="p-2 bg-[#EA638C]/10 text-[#EA638C] rounded-xl"
+              >
                 <Menu size={20} />
-              </div>
+              </motion.div>
             </button>
 
-            {/* Desktop View: Remains "Account Management" */}
+            {/* Desktop Static Header */}
             <div className="hidden md:block">
               <h2 className="text-xl font-black text-[#3E442B] uppercase italic tracking-tighter">
                 Account
@@ -118,7 +139,7 @@ export default function DashboardLayout({ children }) {
             </div>
           </div>
 
-          {/* Desktop Nav: Hidden on mobile since it's in the drawer */}
+          {/* Desktop Navigation */}
           <div className="hidden md:block">
             <NavContent />
           </div>
@@ -127,9 +148,14 @@ export default function DashboardLayout({ children }) {
 
       {/* Main Content Area */}
       <main className="flex-1">
-        <div className="min-h-[500px]">
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="min-h-[500px]"
+        >
           {children}
-        </div>
+        </motion.div>
       </main>
     </div>
   );
