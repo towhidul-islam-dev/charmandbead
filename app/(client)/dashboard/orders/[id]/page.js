@@ -23,6 +23,73 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
+// 🟢 NEW: Pathao Tracking Component for Order Details
+const PathaoTracker = ({ consignmentId }) => {
+  const [trackingData, setTrackingData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchTracking = async () => {
+    if (!consignmentId) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/track-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ consignmentId }),
+      });
+      const result = await res.json();
+      setTrackingData(result.data);
+    } catch (err) {
+      console.error("Tracking Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Auto-fetch if consignmentId exists
+  useEffect(() => {
+    if (consignmentId) fetchTracking();
+  }, [consignmentId]);
+
+  if (!consignmentId) return null;
+
+  return (
+    <div className="max-w-3xl mx-auto mb-16">
+      <div className="bg-[#FBB6E6]/10 border border-[#FBB6E6]/30 p-6 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 transition-all hover:shadow-lg">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-[#3E442B] rounded-2xl flex items-center justify-center text-white shadow-lg shadow-[#3E442B]/20">
+            <Truck size={24} />
+          </div>
+          <div>
+            <p className="text-[10px] font-black text-[#EA638C] uppercase tracking-[0.2em]">Pathao Logistics</p>
+            <p className="text-sm font-black text-[#3E442B]">ID: {consignmentId}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center md:items-end">
+          {loading ? (
+            <div className="flex items-center gap-2 text-[#EA638C]">
+              <Loader2 size={16} className="animate-spin" />
+              <span className="text-[10px] font-black uppercase">Locating Parcel...</span>
+            </div>
+          ) : trackingData ? (
+            <>
+              <div className="px-5 py-2 bg-[#EA638C] text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
+                {trackingData.order_status}
+              </div>
+              <p className="text-[9px] font-bold text-gray-400 mt-2 uppercase tracking-tighter">Last Update: {trackingData.updated_at}</p>
+            </>
+          ) : (
+            <button onClick={fetchTracking} className="text-[10px] font-black uppercase text-[#3E442B] underline decoration-[#EA638C] decoration-2">
+              Refresh Status
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function OrderDetailsPage({ params: paramsPromise }) {
   const params = use(paramsPromise);
   const id = params?.id;
@@ -84,7 +151,7 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
         _id: item.variant?.variantId || `std-${pId}`,
         price: Number(item.price) || 0,
         size: item.variant?.size || "Standard",
-        color: item.variant?.name || "Default", // Mapping 'name' back to 'color' for Context
+        color: item.variant?.name || "Default",
       };
 
       addToCart(productData, variantData, item.quantity || 1);
@@ -150,24 +217,30 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
           </div>
 
           {order.status !== "Cancelled" ? (
-            <div className="relative flex justify-between max-w-3xl px-2 mx-auto mb-24">
-              {steps.map((step, index) => {
-                const Icon = step.icon;
-                const isDone = index <= activeIndex;
-                const isCurrent = index === activeIndex;
-                return (
-                  <div key={index} className="z-10 flex flex-col items-center">
-                    <div className={`w-12 h-12 md:w-16 md:h-16 rounded-[1.5rem] flex items-center justify-center transition-all duration-700 ${isDone ? "bg-[#EA638C] text-white shadow-xl shadow-[#EA638C]/30" : "bg-gray-100 text-gray-300"}`}>
-                      <Icon size={22} className={isCurrent && step.status === "Processing" ? "animate-spin" : ""} />
+            <>
+              {/* STATUS STEPPER */}
+              <div className="relative flex justify-between max-w-3xl px-2 mx-auto mb-20">
+                {steps.map((step, index) => {
+                  const Icon = step.icon;
+                  const isDone = index <= activeIndex;
+                  const isCurrent = index === activeIndex;
+                  return (
+                    <div key={index} className="z-10 flex flex-col items-center">
+                      <div className={`w-12 h-12 md:w-16 md:h-16 rounded-[1.5rem] flex items-center justify-center transition-all duration-700 ${isDone ? "bg-[#EA638C] text-white shadow-xl shadow-[#EA638C]/30" : "bg-gray-100 text-gray-300"}`}>
+                        <Icon size={22} className={isCurrent && step.status === "Processing" ? "animate-spin" : ""} />
+                      </div>
+                      <p className={`absolute -bottom-8 text-[10px] font-black uppercase tracking-tighter ${isDone ? "text-[#3E442B]" : "text-gray-300"}`}>{step.label}</p>
                     </div>
-                    <p className={`absolute -bottom-8 text-[10px] font-black uppercase tracking-tighter ${isDone ? "text-[#3E442B]" : "text-gray-300"}`}>{step.label}</p>
-                  </div>
-                );
-              })}
-              <div className="absolute top-6 md:top-8 left-0 w-full h-[3px] bg-gray-50 -z-0 rounded-full">
-                <div className="h-full bg-[#EA638C] transition-all duration-1000 ease-out" style={{ width: `${(activeIndex / (steps.length - 1)) * 100}%` }} />
+                  );
+                })}
+                <div className="absolute top-6 md:top-8 left-0 w-full h-[3px] bg-gray-50 -z-0 rounded-full">
+                  <div className="h-full bg-[#EA638C] transition-all duration-1000 ease-out" style={{ width: `${(activeIndex / (steps.length - 1)) * 100}%` }} />
+                </div>
               </div>
-            </div>
+
+              {/* 🟢 LIVE PATHAO TRACKER INJECTED HERE */}
+              <PathaoTracker consignmentId={order.consignmentId} />
+            </>
           ) : (
             <div className="p-6 mb-20 text-center border-2 border-dashed border-red-100 bg-red-50/50 rounded-[2rem]">
               <p className="text-xs font-black tracking-widest text-red-500 uppercase">Transaction Voided / Cancelled</p>
@@ -196,12 +269,9 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
                         />
                       </div>
                       <div className="flex-1 text-center sm:text-left">
-                        {/* 🟢 FIXED: Now correctly displays item.productName */}
                         <p className="text-sm font-black text-[#3E442B] uppercase mb-1">
                           {item.productName || "Unnamed Product"}
                         </p>
-                        
-                        {/* 🟢 FIXED: Clean variant display (hides Default/NA) */}
                         <p className="text-[10px] font-bold text-gray-400 uppercase">
                           {item.variant?.name && item.variant.name !== "Default" ? `${item.variant.name} • ` : ""}
                           {item.variant?.size && item.variant.size !== "N/A" ? `${item.variant.size} • ` : ""}

@@ -1,18 +1,21 @@
 import { getProducts } from '@/lib/data'; 
 import ProductCatalog from '@/components/ProductCatalog'; 
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Suspense } from 'react';
-import { silentInventoryHeal } from '@/actions/product'; 
-import Category from '@/models/Category'; // 🟢 Added to look up Slugs
+import Category from '@/models/Category'; 
 import mongodb from '@/lib/mongodb';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-// 🟢 Updated to accept searchParams/params for URL filtering
 export default async function ProductsServerPage({ searchParams }) {
-    // Expected URL: /shop?category=resin-charms
-    const { category: categorySlug } = await searchParams;
+    const params = await searchParams;
+    const categorySlug = params.category || '';
+    const currentPage = Number(params.page) || 1;
+    const limit = 16; 
+
+    // 🟢 KEY STABILITY: Forces a clean swap when the page/category changes
+    const suspenseKey = `${categorySlug}-${currentPage}`;
 
     return (
         <main className="relative min-h-screen pb-24 overflow-hidden bg-white">
@@ -20,96 +23,142 @@ export default async function ProductsServerPage({ searchParams }) {
             <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#FBB6E6]/15 blur-[100px] rounded-full -z-10 translate-x-1/4 -translate-y-1/4" />
             <div className="absolute top-20 left-0 w-[300px] h-[300px] bg-[#3E442B]/5 blur-[80px] rounded-full -z-10 -translate-x-1/4" />
             
-            {/* 🟢 Refined Compact Header */}
             <section className="relative px-6 pb-10 text-center pt-28 md:pt-36 md:pb-14">
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white text-[#EA638C] text-[8px] font-black uppercase tracking-[0.4em] mb-6 shadow-sm border border-[#FBB6E6]/40">
                     <Sparkles size={10} fill="currentColor" className="animate-pulse" /> 
-                    {categorySlug ? categorySlug.replace('-', ' ') : 'Curated Collection'}
+                    {categorySlug ? categorySlug.replace(/-/g, ' ') : 'Curated Collection'}
                 </div>
 
                 <div className="max-w-2xl mx-auto">
                     <h1 className="text-4xl md:text-5xl lg:text-6xl italic font-black tracking-tighter text-[#3E442B] uppercase leading-none">
                         The <span className="text-[#EA638C] not-italic">Materials</span> Shop
                     </h1>
-                    
-                    <div className="flex items-center justify-center gap-3 mt-5">
-                        <div className="h-[1px] w-6 bg-[#3E442B]/20" />
-                        <p className="text-[9px] font-bold tracking-[0.5em] text-gray-400 uppercase">
-                            Premium Wholesale • 2026
-                        </p>
-                        <div className="h-[1px] w-6 bg-[#3E442B]/20" />
-                    </div>
                 </div>
             </section>
 
-            {/* 🟢 Catalog Container */}
-            <div className="mx-auto md:px-8 max-w-7xl">
-                <Suspense fallback={<ProductSkeleton />}>
-                    <ProductDataWrapper categorySlug={categorySlug} />
+            {/* 🟢 CLS FIX: min-h prevents footer from jumping up while loading */}
+            <div className="mx-auto md:px-8 max-w-7xl min-h-[70vh]">
+                <Suspense key={suspenseKey} fallback={<ProductSkeleton />}>
+                    <ProductDataWrapper 
+                        categorySlug={categorySlug} 
+                        page={currentPage} 
+                        limit={limit} 
+                    />
                 </Suspense>
             </div>
         </main>
     );
 }
 
-async function ProductDataWrapper({ categorySlug }) {
+async function ProductDataWrapper({ categorySlug, page, limit }) {
     await mongodb();
-    await silentInventoryHeal();
 
+    const allCategories = await Category.find({}).lean();
     let filterId = null;
 
-    // 1. Get all categories once to have a name-to-ID map
-    const allCategories = await Category.find({}).lean();
-
-    // 2. Convert Slug back to ID for Database Query
     if (categorySlug) {
         const foundCategory = allCategories.find(c => c.slug === categorySlug);
-        if (foundCategory) {
-            filterId = foundCategory._id.toString();
-        }
+        if (foundCategory) filterId = foundCategory._id.toString();
     }
 
-    // 3. Get raw products
-    const { products: rawProducts, success } = await getProducts(false, filterId);
+    // 🟢 DATA FETCH: Passing all 4 required arguments now
+    const { products: rawProducts, success, totalCount } = await getProducts(false, filterId, page, limit);
     
-    // 4. THE FIX: Manually inject names into the product objects
-    let products = [];
-    if (success && rawProducts) {
-        // Convert Mongoose documents to plain objects
-        const plainProducts = JSON.parse(JSON.stringify(rawProducts));
-        
-        products = plainProducts.map(p => {
-            // Find the parent category object
-            const matchedCat = allCategories.find(c => 
-                String(c._id) === String(p.category)
-            );
-
-            // Find the specific subcategory name from the parent's subCategories array
-            const matchedSub = matchedCat?.subCategories?.find(s => 
-                String(s._id) === String(p.subCategory)
-            );
-
-            return {
-                ...p,
-                // Ensure these fields exist so ProductCard can see them
-                categoryName: p.categoryName || matchedCat?.name || "Collection",
-                subCategoryName: p.subCategoryName || matchedSub?.name || ""
-            };
-        });
-    }
-
-    if (products.length === 0) {
+    if (!success || !rawProducts || rawProducts.length === 0) {
         return (
             <div className="py-24 text-center bg-white border border-dashed border-[#FBB6E6]/40 rounded-[3rem]">
                 <Sparkles size={24} className="mx-auto mb-4 text-[#EA638C]/20" />
                 <p className="text-[9px] font-black tracking-[0.3em] text-gray-400 uppercase leading-relaxed">
-                    No treasures found in this category. <br/> New arrivals imminent.
+                    No treasures found. <br/> New arrivals imminent.
                 </p>
             </div>
         );
     }
 
-    return <ProductCatalog initialProducts={products} />;
+    // Sanitize and map category names
+    const products = JSON.parse(JSON.stringify(rawProducts)).map(p => {
+        const matchedCat = allCategories.find(c => String(c._id) === String(p.category));
+        const matchedSub = matchedCat?.subCategories?.find(s => String(s._id) === String(p.subCategory));
+        return {
+            ...p,
+            categoryName: p.categoryName || matchedCat?.name || "Collection",
+            subCategoryName: p.subCategoryName || matchedSub?.name || ""
+        };
+    });
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    const getPageNumbers = () => {
+        const pages = [];
+        const range = 1; 
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= page - range && i <= page + range)) {
+                pages.push(i);
+            } else if (pages[pages.length - 1] !== "...") {
+                pages.push("...");
+            }
+        }
+        return pages;
+    };
+
+    return (
+        <>
+            {/* 🟢 RENDER FIX: The 'key' ensures the catalog component refreshes data correctly */}
+            <ProductCatalog key={`catalog-page-${page}`} initialProducts={products} />
+            
+            {totalPages > 1 && (
+                <div className="flex flex-col items-center justify-center gap-8 mt-24 mb-10">
+                    <div className="flex items-center gap-2 p-2 bg-gray-50/50 backdrop-blur-xl rounded-[2.5rem] border border-gray-100 shadow-sm">
+                        
+                        {/* Previous Button */}
+                        <Link 
+                            href={`?${categorySlug ? `category=${categorySlug}&` : ''}page=${Math.max(1, page - 1)}`}
+                            scroll={false}
+                            className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${page === 1 ? 'opacity-20 pointer-events-none' : 'bg-white text-[#3E442B] shadow-sm hover:text-[#EA638C] active:scale-95'}`}
+                        >
+                            <ChevronLeft size={18} />
+                        </Link>
+
+                        {/* Numbered Navigation */}
+                        <div className="flex items-center gap-1 px-2">
+                            {getPageNumbers().map((p, i) => (
+                                p === "..." ? (
+                                    <span key={`dots-${i}`} className="px-2 text-gray-300 font-bold">...</span>
+                                ) : (
+                                    <Link
+                                        key={p}
+                                        href={`?${categorySlug ? `category=${categorySlug}&` : ''}page=${p}`}
+                                        scroll={false}
+                                        className={`min-w-[44px] h-11 flex flex-col items-center justify-center rounded-full text-[11px] font-black transition-all duration-300 active:scale-90 ${
+                                            page === p 
+                                            ? 'bg-[#3E442B] text-white shadow-lg' 
+                                            : 'text-gray-400 hover:text-[#EA638C] hover:bg-white'
+                                        }`}
+                                    >
+                                        {page === p && <span className="text-[6px] uppercase tracking-tighter opacity-60 leading-none mb-0.5">Pg</span>}
+                                        {p}
+                                    </Link>
+                                )
+                            ))}
+                        </div>
+
+                        {/* Next Button */}
+                        <Link 
+                            href={`?${categorySlug ? `category=${categorySlug}&` : ''}page=${Math.min(totalPages, page + 1)}`}
+                            scroll={false}
+                            className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${page === totalPages ? 'opacity-20 pointer-events-none' : 'bg-[#3E442B] text-white shadow-md hover:bg-[#EA638C] active:scale-95'}`}
+                        >
+                            <ChevronRight size={18} />
+                        </Link>
+                    </div>
+
+                    <p className="text-[8px] font-black text-gray-300 uppercase tracking-[0.4em]">
+                        Catalogue Discovery <span className="mx-2 opacity-30">•</span> {totalCount} Materials
+                    </p>
+                </div>
+            )}
+        </>
+    );
 }
 
 function ProductSkeleton() {

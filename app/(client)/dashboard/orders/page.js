@@ -4,7 +4,65 @@ import { useEffect, useState } from "react";
 import { getUserOrders } from "@/actions/order";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ChevronRight, Clock, Package, CheckCircle, Truck, AlertCircle } from "lucide-react";
+import { ChevronRight, Clock, Package, CheckCircle, Truck, AlertCircle, Loader2 } from "lucide-react";
+
+// 🟢 NEW: Isolated Tracking Section
+const PathaoTracker = ({ consignmentId }) => {
+  const [trackingData, setTrackingData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchTracking = async (e) => {
+    e.preventDefault(); // Prevent Link navigation if nested
+    if (!consignmentId) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/track-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ consignmentId }),
+      });
+      const result = await res.json();
+      setTrackingData(result.data);
+    } catch (err) {
+      console.error("Tracking Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!consignmentId) return null;
+
+  return (
+    <div className="mt-6 pt-6 border-t border-dashed border-gray-100">
+      <div className="flex items-center justify-between bg-[#FBB6E6]/10 p-4 rounded-[2rem] border border-[#FBB6E6]/20">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm">
+            <Truck size={18} className="text-[#EA638C]" />
+          </div>
+          <div>
+            <p className="text-[9px] font-black text-[#EA638C] uppercase tracking-widest">Courier Tracking</p>
+            <p className="text-[11px] font-bold text-[#3E442B]">Pathao ID: {consignmentId}</p>
+          </div>
+        </div>
+
+        {trackingData ? (
+          <div className="text-right">
+            <p className="text-[10px] font-black text-[#3E442B] uppercase">{trackingData.order_status}</p>
+            <p className="text-[8px] text-gray-400 uppercase">{trackingData.updated_at}</p>
+          </div>
+        ) : (
+          <button 
+            onClick={fetchTracking}
+            disabled={loading}
+            className="bg-[#3E442B] text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-tighter hover:bg-[#EA638C] transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {loading ? <Loader2 size={12} className="animate-spin" /> : "Live Status"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function OrdersListPage() {
   const { data: session } = useSession();
@@ -66,7 +124,6 @@ export default function OrdersListPage() {
           </div>
         ) : (
           orders.map(order => {
-            const paymentProgress = (order.paidAmount / order.totalAmount) * 100;
             const isDue = order.dueAmount > 0;
             
             return (
@@ -97,7 +154,6 @@ export default function OrdersListPage() {
                             {item.productName || "Product"}
                           </p>
                           <p className="text-[8px] font-bold text-[#EA638C] uppercase">
-                             {/* 🟢 Using the correct variant name mapping */}
                              {item.variant?.name && item.variant.name !== "Default" ? `${item.variant.name} • ` : ""}
                              {item.quantity} units
                           </p>
@@ -135,6 +191,9 @@ export default function OrdersListPage() {
                     </Link>
                   </div>
                 </div>
+
+                {/* 🟢 Live Tracking Section Added Here */}
+                <PathaoTracker consignmentId={order.consignmentId} />
               </div>
             );
           })

@@ -9,7 +9,7 @@ import EmailCopy from "@/components/admin/EmailCopy";
 import Surprise from "@/models/Surprise";
 import RewardHistory from "@/models/RewardHistory";
 import dbConnect from "@/lib/mongodb";
-import { ShieldCheck, Users, Zap, SearchX } from "lucide-react"; 
+import { ShieldCheck, Users, Zap, SearchX, ChevronLeft, ChevronRight } from "lucide-react"; 
 import Link from "next/link";
 import Image from "next/image";
 
@@ -20,6 +20,8 @@ export default async function AdminUsersPage({ searchParams }) {
   const resolvedSearchParams = await searchParams;
   const activeFilter = resolvedSearchParams?.filter || "all";
   const query = resolvedSearchParams?.query?.toLowerCase() || "";
+  const currentPage = Number(resolvedSearchParams?.page) || 1;
+  const itemsPerPage = 5;
   
   await dbConnect();
   const { users: rawUsers, success, error } = await getUsers();
@@ -73,17 +75,29 @@ export default async function AdminUsersPage({ searchParams }) {
     return matchesTier && matchesSearch;
   });
 
-  // 🟢 FIXED IMAGE RESOLUTION LOGIC
+  // --- PAGINATION LOGIC ---
+  const totalUsers = filteredUsers.length;
+  const totalPages = Math.ceil(totalUsers / itemsPerPage);
+  const paginatedUsers = filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const range = 1;
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= currentPage - range && i <= currentPage + range)) {
+        pages.push(i);
+      } else if (pages[pages.length - 1] !== "...") {
+        pages.push("...");
+      }
+    }
+    return pages;
+  };
+
   const getProfileImage = (user) => {
     if (user.image) {
-      // If it's a full URL (like Google/Facebook), return it directly
-      if (user.image.startsWith('http')) {
-        return user.image;
-      }
-      // If it's just a Cloudinary ID, prefix it
+      if (user.image.startsWith('http')) return user.image;
       return `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'diabqgzyo'}/image/upload/${user.image}`;
     }
-    // Fallback to UI Avatars
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=EA638C&color=fff&bold=true`;
   };
 
@@ -119,25 +133,22 @@ export default async function AdminUsersPage({ searchParams }) {
         </div>
       </div>
 
-      {filteredUsers.length === 0 ? (
+      {totalUsers === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center bg-white rounded-[3rem] border border-gray-100 shadow-sm">
           <SearchX className="w-16 h-16 mb-4 text-gray-100" />
           <h3 className="text-lg font-black text-[#3E442B] uppercase italic">No Matches Found</h3>
         </div>
       ) : (
         <>
-          {/* --- 📱 MOBILE CARD LAYOUT (< 768px) --- */}
-          <div className="grid grid-cols-1 gap-6 md:hidden pb-20">
-            {filteredUsers.map((user, index) => {
+          {/* --- MOBILE CARD LAYOUT --- */}
+          <div className="grid grid-cols-1 gap-6 md:hidden pb-10">
+            {paginatedUsers.map((user, index) => {
               const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(user.email);
               const isVIP = user.isVIP || (user.totalSpent >= VIP_THRESHOLD);
               const displayImg = getProfileImage(user);
               return (
-                <div 
-                  key={user._id} 
-                  className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-xl shadow-gray-200/40 relative overflow-visible"
-                  style={{ zIndex: filteredUsers.length - index }}
-                >
+                <div key={user._id} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-xl shadow-gray-200/40 relative overflow-visible" style={{ zIndex: paginatedUsers.length - index }}>
+                  {/* ... mobile card content remains identical ... */}
                   <div className="flex items-start justify-between mb-6">
                     <div className="flex items-center gap-3">
                       <div className={`relative w-12 h-12 rounded-2xl overflow-hidden border-2 flex items-center justify-center bg-[#EA638C] ${isVIP ? 'border-yellow-400 shadow-md' : 'border-white shadow-sm'}`}>
@@ -153,18 +164,13 @@ export default async function AdminUsersPage({ searchParams }) {
                        <span className="text-sm font-black text-[#3E442B]">৳{user.totalSpent?.toLocaleString() || 0}</span>
                     </div>
                   </div>
-
                   <div className="space-y-5 p-5 bg-gray-50/80 rounded-[2.2rem] border border-gray-100/50 overflow-visible">
                     <div className="flex flex-col gap-2.5">
                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Surprise Reward</span>
                        <div className="w-full pr-4 overflow-visible">
                          {!isSuperAdmin ? (
                            <div className="relative scale-95 origin-left overflow-visible">
-                             <UserGiftActions 
-                                userId={user._id.toString()} 
-                                userName={user.name} 
-                                availableGifts={availableGifts} 
-                             />
+                             <UserGiftActions userId={user._id.toString()} userName={user.name} availableGifts={availableGifts} />
                            </div>
                          ) : (
                            <div className="flex items-center gap-2 text-purple-600 bg-purple-100 px-4 py-2 rounded-xl w-fit">
@@ -174,7 +180,6 @@ export default async function AdminUsersPage({ searchParams }) {
                          )}
                        </div>
                     </div>
-
                     <div className="flex items-center justify-between gap-4 border-t border-gray-200/60 pt-4">
                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Access Level</span>
                        <div className="scale-90 origin-right">
@@ -182,7 +187,6 @@ export default async function AdminUsersPage({ searchParams }) {
                        </div>
                     </div>
                   </div>
-
                   <div className="flex items-center justify-end gap-3 mt-6 pr-2">
                       <UserDetailsModal user={user} orders={user.orders || []} totalSpent={user.totalSpent || 0} lastGiftAt={user.lastGiftAt} lastGiftTitle={user.lastGiftTitle} lastGiftValue={user.lastGiftValue} />
                       <DeleteUserButton userId={user._id.toString()} userName={user.name} isSuperAdmin={isSuperAdmin} />
@@ -192,7 +196,7 @@ export default async function AdminUsersPage({ searchParams }) {
             })}
           </div>
 
-          {/* --- 💻 DESKTOP TABLE LAYOUT (>= 768px) --- */}
+          {/* --- DESKTOP TABLE LAYOUT --- */}
           <div className="hidden md:block bg-white rounded-[2.5rem] shadow-2xl shadow-gray-200/50 border border-gray-100 overflow-visible">
             <table className="min-w-full border-separate divide-y divide-gray-100 table-auto border-spacing-0 overflow-visible">
               <thead className="bg-gray-50/50">
@@ -205,17 +209,12 @@ export default async function AdminUsersPage({ searchParams }) {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-50">
-                {filteredUsers.map((user, index) => {
+                {paginatedUsers.map((user, index) => {
                   const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(user.email);
                   const isVIP = user.isVIP || (user.totalSpent >= VIP_THRESHOLD);
                   const displayImg = getProfileImage(user);
-
                   return (
-                    <tr 
-                      key={user._id} 
-                      className="transition-all duration-300 group hover:bg-[#EA638C]/5 relative overflow-visible"
-                      style={{ zIndex: filteredUsers.length - index, position: 'relative' }}
-                    >
+                    <tr key={user._id} className="transition-all duration-300 group hover:bg-[#EA638C]/5 relative overflow-visible" style={{ zIndex: paginatedUsers.length - index, position: 'relative' }}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <div className={`relative flex-shrink-0 w-10 h-10 rounded-xl overflow-hidden border bg-white flex items-center justify-center ${isVIP ? 'border-yellow-400 shadow-sm' : 'border-gray-100'}`}>
@@ -261,6 +260,49 @@ export default async function AdminUsersPage({ searchParams }) {
               </tbody>
             </table>
           </div>
+
+          {/* --- BRANDED PAGINATION --- */}
+          {totalPages > 1 && (
+            <div className="flex flex-col items-center justify-center gap-6 mt-16 pb-10">
+              <div className="flex items-center gap-2 p-1.5 bg-white shadow-xl rounded-full border border-gray-50">
+                <Link
+                  href={`?page=${Math.max(1, currentPage - 1)}&filter=${activeFilter}&query=${query}`}
+                  className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${currentPage === 1 ? 'opacity-20 pointer-events-none' : 'bg-gray-50 text-[#3E442B] hover:text-[#EA638C]'}`}
+                >
+                  <ChevronLeft size={18} />
+                </Link>
+
+                <div className="flex items-center gap-1 px-1">
+                  {getPageNumbers().map((p, i) => (
+                    p === "..." ? (
+                      <span key={`dots-${i}`} className="px-2 text-gray-300 font-bold text-xs">...</span>
+                    ) : (
+                      <Link
+                        key={p}
+                        href={`?page=${p}&filter=${activeFilter}&query=${query}`}
+                        className={`w-11 h-11 flex flex-col items-center justify-center rounded-full text-[10px] font-black transition-all ${
+                          currentPage === p ? 'bg-[#3E442B] text-white shadow-lg' : 'text-gray-400 hover:text-[#EA638C]'
+                        }`}
+                      >
+                        {currentPage === p && <span className="text-[5px] uppercase tracking-tighter opacity-60 leading-none">Pg</span>}
+                        {p}
+                      </Link>
+                    )
+                  ))}
+                </div>
+
+                <Link
+                  href={`?page=${Math.min(totalPages, currentPage + 1)}&filter=${activeFilter}&query=${query}`}
+                  className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${currentPage === totalPages ? 'opacity-20 pointer-events-none' : 'bg-[#3E442B] text-white hover:bg-[#EA638C] shadow-lg'}`}
+                >
+                  <ChevronRight size={18} />
+                </Link>
+              </div>
+              <p className="text-[8px] font-black text-gray-300 uppercase tracking-[0.4em]">
+                Member Registry <span className="mx-2 opacity-30">•</span> {totalUsers} Records
+              </p>
+            </div>
+          )}
         </>
       )}
     </div>

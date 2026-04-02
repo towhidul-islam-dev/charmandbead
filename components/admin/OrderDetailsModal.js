@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
-import { X, MessageSquare, MapPin, Printer, Wallet, Truck, Copy, Check, Info, CreditCard, Hash, ShieldCheck } from "lucide-react";
+import { X, MessageSquare, MapPin, Printer, Wallet, Truck, Copy, Check, Info, CreditCard, Hash, ShieldCheck, Loader2, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 
 // Brand Colors: Green: #3E442B | Pink: #EA638C | lightPink: #FBB6E6
@@ -10,6 +10,32 @@ import toast from "react-hot-toast";
 export default function OrderDetailsModal({ order, onClose }) {
   const [includePrice, setIncludePrice] = useState(true);
   const [copied, setCopied] = useState(false);
+  
+  // 🟢 NEW: Pathao Tracking State
+  const [pathaoData, setPathaoData] = useState(null);
+  const [loadingPathao, setLoadingPathao] = useState(false);
+
+  const fetchPathaoStatus = async () => {
+    if (!order?.trackingNumber) return;
+    setLoadingPathao(true);
+    try {
+      const res = await fetch('/api/track-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ consignmentId: order.trackingNumber }),
+      });
+      const result = await res.json();
+      if (result.success) setPathaoData(result.data);
+    } catch (err) {
+      console.error("Pathao Modal Sync Error:", err);
+    } finally {
+      setLoadingPathao(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPathaoStatus();
+  }, [order?.trackingNumber]);
 
   if (!order) return null;
 
@@ -22,7 +48,6 @@ export default function OrderDetailsModal({ order, onClose }) {
   const dueAmount = order.dueAmount || (totalAmount - paidAmount);
   const isPartial = dueAmount > 0;
 
-  // 🟢 NEW: Calculation for Net Revenue (Total minus gateway fees)
   const netRevenue = totalAmount - mfsFee;
 
   const handleCopyAddress = () => {
@@ -50,7 +75,6 @@ export default function OrderDetailsModal({ order, onClose }) {
             Order <span className="text-[#EA638C]">Analytics</span>
           </h2>
           <div className="flex items-center gap-4">
-            {/* 🟢 NEW: Transaction Status Pulse */}
             <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1 rounded-full">
               <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${!isPartial ? 'bg-green-400' : 'bg-[#FBB6E6]'}`}></span>
               <span className="text-[7px] font-black text-white uppercase tracking-tighter">{!isPartial ? "Paid" : "Pending"}</span>
@@ -85,7 +109,7 @@ export default function OrderDetailsModal({ order, onClose }) {
            </div>
         </div>
 
-        {/* 🟢 NEW: TRANSACTION ID BAR (Operational Hub) */}
+        {/* TRANSACTION ID BAR */}
         {order.transactionId && (
           <div className="flex items-center justify-between px-6 py-2 bg-[#F3FDF5] border-b border-green-100">
             <div className="flex items-center gap-2">
@@ -99,8 +123,30 @@ export default function OrderDetailsModal({ order, onClose }) {
           </div>
         )}
 
+        {/* 🟢 NEW: LOGISTICS INTELLIGENCE (Pathao Integration) */}
+        {order.trackingNumber && (
+          <div className="px-6 py-3 bg-white border-b border-gray-50">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-[#EA638C]/10 text-[#EA638C] rounded-lg">
+                  <Truck size={12} />
+                </div>
+                <div>
+                  <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest">Live Courier Status</p>
+                  <p className="text-[9px] font-black text-[#3E442B] uppercase flex items-center gap-2">
+                    {loadingPathao ? <Loader2 size={10} className="animate-spin" /> : (pathaoData?.order_status || "Checking...")}
+                  </p>
+                </div>
+              </div>
+              <button onClick={fetchPathaoStatus} className="p-2 text-gray-300 hover:text-[#3E442B] transition-colors">
+                <RefreshCw size={12} className={loadingPathao ? "animate-spin" : ""} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* COURIER UTILITY BAR */}
-        <div className="flex justify-end flex-shrink-0 px-6 py-2 bg-white">
+        <div className="flex justify-end flex-shrink-0 px-6 py-1 bg-white">
           <button 
              onClick={handleCopyAddress}
              className="flex items-center gap-2 px-3 py-2 text-[8px] font-black uppercase hover:text-[#EA638C] transition-all text-[#3E442B]/50"
@@ -162,7 +208,6 @@ export default function OrderDetailsModal({ order, onClose }) {
                 </div>
               )}
 
-              {/* 🟢 NEW: NET REVENUE DISPLAY (For Admin Internal Use) */}
               <div className="flex justify-between text-[8px] font-bold uppercase text-gray-300 italic">
                 <span className="flex items-center gap-1"><Info size={9}/> Estimated Net</span>
                 <span>৳{netRevenue.toLocaleString()}</span>

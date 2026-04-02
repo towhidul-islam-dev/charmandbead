@@ -6,7 +6,7 @@ import { getOrderById, updateOrderStatus } from "@/actions/order";
 import { 
   ArrowLeft, Printer, Truck, Package, User, MapPin, 
   Calendar, CheckCircle, Clock, 
-  Phone, Mail, ChevronDown, Save, ExternalLink, FileText, ShoppingBag
+  Phone, Mail, ChevronDown, Save, ExternalLink, FileText, ShoppingBag, Loader2, RefreshCw
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -14,6 +14,76 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
 const statusSteps = ["Pending", "Processing", "Shipped", "Delivered"];
+
+// 🟢 NEW: Pathao Live Status Component (Keeps logic isolated)
+const PathaoLiveIntelligence = ({ trackingId }) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchPathaoStatus = async () => {
+    if (!trackingId) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/track-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ consignmentId: trackingId }),
+      });
+      const result = await res.json();
+      if (result.success) setData(result.data);
+    } catch (err) {
+      console.error("Pathao Sync Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPathaoStatus();
+  }, [trackingId]);
+
+  if (!trackingId) return null;
+
+  return (
+    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border-2 border-[#EA638C]/10 mb-8 overflow-hidden relative">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-[#3E442B] text-white rounded-xl shadow-lg shadow-[#3E442B]/20">
+            <Truck size={18} />
+          </div>
+          <h3 className="text-[10px] font-black uppercase text-[#3E442B] tracking-widest">Courier Intelligence</h3>
+        </div>
+        <button 
+          onClick={fetchPathaoStatus} 
+          disabled={loading}
+          className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400"
+        >
+          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-3 py-2">
+          <Loader2 size={14} className="animate-spin text-[#EA638C]" />
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Syncing with Pathao Servers...</span>
+        </div>
+      ) : data ? (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+            <p className="text-[8px] font-black text-gray-400 uppercase mb-1 tracking-widest">Current Status</p>
+            <p className="text-[11px] font-black text-[#EA638C] uppercase">{data.order_status || "Unknown"}</p>
+          </div>
+          <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+            <p className="text-[8px] font-black text-gray-400 uppercase mb-1 tracking-widest">Last Update</p>
+            <p className="text-[10px] font-bold text-[#3E442B]">{data.updated_at || "Waiting for scan..."}</p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-[9px] font-bold text-gray-300 italic uppercase">Logistics data currently unavailable...</p>
+      )}
+    </div>
+  );
+};
 
 export default function OrderDetailsPage() {
   const { id } = useParams();
@@ -61,7 +131,7 @@ export default function OrderDetailsPage() {
   const downloadProductList = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
-    doc.setTextColor(62, 68, 43); // #3E442B
+    doc.setTextColor(62, 68, 43); 
     doc.text("PRODUCT PACKING LIST", 14, 22);
     
     doc.setFontSize(10);
@@ -189,7 +259,10 @@ export default function OrderDetailsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
             
-            {/* LOGISTICS */}
+            {/* 🟢 NEW: LIVE PATHAO INTELLIGENCE */}
+            <PathaoLiveIntelligence trackingId={order.trackingNumber} />
+
+            {/* LOGISTICS (Logic preserved exactly) */}
             {(order.status === "Shipped" || order.status === "Delivered") && (
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border-2 border-dashed border-[#EA638C]/30 flex flex-col md:flex-row items-center gap-6">
                 <div className="w-14 h-14 bg-[#FBB6E6] text-[#EA638C] rounded-2xl flex items-center justify-center">
@@ -212,7 +285,7 @@ export default function OrderDetailsPage() {
               </div>
             )}
 
-            {/* PACKAGE ITEMS */}
+            {/* PACKAGE ITEMS (Logic preserved exactly) */}
             <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-10 py-8 border-b border-gray-50 bg-gray-50/30">
                 <h3 className="text-xs font-black uppercase tracking-widest text-[#3E442B]">Bag Contents ({order.items.length})</h3>
@@ -251,7 +324,7 @@ export default function OrderDetailsPage() {
             </div>
           </div>
 
-          {/* SIDEBAR */}
+          {/* SIDEBAR (Logic preserved exactly) */}
           <div className="space-y-6">
             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm relative overflow-hidden">
               <div className="relative z-10">
