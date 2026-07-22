@@ -14,7 +14,7 @@ const OrderSchema = new mongoose.Schema(
         productName: String,
         variant: {
           name: String,
-          image: String,
+          image: String, // 🟢 Variant image URL saved properly
           size: String,
           variantId: mongoose.Schema.Types.ObjectId, 
         },
@@ -29,7 +29,7 @@ const OrderSchema = new mongoose.Schema(
     dueAmount: { type: Number, default: 0 },
     
     // 🟢 Financial Ledger Support
-    mobileBankingFee: { type: Number, default: 0 }, // To store gateway processing fees
+    mobileBankingFee: { type: Number, default: 0 },
     
     shippingAddress: Object,
     status: {
@@ -40,7 +40,7 @@ const OrderSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ["Unpaid", "Partially Paid", "Paid"],
+      enum: ["Unpaid", "Partially Paid", "Paid", "Verifying"],
       default: "Unpaid",
     },
 
@@ -49,21 +49,25 @@ const OrderSchema = new mongoose.Schema(
       type: String, 
       enum: [
         "bKash", "Nagad", "Rocket", "Upay", 
-        "Card", "Bank Transfer", "COD", "Other"
+        "Card", "Bank Transfer", "COD", "Other",
+        "Partial_COD_BanglaQR", "Full_PrePay_BanglaQR"
       ],
       default: "COD",
       index: true 
     },
     
     // The Unique Transaction ID from Gateway
-    tran_id: { type: String, unique: true, sparse: true },
+    tran_id: { type: String, sparse: true },
 
     paymentDetails: {
-      source: String,           // Phone number (MFS) or Account Number (Bank)
-      cardType: String,         // Visa, Mastercard, AMEX (if Card)
+      source: String,           // 🟢 Phone number (MFS) or Account Number
+      sourcePhone: String,      // 🟢 Alias for sender phone number (prevents UI missing key)
+      transactionId: String,    // 🟢 Transaction ID copy inside paymentDetails
+      gatewayStatus: String,    // Gateway verification state
+      cardType: String,         // Visa, Mastercard, AMEX
       cardIssuer: String,       // City Bank, EBL, etc.
       bankApp: String,          // City Touch, EBL Skybank, etc.
-      gatewayResponse: Object,  // Raw JSON from SSLCommerz/AmarPay
+      gatewayResponse: Object,  // Raw JSON
     },
 
     trackingNumber: { type: String, default: "" },
@@ -91,10 +95,12 @@ OrderSchema.index({
   "shippingAddress.name": "text",
   "shippingAddress.phone": "text",
   "tran_id": "text",
-  "paymentDetails.source": "text"
+  "paymentDetails.source": "text",
+  "paymentDetails.sourcePhone": "text",
+  "paymentDetails.transactionId": "text"
 });
 
-// --- 🛡️ NEXT.JS 16 SERIALIZATION FIX ---
+// --- 🛡️ NEXT.JS SERIALIZATION FIX ---
 OrderSchema.set('toJSON', {
   transform: (doc, ret) => {
     ret._id = ret._id.toString();

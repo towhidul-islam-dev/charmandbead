@@ -5,10 +5,10 @@ import { useEffect, useState, Suspense, useRef } from "react";
 import { getOrderById } from "@/actions/order";
 import { processOrderStock } from "@/actions/inventoryWatcher";
 import { sendInvoiceEmail } from "@/actions/emailActions";
-import { createInAppNotification } from "@/actions/inAppNotifications"; 
+import { createInAppNotification } from "@/actions/inAppNotifications"; // 🟢 Import the action
 import { useCart } from "@/Context/CartContext";
 import { useSession } from "next-auth/react";
-import { useNotifications } from "@/Context/NotificationContext"; 
+import { useNotifications } from "@/Context/NotificationContext"; // 🟢 Used for instant UI update
 import Link from "next/link";
 import {
   CheckCircle,
@@ -20,8 +20,6 @@ import {
   AlertCircle,
   CreditCard,
   MailCheck,
-  ShieldCheck,
-  Clock,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -54,7 +52,7 @@ const getBase64ImageFromURL = (url) => {
 function SuccessContent() {
   const { deleteSelectedItems } = useCart();
   const { data: session } = useSession();
-  const { addNotification } = useNotifications(); 
+  const { addNotification } = useNotifications(); // 🟢 For context update
   const searchParams = useSearchParams();
   const router = useRouter();
   const orderId = searchParams.get("orderId");
@@ -109,6 +107,7 @@ function SuccessContent() {
 
           setOrder(data);
 
+          // 🟢 1. Trigger In-App Notification (Private)
           const isPaidInFull = (data.dueAmount ?? 0) <= 0;
           const orderTag = data._id.slice(-6).toUpperCase();
           
@@ -119,21 +118,23 @@ function SuccessContent() {
                 ? `Your payment for Order #INV-${orderTag} was successful.` 
                 : `Order #INV-${orderTag} received. Residual COD: ৳${data.dueAmount.toLocaleString()}`,
               type: "payment",
-              recipientId: session?.user?.id || "GUEST", 
+              recipientId: session?.user?.id || "GUEST", // 🟢 Linked to current user session
               link: `/dashboard/orders`
             });
 
             if (dbNotify.success) {
-              addNotification(dbNotify.data); 
+              addNotification(dbNotify.data); // Update bell icon immediately
             }
           } catch (notifyErr) {
             console.error("Notification Error:", notifyErr);
           }
 
+          // 2. Process Inventory Stock
           if (!data.stockProcessed) {
             await processOrderStock(data);
           }
 
+          // 3. Clear Cart Items
           const saved = localStorage.getItem("checkoutItems");
           if (saved) {
             const purchasedItems = JSON.parse(saved);
@@ -142,6 +143,7 @@ function SuccessContent() {
             localStorage.removeItem("checkoutItems");
           }
 
+          // 4. Send Email
           const recipientEmail = data.email || data.shippingAddress?.email || session?.user?.email;
           if (recipientEmail) {
             try {
@@ -162,6 +164,7 @@ function SuccessContent() {
 
           setIsProcessed(true);
 
+          // 5. AUTO-DOWNLOAD INVOICE
           setTimeout(() => {
             generateInvoice(data);
           }, 2500);
@@ -169,7 +172,7 @@ function SuccessContent() {
       } catch (error) {
         console.error("Error fetching order:", error);
       } finally {
-        loading(false);
+        setLoading(false);
       }
     }
 
@@ -184,8 +187,8 @@ function SuccessContent() {
 
     try {
       const doc = new jsPDF();
-      const brandPink = [234, 99, 140]; 
-      const brandGreen = [62, 68, 43]; 
+      const brandPink = [234, 99, 140]; // #EA638C
+      const brandGreen = [62, 68, 43]; // #3E442B
       const darkColor = [31, 41, 55];
       const lightGray = [156, 163, 175];
 
@@ -200,6 +203,7 @@ function SuccessContent() {
         }),
       );
 
+      // Header
       doc.setFillColor(brandGreen[0], brandGreen[1], brandGreen[2]);
       doc.rect(0, 0, 210, 40, "F");
       doc.setTextColor(255, 255, 255);
@@ -217,6 +221,7 @@ function SuccessContent() {
       doc.setFont("helvetica", "bold");
       doc.text(isPaid ? "FULLY PAID" : "PARTIAL COD", 172.5, 23, { align: "center" });
 
+      // Invoice Details
       doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
       doc.setFontSize(12);
       doc.text("INVOICE DETAILS", 14, 55);
@@ -327,47 +332,16 @@ function SuccessContent() {
 
   const subtotal = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const isPartial = (order.dueAmount ?? 0) > 0;
-  
-  // 🟢 Detect if the payment path relies on manual Bangla QR token tracking
-  const isManualReview = 
-    order.paymentStatus === "Verifying" || 
-    order.paymentMethod?.includes("BanglaQR");
 
   return (
     <div className="max-w-2xl px-6 py-20 mx-auto">
-      <div className="bg-white border-2 border-gray-50 p-8 shadow-2xl rounded-[3rem] text-center overflow-hidden relative">
-        
-        {/* 🟢 Accent block highlighting manual queue items */}
-        {isManualReview && (
-          <div className="absolute top-0 left-0 right-0 h-2 bg-[#EA638C]" />
-        )}
-
-        <div className="flex items-center justify-center w-20 h-20 mx-auto mb-6 rounded-full bg-green-50 relative">
+      <div className="bg-white border-2 border-gray-50 p-8 shadow-2xl rounded-[3rem] text-center overflow-hidden">
+        <div className="flex items-center justify-center w-20 h-20 mx-auto mb-6 rounded-full bg-green-50">
           <CheckCircle size={40} className="text-green-500" />
-          {isManualReview && (
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#3E442B] text-white rounded-full flex items-center justify-center shadow">
-              <Clock size={12} />
-            </div>
-          )}
         </div>
 
-        {/* 🟢 Conditional text adjustments for verification route */}
-        <h1 className="mb-2 text-3xl italic font-black tracking-tighter text-[#3E442B] uppercase">
-          {isManualReview ? "Request Accepted" : "Registry Success"}
-        </h1>
+        <h1 className="mb-2 text-3xl italic font-black tracking-tighter text-[#3E442B] uppercase">Registry Success</h1>
         <p className="mb-4 font-bold text-gray-400">Order #INV-{order._id.slice(-6).toUpperCase()}</p>
-
-        {/* 🟢 High-visibility notification block explaining manual timeline */}
-        {isManualReview && (
-          <div className="mb-8 p-6 bg-[#FAFAFA] border-2 border-[#3E442B]/10 rounded-[2rem] text-left space-y-2">
-            <div className="flex items-center gap-2 text-[#3E442B] font-black text-[10px] uppercase tracking-wider">
-              <ShieldCheck size={16} className="text-[#EA638C]" /> Admin Verification Queue
-            </div>
-            <p className="text-xs text-gray-500 font-medium leading-relaxed">
-              Your manual Bangla QR payment token details were submitted correctly. An administrator will verify the transaction registry reference on our ledger system and approve your order shortly.
-            </p>
-          </div>
-        )}
 
         <div className="flex flex-col items-center gap-3 mb-8">
           <div className="inline-flex items-center gap-2 px-5 py-2 border border-gray-100 rounded-full bg-gray-50">
@@ -421,16 +395,12 @@ function SuccessContent() {
               <span className="flex items-center gap-2"><Wallet size={14} /> Paid Online:</span>
               <span>- ৳{(order.paidAmount ?? 0).toLocaleString()}</span>
             </div>
-            <div className="flex justify-between p-5 rounded-2xl transition-all relative overflow-hidden bg-[#3E442B] text-white shadow-xl">
+            <div className={`flex justify-between p-5 rounded-2xl transition-all ${isPartial ? "bg-[#3E442B] text-white shadow-xl" : "bg-gray-100 text-gray-400"}`}>
               <div className="flex items-center gap-2">
-                <Banknote size={18} className="text-[#FBB6E6]" />
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                  {isManualReview ? "Pending Audit Verification:" : isPartial ? "Residual COD:" : "Balance Due:"}
-                </span>
+                <Banknote size={18} className={isPartial ? "text-[#FBB6E6]" : ""} />
+                <span className="text-[10px] font-black uppercase tracking-widest">{isPartial ? "Residual COD:" : "Balance Due:"}</span>
               </div>
-              <span className="text-lg font-black">
-                ৳{(isManualReview ? order.paidAmount : order.dueAmount ?? 0).toLocaleString()}
-              </span>
+              <span className="text-lg font-black">৳{(order.dueAmount ?? 0).toLocaleString()}</span>
             </div>
           </div>
         </div>

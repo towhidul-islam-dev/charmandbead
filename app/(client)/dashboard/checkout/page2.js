@@ -37,7 +37,7 @@ export default function CheckoutPage() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [userAddress, setUserAddress] = useState(null);
   const [phone, setPhone] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("COD"); // "COD" or "Online"
+  const [paymentMethod, setPaymentMethod] = useState("COD"); // "COD" (Partial) or "Online" (Full Pre-pay)
   const [shippingCharge, setShippingCharge] = useState(130);
 
   // Bangla QR Fields
@@ -65,7 +65,7 @@ export default function CheckoutPage() {
           const isInsideDhaka = DHAKA_ZONES.some(
             (zone) =>
               city.toLowerCase().includes(zone.toLowerCase()) ||
-              city.toLowerCase() === "dhaka"
+              city.toLowerCase() === "dhaka",
           );
           setShippingCharge(isInsideDhaka ? 80 : 130);
         }
@@ -75,7 +75,7 @@ export default function CheckoutPage() {
     initCheckout();
   }, [cart, router, status, session]);
 
-  // Dynamic Calculations
+  // --- DYNAMIC CALCULATIONS ---
   const { subtotal, totalSavings } = useMemo(() => {
     return checkoutItems.reduce(
       (acc, item) => {
@@ -92,6 +92,8 @@ export default function CheckoutPage() {
   }, [checkoutItems]);
 
   const finalTotal = subtotal + shippingCharge;
+  
+  // Base for fee dynamically switches depending on selected plan
   const baseForFee = paymentMethod === "COD" ? shippingCharge : finalTotal;
   const mobileBankingFee = baseForFee * 0.015;
   const payableNow = baseForFee + mobileBankingFee;
@@ -114,6 +116,7 @@ export default function CheckoutPage() {
       return;
     }
 
+    // Explicit Bangla QR Validations
     if (!qrSenderPhone || !bdPhoneRegex.test(qrSenderPhone)) {
       toast.error("Valid sender account/phone number is required for payment confirmation");
       return;
@@ -128,59 +131,20 @@ export default function CheckoutPage() {
 
       const orderData = {
         userId: session?.user?.id,
-        items: checkoutItems.map((item) => {
-          // 🟢 1. Resolve Variant Name
-          const variantName = typeof item.variant === "string" 
-            ? item.variant 
-            : (item.variant?.name || item.color || "Default");
-
-          // 🟢 2. Precise Variant Image Resolution Logic
-          let variantImg = 
-            item.variant?.image || 
-            item.variant?.img || 
-            item.variant?.thumbnail || 
-            item.variantImage || 
-            item.selectedVariant?.image;
-
-          // If image not directly on variant, try matching by index from product images array
-          if (!variantImg) {
-            const imagesArr = item.images || item.product?.images || item.productImages;
-            if (Array.isArray(imagesArr) && imagesArr.length > 0) {
-              let idx = -1;
-              if (typeof item.variantIndex === "number") idx = item.variantIndex;
-              else if (typeof item.variant === "number") idx = item.variant;
-              else if (typeof variantName === "string") {
-                const parsed = parseInt(variantName, 10);
-                if (!isNaN(parsed)) idx = parsed - 1; // Converts 1-based "1" or "2" to 0-based array index
-              }
-
-              if (idx >= 0 && idx < imagesArr.length) {
-                variantImg = imagesArr[idx];
-              } else {
-                variantImg = imagesArr[0]; // Fallback to first image in product array
-              }
-            }
-          }
-
-          // Final fallback if no array or variant match exists
-          if (!variantImg) {
-            variantImg = item.image || item.thumbnail || item.product?.imageUrl || null;
-          }
-
-          return {
-            productId: item.productId || item._id,
-            productName: item.name || item.productName || "Product",
-            variant: {
-              name: variantName,
-              size: item.size || "N/A",
-              variantId: item.variantId || item.variant?._id || null,
-              image: variantImg, 
-            },
-            quantity: Number(item.quantity),
-            price: Number(item.price), 
-            sku: item.sku || "C&B-GEN",
-          };
-        }),
+        items: checkoutItems.map((item) => ({
+          productId: item.productId || item._id,
+          productName: item.name || item.productName || "Product",
+          variant: {
+            name: item.color || item.variant?.name || "Default",
+            size: item.size || "N/A",
+            variantId: item.variantId || item.variant?._id || null,
+            // 🟢 FIXED: Persisting the specific variant thumbnail image to the database payload
+            image: item.variant?.image || item.image || null, 
+          },
+          quantity: Number(item.quantity),
+          price: Number(item.price), 
+          sku: item.sku || "C&B-GEN",
+        })),
         totalAmount: Number((finalTotal + mobileBankingFee).toFixed(2)),
         paidAmount: Number(payableNow.toFixed(2)),
         dueAmount: Number(dueOnDelivery.toFixed(2)),
@@ -190,7 +154,7 @@ export default function CheckoutPage() {
         phone: phone,
         paymentDetails: {
           sourcePhone: qrSenderPhone,
-          transactionId: qrTxnId.trim(),
+          transactionId: qrTxnId,
           gatewayStatus: "MANUAL_VERIFICATION" 
         },
         paymentStatus: "Verifying",
@@ -222,9 +186,10 @@ export default function CheckoutPage() {
     );
 
   return (
+    // 🟢 Changed pt-32 to pt-6 to remove the huge top white space gap
     <div className="relative grid max-w-6xl grid-cols-1 gap-12 px-4 py-10 pt-6 mx-auto lg:grid-cols-3 bg-[#FAFAFA]">
       <div className="space-y-10 lg:col-span-2">
-        {/* SECTION 01: DESTINATION */}
+        {/* --- SECTION 01: DESTINATION --- */}
         <section className="space-y-6">
           <h2 className="flex items-center gap-3 text-2xl font-bold font-serif text-[#3E442B] uppercase italic">
             <MapPin className="text-[#EA638C]" size={28} /> 01. Destination
@@ -257,7 +222,7 @@ export default function CheckoutPage() {
           </div>
         </section>
 
-        {/* SECTION 02: PAYMENT PLAN */}
+        {/* --- SECTION 02: PAYMENT PLAN --- */}
         <section className="space-y-6">
           <h2 className="flex items-center gap-3 text-2xl font-bold font-serif text-[#3E442B] uppercase italic">
             <CreditCard className="text-[#EA638C]" size={28} /> 02. Payment Plan
@@ -284,13 +249,14 @@ export default function CheckoutPage() {
           </div>
         </section>
 
-        {/* SECTION 03: LIVE BANGLA QR VERIFICATION */}
+        {/* --- SECTION 03: LIVE BANGLA QR VERIFICATION --- */}
         <section className="space-y-6 border-2 border-[#3E442B] p-8 rounded-[2.5rem] bg-white transition-all">
           <h2 className="flex items-center gap-3 text-xl font-bold font-serif text-[#3E442B] uppercase italic">
             <QrCode className="text-[#EA638C]" size={24} /> Islami Bank Bangla QR Payment
           </h2>
           
           <div className="flex flex-col items-center gap-6 md:flex-row md:items-start">
+            {/* QR Frame Container */}
             <div className="bg-[#FBB6E6] p-4 rounded-[2rem] text-center w-full md:w-auto shrink-0">
               <div className="inline-block p-2 bg-white rounded-2xl shadow-sm">
                 <img 
@@ -304,6 +270,7 @@ export default function CheckoutPage() {
               </p>
             </div>
 
+            {/* Verification Inputs & Messaging */}
             <div className="w-full space-y-4">
               <p className="text-xs italic text-gray-500 font-medium">
                 Please scan the QR code above with your app to complete your payment of{" "}
@@ -345,7 +312,8 @@ export default function CheckoutPage() {
         </section>
       </div>
 
-      {/* SIDEBAR: SUMMARY */}
+      {/* --- SIDEBAR: SUMMARY --- */}
+      {/* 🟢 Changed lg:top-32 to lg:top-6 so the sidebar floats seamlessly with the tighter design layout */}
       <div className="h-auto lg:sticky lg:top-6">
         <div className="bg-[#3E442B] border-t-8 border-[#EA638C] rounded-[3rem] p-6 md:p-8 shadow-2xl w-full overflow-hidden">
           <h2 className="mb-6 font-serif text-xl italic font-bold text-white uppercase">Checkout Summary</h2>
@@ -404,7 +372,7 @@ export default function CheckoutPage() {
               {loading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
             </div>
             <span className="flex-1 font-black text-center">
-              {loading ? "SUBMITTING..." : "PLACE ORDER"}
+              {loading ? "SUBMITTING..." : "SUBMIT ORDER FOR VERIFICATION"}
             </span>
           </button>
         </div>

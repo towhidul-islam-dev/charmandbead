@@ -1,6 +1,6 @@
 import CartPage from '@/components/CartPage';
 import { getProducts } from '@/lib/data';
-import { ShoppingCart, LayoutDashboard, RefreshCcw, AlertCircle, Eye } from 'lucide-react';
+import { ShoppingCart, LayoutDashboard, RefreshCcw, AlertCircle, Eye, Database } from 'lucide-react';
 
 export const metadata = {
     title: 'Admin Cart Review | J-Materials',
@@ -21,17 +21,13 @@ export default async function AdminCartReviewPage() {
         );
     }
 
-    // 🛠️ FIX: Serialize MongoDB objects to plain JSON strings/objects
     const sanitizedProducts = JSON.parse(JSON.stringify(products));
 
     const formattedItems = sanitizedProducts.map(item => {
-        // If the product has variants, we use the first one for the preview
         const firstVariant = item.variants?.[0] || {};
-        
         return {
             ...item,
             productId: item._id,
-            // Create a uniqueKey so the Cart checkbox logic works
             uniqueKey: `${item._id}-preview`, 
             name: item.name,
             price: firstVariant.price || item.price,
@@ -45,42 +41,61 @@ export default async function AdminCartReviewPage() {
     });
 
     return (
-        <div className="pb-20">
+        <div className="pb-20 max-w-[1600px] mx-auto px-4 lg:px-8">
+            {/* TOP HEADER SECTION */}
             <div className="flex flex-col justify-between gap-4 mb-8 md:flex-row md:items-end">
                 <div>
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="bg-[#EA638C]/10 px-2 py-1 rounded-lg">
-                            <span className="text-[10px] font-black text-[#EA638C] uppercase tracking-widest flex items-center gap-1">
-                                <Eye size={12} /> Live Preview Mode
+                    <div className="flex items-center gap-2 mb-3">
+                        <div className="bg-[#EA638C]/10 px-3 py-1 rounded-full border border-[#EA638C]/20">
+                            <span className="text-[10px] font-black text-[#EA638C] uppercase tracking-[0.2em] flex items-center gap-1.5">
+                                <Eye size={12} className="animate-pulse" /> Live Preview Mode
                             </span>
                         </div>
                     </div>
-                    <h1 className="text-3xl italic font-black tracking-tighter text-gray-900 uppercase">
+                    <h1 className="text-4xl italic font-black tracking-tighter text-[#3E442B] uppercase">
                         Cart <span className="text-[#EA638C]">Review</span>
                     </h1>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <div className="px-5 py-2 text-right bg-white border border-gray-100 shadow-sm rounded-2xl">
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Database</p>
-                        <p className="text-sm font-black text-gray-800">{products.length} Products</p>
+                <div className="flex items-center gap-4">
+                    <div className="px-6 py-3 text-right bg-white border border-gray-100 shadow-sm rounded-2xl">
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center justify-end gap-1">
+                           <Database size={10} /> MongoDB Status
+                        </p>
+                        <p className="text-lg font-black text-[#3E442B]">{products.length} Products Loaded</p>
                     </div>
                 </div>
             </div>
 
-            <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden">
-                <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100 bg-gray-50/80">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                        previewing_cart_ui.sys
-                    </span>
-                </div>
-                
-                <div className="p-4 md:p-10 lg:p-14 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px]">
-                    <div className="bg-white rounded-[2rem] shadow-2xl border border-gray-100 overflow-hidden">
-                        {/* 🟢 PASSING THE DATA HERE */}
-                        <CartPage initialItems={formattedItems} isAdminPreview={true} />
-                    </div>
-                </div>
+            {/* MAIN CONTAINER: Full-width alignment */}
+<div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+    {/* System Label Bar */}
+    <div className="flex items-center justify-between px-8 py-4 border-b border-gray-100 bg-gray-50/50">
+        <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">
+            sys.render_full_width_bypass
+        </span>
+    </div>
+    
+    {/* 🛠️ THE FIX: Force all children to ignore max-width limits */}
+    <div className="w-full bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:24px_24px] p-4 md:p-8">
+        <div className="w-full bg-white rounded-[2rem] shadow-2xl border border-gray-100 overflow-hidden">
+            
+            {/* The class below ([&_*]:max-w-none) is a "Nuclear Option". 
+                It forces EVERY element inside to stop shrinking to a center column.
+            */}
+            <div className="w-full [&_*]:max-w-none [&_.container]:max-w-none [&_.container]:w-full">
+                <CartPage initialItems={formattedItems} isAdminPreview={true} />
+            </div>
+
+        </div>
+    </div>
+</div>
+
+            {/* FOOTER ACTION (OPTIONAL) */}
+            <div className="flex justify-center mt-8">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">
+                    End of Production Preview — Charm & Bead 2026
+                </p>
             </div>
         </div>
     );

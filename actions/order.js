@@ -24,8 +24,8 @@ export async function createOrder(orderData) {
       paidAmount, 
       dueAmount, 
       paymentMethod, 
-      deliveryCharge,      // 🟢 Captured from frontend
-      mobileBankingFee: frontendFee, // 🟢 Captured from frontend (1.5%)
+      deliveryCharge,
+      mobileBankingFee: frontendFee,
       tran_id, 
       paymentDetails 
     } = orderData;
@@ -33,17 +33,16 @@ export async function createOrder(orderData) {
     if (!userId) throw new Error("User ID is required.");
 
     // --- 🟢 FINANCIAL CALCULATIONS ---
-    // Use the 1.5% fee from the frontend, or fallback to 1.5% calculation if missing
     let finalMobileBankingFee = frontendFee || 0;
     if (!finalMobileBankingFee && paymentMethod !== "COD") {
       finalMobileBankingFee = Number((totalAmount * 0.015).toFixed(2)); 
     }
 
-    // 1. Idempotency Check (Prevent double orders on rapid clicks)
+    // 1. Idempotency Check
     const existingOrder = await Order.findOne({
       user: userId,
       totalAmount: totalAmount,
-      createdAt: { $gte: new Date(Date.now() - 30 * 1000) } // 30 second window
+      createdAt: { $gte: new Date(Date.now() - 30 * 1000) }
     }).session(session);
 
     if (existingOrder) {
@@ -51,20 +50,24 @@ export async function createOrder(orderData) {
       return { success: true, orderId: existingOrder._id.toString() };
     }
 
-    // 2. Create the Order
-    // Note: item.price here is already the Wholesale/Discounted price from the Cart Context
+    // 2. Extract Payment Identifiers safely
+    const extractedTxnId = paymentDetails?.transactionId || tran_id || orderData.transactionId || "";
+    const extractedSenderPhone = paymentDetails?.sourcePhone || orderData.senderPhone || "";
+
+    // 3. Create the Order
     const [newOrder] = await Order.create([{
         user: userId, 
         items: items.map(i => ({
           product: i.productId || i.product || i._id,
           productName: i.productName || i.name || "Unnamed Product",
           variant: {
-              name: i.variant?.name || i.color || "Default",
-              size: i.size || "N/A",
-              variantId: i.variantId || i.variant?._id
+            name: i.variant?.name || i.color || "Default",
+            size: i.size || i.variant?.size || "N/A",
+            variantId: i.variantId || i.variant?._id,
+            image: i.variant?.image || i.image || null // 🟢 FIX 1: Save Variant Image URL explicitly
           },
           quantity: Number(i.quantity),
-          price: Number(i.price), // 🟢 Stores the specific price paid (wholesale or retail)
+          price: Number(i.price),
           sku: i.sku || "N/A"
         })),
         shippingAddress,
@@ -74,16 +77,18 @@ export async function createOrder(orderData) {
         paymentMethod,
         deliveryCharge: Number(deliveryCharge || 0),
         mobileBankingFee: Number(finalMobileBankingFee), 
-        tran_id,
+        tran_id: extractedTxnId, // 🟢 FIX 2: Ensure Top-Level Txn ID is populated
         paymentDetails: {
-          source: phone,
-          ...paymentDetails
+          sourcePhone: extractedSenderPhone, // 🟢 FIX 3: Preserves the customer's payment phone
+          transactionId: extractedTxnId,    // 🟢 FIX 4: Explicit transaction ID inside paymentDetails
+          deliveryPhone: phone,              // Saved separately for reference
+          gatewayStatus: paymentDetails?.gatewayStatus || "MANUAL_VERIFICATION"
         },
         status: "Pending",
         isStockReduced: false
     }], { session });
 
-    // 3. Inventory Logic (Reduces stock based on wholesale quantities)
+    // 4. Inventory Logic (Reduces stock based on wholesale quantities)
     const productDeductions = items.reduce((acc, item) => {
       const pId = (item.productId || item.product || item._id).toString();
       const name = item.productName || item.name || "Product"; 
@@ -111,7 +116,6 @@ export async function createOrder(orderData) {
           if (target.stock < orderedVar.qty) throw new Error(`Stock error for ${data.name}: ${target.color} is out of stock.`);
           target.stock -= orderedVar.qty;
         });
-        // Update master stock sum
         product.stock = product.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
       } else {
         if (product.stock < data.totalQty) throw new Error(`Stock error: ${data.name} is out of stock.`);
@@ -120,7 +124,6 @@ export async function createOrder(orderData) {
 
       await product.save({ session });
 
-      // Log the inventory change for admin tracking
       await InventoryLog.create([{
         productId,
         productName: data.name,
@@ -130,10 +133,8 @@ export async function createOrder(orderData) {
       }], { session });
     }
 
-    // Mark stock as successfully reduced
     await Order.updateOne({ _id: newOrder._id }, { isStockReduced: true }, { session });
     
-    // Send notification to the user
     await createInAppNotification({
       title: "Order Placed! 🎉",
       message: `Your wholesale-ready order ${orderRef} has been received.`,
@@ -144,7 +145,6 @@ export async function createOrder(orderData) {
 
     await session.commitTransaction();
 
-    // Revalidate paths for real-time admin updates
     revalidatePath("/admin/products");
     revalidatePath("/admin/orders");
     revalidatePath("/dashboard/orders");

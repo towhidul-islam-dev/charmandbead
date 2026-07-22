@@ -10,7 +10,6 @@ import {
   PlusIcon,
   ShoppingBagIcon,
   PlusIcon as PlusSmallIcon,
-  FireIcon,
   CheckBadgeIcon
 } from "@heroicons/react/24/outline";
 
@@ -24,7 +23,7 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
     clearCart,
   } = useCart();
 
-  // Prioritize globalCart from Context as it contains the dynamic wholesale pricing logic
+  // Prioritize globalCart from Context as it contains dynamic wholesale pricing
   const cart = useMemo(() => {
     return globalCart.length > 0 ? globalCart : initialItems;
   }, [globalCart, initialItems]);
@@ -40,12 +39,12 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
   const groupedCart = useMemo(() => {
     const groups = {};
     cart.forEach((item) => {
-      const pId = item.productId;
+      const pId = item.productId || item._id;
       if (!groups[pId]) {
         groups[pId] = {
           productId: pId,
-          name: item.name,
-          imageUrl: item.imageUrl,
+          name: item.name || item.productName,
+          imageUrl: item.imageUrl || item.image,
           variants: [],
         };
       }
@@ -99,14 +98,40 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
     addToCart(item, delta);
   };
 
+  // 🟢 FIX: Properly attach variant images before passing data to Checkout
+  // 🟢 FIX: Save items to localStorage, delete them from Cart Context, and navigate
   const handleCheckout = () => {
     if (selectedItems.length === 0 || isPending) return;
     setIsPending(true); 
     try {
-      const itemsToPurchase = cart.filter((item) => selectedItems.includes(item.uniqueKey));
+      // 1. Filter selected items & attach variant image fields
+      const itemsToPurchase = cart
+        .filter((item) => selectedItems.includes(item.uniqueKey))
+        .map((item) => {
+          const img = item.imageUrl || item.image || item.variant?.image || null;
+          return {
+            ...item,
+            variantImage: img,
+            image: img,
+            variant: {
+              ...(typeof item.variant === "object" ? item.variant : {}),
+              name: typeof item.variant === "string" ? item.variant : (item.variant?.name || item.color || "Default"),
+              image: img,
+            }
+          };
+        });
+
+      // 2. Save snapshot to localStorage for CheckoutPage
       localStorage.setItem("checkoutItems", JSON.stringify(itemsToPurchase));
+
+      // 3. Remove selected items from global CartContext immediately
+      deleteSelectedItems(selectedItems);
+
+      // 4. Reset selected state & Navigate to checkout
+      setSelectedItems([]);
       router.push("/dashboard/checkout");
     } catch (err) {
+      console.error("CHECKOUT_PREP_ERROR:", err);
       setIsPending(false);
     }
   };
@@ -168,8 +193,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                     const remainingStock = variant.stock - variant.quantity;
                     const isLowStock = remainingStock <= moq;
                     const isMaxed = remainingStock < moq;
-
-                    // 🟢 Check if this variant has reached a wholesale tier
                     const isDiscounted = variant.price < (variant.basePrice || variant.price);
 
                     return (
@@ -178,7 +201,7 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                           <div className="flex items-center gap-4 md:col-span-5">
                             <input type="checkbox" className="w-4 h-4 accent-[#EA638C] cursor-pointer" checked={isSelected} onChange={() => toggleSelect(variant.uniqueKey)} />
                             <div className="relative w-16 h-16 overflow-hidden bg-white border border-gray-100 shadow-sm rounded-2xl shrink-0">
-                                <img src={variant.imageUrl} className="object-cover w-full h-full" alt={variant.color} />
+                              <img src={variant.imageUrl || variant.image} className="object-cover w-full h-full" alt={variant.color || "Variant"} />
                             </div>
                             <div className="flex flex-col">
                               <div className="flex items-center gap-2">
@@ -187,7 +210,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                                 <span className="text-[10px] font-black uppercase text-[#3E442B]">{variant.size}</span>
                               </div>
 
-                              {/* 🟢 Wholesale Badge */}
                               {isDiscounted && (
                                 <div className="flex items-center gap-1 mt-1 animate-bounce">
                                   <CheckBadgeIcon className="w-3 h-3 text-[#3E442B]" />
@@ -208,16 +230,15 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
 
                           <div className="flex items-center justify-between gap-10 md:col-span-7 md:justify-end">
                             <div className="flex flex-col items-center gap-1">
-                                <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-1.5 px-4 shadow-sm">
+                              <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-1.5 px-4 shadow-sm">
                                 <button onClick={() => handleQuantityUpdate(variant, -moq)} disabled={variant.quantity <= moq} className="p-1 text-[#3E442B] hover:text-[#EA638C] disabled:opacity-20"><MinusIcon className="w-4 h-4 stroke-[3px]" /></button>
                                 <span className="w-6 text-sm font-black text-center text-[#3E442B]">{variant.quantity}</span>
                                 <button onClick={() => handleQuantityUpdate(variant, moq)} disabled={variant.quantity + moq > variant.stock} className="p-1 text-[#3E442B] hover:text-[#EA638C] disabled:opacity-10"><PlusIcon className="w-4 h-4 stroke-[3px]" /></button>
-                                </div>
+                              </div>
                             </div>
 
                             <div className="text-right min-w-[120px]">
                               <div className="flex flex-col">
-                                {/* 🟢 Strikethrough Price */}
                                 {isDiscounted && (
                                   <span className="text-[10px] text-gray-300 line-through font-bold">
                                     ৳{(variant.basePrice * variant.quantity).toLocaleString()}

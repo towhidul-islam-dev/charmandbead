@@ -1,7 +1,11 @@
+"use client";
+
 import Link from 'next/link';
+import { useSession } from "next-auth/react";
 import { Facebook, Instagram, Twitter, Mail, MapPin, Phone, ArrowUpRight, HelpCircle } from 'lucide-react';
 
 export default function Footer() {
+    const { data: session } = useSession();
     const currentYear = new Date().getFullYear();
 
     return (
@@ -21,7 +25,6 @@ export default function Footer() {
                                 Elevating the craft of jewelry making since 2018. Source certified gems and rare components for your next masterpiece.
                             </p>
                         </div>
-                        {/* ... Newsletters input ... */}
                     </div>
 
                     {/* --- 2. NAVIGATION --- */}
@@ -31,7 +34,6 @@ export default function Footer() {
                             <ul className="space-y-4 text-sm font-semibold">
                                 <li><Link href="/products" className="text-gray-200 hover:text-white">All Materials</Link></li>
                                 <li><Link href="/featured" className="text-gray-200 hover:text-white">Rare Finds</Link></li>
-                                {/* <li><Link href="/wholesale" className="text-gray-200 hover:text-white">Wholesale</Link></li> */}
                             </ul>
                         </div>
 
@@ -39,11 +41,9 @@ export default function Footer() {
                             <h4 className="text-xs font-black uppercase tracking-widest text-[#EA638C] mb-6 underline decoration-[#EA638C]/30 underline-offset-8">Experience</h4>
                             <ul className="space-y-4 text-sm font-semibold">
                                 <li><Link href="/about" className="text-gray-200 hover:text-white">Our Story</Link></li>
-                                {/* 🟢 FAQ RESTORED HERE */}
                                 <li><Link href="/faq" className="flex items-center gap-1 text-gray-200 hover:text-white">FAQ</Link></li>
                                 <li><Link href="/reviews" className="text-gray-200 hover:text-white">Community</Link></li>
-                                {/* 🟢 REFUND PAGE LINKED CORRECTLY HERE */}
-                                {<li><Link href="/policy/refund" className="text-gray-200 hover:text-[#FBB6E6]">Returns Policy</Link></li>}
+                                <li><Link href="/policy/refund" className="text-gray-200 hover:text-[#FBB6E6]">Returns Policy</Link></li>
                             </ul>
                         </div>
 
@@ -53,7 +53,6 @@ export default function Footer() {
                                 <li className="flex items-center gap-3"><MapPin size={16} className="text-[#EA638C]" /> Dhaka, BD</li>
                                 <li className="flex items-center gap-3"><Mail size={16} className="text-[#EA638C]" /> charmandbeads.official@gmail.com</li>
                             </ul>
-                            {/* ... Socials ... */}
                         </div>
                     </div>
                 </div>
@@ -65,12 +64,16 @@ export default function Footer() {
                     </p>
                     
                     <div className="flex gap-8 text-[11px] font-black uppercase tracking-tighter">
-                        {/* 🟢 PRIVACY & TERMS PATHS UPDATED */}
                         <Link href="/policy/privacy" className="transition-colors hover:text-white">Privacy</Link>
                         <Link href="/policy/terms" className="transition-colors hover:text-white">Terms</Link>
-                        <Link href="/admin" className="hover:text-[#EA638C] transition-colors">Staff Access</Link>
+                        
+                        {/* 🟢 STAFF ACCESS: Only visible if user is admin */}
+                        {session?.user?.role === "admin" && (
+                            <Link href="/admin" className="hover:text-[#EA638C] transition-colors border-l border-white/10 pl-8">
+                                Staff Access
+                            </Link>
+                        )}
                     </div>
-                    {/* ... Payments ... */}
                 </div>
             </div>
         </footer>

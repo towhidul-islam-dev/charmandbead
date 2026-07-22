@@ -6,11 +6,13 @@ import { getAllOrders, updateOrderStatus, deleteOrder } from "@/actions/order";
 import {
   Search, Eye, CheckSquare, Square, 
   ChevronLeft, ChevronRight, Trash2, 
-  Package, Banknote, CreditCard, Info, Trash,
-  Wallet, Receipt, Truck, Loader2
+  CreditCard, Banknote, Info, Trash,
+  Wallet, Receipt, Truck, Loader2, PhoneCall, Hash
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrderDetailsModal from "@/components/admin/OrderDetailsModal";
+
+// Brand Colors: Green: #3E442B | Pink: #EA638C | LightPink: #FBB6E6
 
 // 🟢 Helper for Pathao Status (Internal)
 const PathaoStatus = ({ trackingId }) => {
@@ -29,8 +31,11 @@ const PathaoStatus = ({ trackingId }) => {
         });
         const result = await res.json();
         if (result.success) setStatus(result.data.order_status);
-      } catch (err) { console.error(err); }
-      finally { setLoading(false); }
+      } catch (err) { 
+        console.error("Pathao status fetch error:", err); 
+      } finally { 
+        setLoading(false); 
+      }
     };
     fetchStatus();
   }, [trackingId]);
@@ -44,7 +49,9 @@ const PathaoStatus = ({ trackingId }) => {
   );
 };
 
+// 🟢 Status styling dictionary
 const statusColors = {
+  Verifying: "bg-purple-50 text-purple-600 border-purple-100",
   Pending: "bg-amber-50 text-amber-600 border-amber-100",
   Processing: "bg-[#FBB6E6]/30 text-[#EA638C] border-[#FBB6E6]",
   Shipped: "bg-blue-50 text-blue-600 border-blue-100",
@@ -64,9 +71,12 @@ export default function AdminOrdersPage() {
   const [totalOrders, setTotalOrders] = useState(0);
 
   const getProductImage = (item) => {
-    if (item.product?.imageUrl) return item.product.imageUrl;
-    if (item.variant?.image) return item.variant.image;
-    return "/placeholder.png";
+    return (
+      item.variant?.image || 
+      item.variant?.img || 
+      item.product?.imageUrl || 
+      "/placeholder.png"
+    );
   };
 
   const fetchOrders = useCallback(async () => {
@@ -77,9 +87,15 @@ export default function AdminOrdersPage() {
         setOrders(res.orders);
         setTotalPages(res.totalPages);
         setTotalOrders(res.totalOrders);
+
+        // Keep viewing modal data in sync if open
+        setViewingOrder(prev => prev ? res.orders.find(o => o._id === prev._id) || prev : null);
       }
-    } catch (error) { toast.error("Failed to load orders"); }
-    finally { setLoading(false); }
+    } catch (error) { 
+      toast.error("Failed to load orders"); 
+    } finally { 
+      setLoading(false); 
+    }
   }, [currentPage, searchTerm, statusFilter]);
 
   useEffect(() => {
@@ -92,6 +108,8 @@ export default function AdminOrdersPage() {
     if (res.success) {
       toast.success(`Updated to ${newStatus}`);
       fetchOrders();
+    } else {
+      toast.error(res.message || "Failed to update status");
     }
   };
 
@@ -100,11 +118,13 @@ export default function AdminOrdersPage() {
     const res = await deleteOrder(orderId);
     if (res.success) {
       toast.success("Order deleted");
+      setSelectedOrders(prev => prev.filter(id => id !== orderId));
       fetchOrders();
+    } else {
+      toast.error(res.message || "Failed to delete order");
     }
   };
 
-  // Pagination Logic Helper
   const getPageNumbers = () => {
     const pages = [];
     const range = 1;
@@ -118,11 +138,12 @@ export default function AdminOrdersPage() {
     return pages;
   };
 
-  const gridLayout = "md:grid-cols-[50px_110px_1.4fr_110px_180px_170px_120px]";
+  const gridLayout = "md:grid-cols-[50px_110px_1.4fr_110px_200px_170px_120px]";
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] pt-8 pb-32 px-4 md:px-12">
       <div className="mx-auto max-w-7xl">
+        {/* HEADER SECTION */}
         <div className="flex flex-col gap-4 mb-10 md:flex-row md:items-end md:justify-between px-2">
           <div className="flex flex-col">
             <div className="flex items-center gap-3">
@@ -137,24 +158,34 @@ export default function AdminOrdersPage() {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row w-full md:w-auto">
-            <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }} className="px-6 py-4 bg-white rounded-2xl text-[10px] font-black uppercase shadow-sm border-none outline-none text-[#3E442B] cursor-pointer ring-1 ring-gray-100">
+            <select 
+              value={statusFilter} 
+              onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }} 
+              className="px-6 py-4 bg-white rounded-2xl text-[10px] font-black uppercase shadow-sm border-none outline-none text-[#3E442B] cursor-pointer ring-1 ring-gray-100"
+            >
               <option value="All">All Statuses</option>
               {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <div className="relative w-full md:w-80">
               <Search className="absolute text-[#3E442B]/20 -translate-y-1/2 left-5 top-1/2" size={18} />
-              <input type="text" placeholder="Search Orders..." className="w-full pl-14 pr-6 py-4 rounded-2xl border-none shadow-sm text-[10px] font-black uppercase outline-none ring-1 ring-gray-100 focus:ring-2 focus:ring-[#EA638C]/20" onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} />
+              <input 
+                type="text" 
+                placeholder="Search Orders..." 
+                className="w-full pl-14 pr-6 py-4 rounded-2xl border-none shadow-sm text-[10px] font-black uppercase outline-none ring-1 ring-gray-100 focus:ring-2 focus:ring-[#EA638C]/20" 
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} 
+              />
             </div>
           </div>
         </div>
 
+        {/* ORDER TABLE CONTAINER */}
         <div className="bg-white rounded-[2.5rem] shadow-xl shadow-[#3E442B]/5 border border-gray-100 overflow-hidden">
           <div className={`hidden px-10 py-6 border-b border-gray-50 md:grid ${gridLayout} items-center bg-gray-50/30 text-[9px] font-black uppercase text-[#3E442B]/40 tracking-[0.2em]`}>
               <span>Sel.</span>
               <span>Identity</span>
               <span>Customer</span>
               <span>Items</span>
-              <span>Payment</span>
+              <span>Payment Details</span>
               <span>Status</span>
               <span className="text-right">Action</span>
           </div>
@@ -163,6 +194,11 @@ export default function AdminOrdersPage() {
             {orders.length > 0 ? (
               orders.map((order) => {
                 const isPaid = (order.dueAmount ?? 0) <= 0;
+                
+                // 🟢 Robust extraction of sender phone & txn ID
+                const qrSender = order.paymentDetails?.sourcePhone || order.paymentDetails?.source;
+                const qrTxnId = order.paymentDetails?.transactionId || order.tran_id || order.transactionId;
+
                 return (
                   <div key={order._id} className={`flex flex-col md:grid ${gridLayout} p-6 md:px-10 md:py-8 items-center border-b border-gray-50 hover:bg-[#FBB6E6]/5 transition-all group relative`}>
                     <button onClick={() => setSelectedOrders(prev => prev.includes(order._id) ? prev.filter(id => id !== order._id) : [...prev, order._id])}>
@@ -178,52 +214,88 @@ export default function AdminOrdersPage() {
                     </div>
 
                     <div className="flex items-center gap-3 py-4 md:py-0">
-                      <div className="w-10 h-10 rounded-xl bg-[#3E442B] flex items-center justify-center text-white font-black text-xs">{order.shippingAddress?.name?.charAt(0)}</div>
+                      <div className="w-10 h-10 rounded-xl bg-[#3E442B] flex items-center justify-center text-white font-black text-xs">
+                        {order.shippingAddress?.name?.charAt(0) || "C"}
+                      </div>
                       <div className="overflow-hidden">
-                        <p className="text-[10px] font-black uppercase text-[#3E442B] truncate">{order.shippingAddress?.name}</p>
-                        <p className="text-[9px] font-bold text-gray-400">{order.shippingAddress?.phone}</p>
+                        <p className="text-[10px] font-black uppercase text-[#3E442B] truncate">{order.shippingAddress?.name || "N/A"}</p>
+                        <p className="text-[9px] font-bold text-gray-400">{order.shippingAddress?.phone || "N/A"}</p>
                       </div>
                     </div>
 
                     <div className="flex -space-x-3 py-2 md:py-0">
-                      {order.items.slice(0, 3).map((item, i) => (
+                      {order.items?.slice(0, 3).map((item, i) => (
                         <div key={i} className="relative w-9 h-9 overflow-hidden bg-white border-2 border-white rounded-xl shadow-md z-[1]">
                           <Image src={getProductImage(item)} fill alt="item" className="object-cover" unoptimized />
                         </div>
                       ))}
                     </div>
 
+                    {/* 🟢 PAYMENT COLUMN */}
                     <div className="py-4 md:py-0">
                       <div className="flex items-center gap-2">
-                         <p className="text-sm font-black text-[#3E442B]">৳{order.totalAmount.toLocaleString()}</p>
-                         {order.mobileBankingFee > 0 && <Info size={12} className="text-[#EA638C]" />}
+                        <p className="text-sm font-black text-[#3E442B]">৳{order.totalAmount?.toLocaleString()}</p>
+                        {order.mobileBankingFee > 0 && <Info size={12} className="text-[#EA638C]" />}
                       </div>
-                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[8px] font-black uppercase mt-2 border ${isPaid ? 'bg-green-50 text-green-600 border-green-100' : 'bg-pink-50 text-[#EA638C] border-[#FBB6E6]'}`}>
+
+                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[8px] font-black uppercase mt-1.5 border ${isPaid ? 'bg-green-50 text-green-600 border-green-100' : 'bg-pink-50 text-[#EA638C] border-[#FBB6E6]'}`}>
                         {isPaid ? <CreditCard size={10}/> : <Banknote size={10}/>}
-                        {isPaid ? 'Settled' : `Due: ৳${order.dueAmount.toLocaleString()}`}
+                        {isPaid ? 'Settled' : `Due: ৳${order.dueAmount?.toLocaleString()}`}
                       </div>
+
+                      {/* Display MFS / QR details if present */}
+                      {(qrSender || qrTxnId) && (
+                        <div className="mt-2 p-2 bg-[#FBB6E6]/10 border border-[#FBB6E6]/40 rounded-xl space-y-0.5">
+                          {qrSender && (
+                            <p className="text-[9px] font-bold text-[#3E442B] flex items-center gap-1">
+                              <PhoneCall size={9} className="text-[#EA638C]" /> {qrSender}
+                            </p>
+                          )}
+                          {qrTxnId && (
+                            <p className="text-[9px] font-mono font-black text-[#EA638C] flex items-center gap-1">
+                              <Hash size={9} className="text-[#3E442B]" /> {qrTxnId}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="w-full py-2 md:w-auto md:pr-4">
-                      <select value={order.status} onChange={(e) => handleStatusChange(order._id, e.target.value)} className={`w-full md:w-32 text-[9px] font-black uppercase px-4 py-2.5 rounded-xl border-none appearance-none text-center cursor-pointer shadow-sm ${statusColors[order.status]}`}>
+                      <select 
+                        value={order.status} 
+                        onChange={(e) => handleStatusChange(order._id, e.target.value)} 
+                        className={`w-full md:w-32 text-[9px] font-black uppercase px-4 py-2.5 rounded-xl border-none appearance-none text-center cursor-pointer shadow-sm ${statusColors[order.status] || "bg-gray-50 text-gray-600"}`}
+                      >
                         {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
 
                     <div className="flex w-full gap-2 mt-4 md:mt-0 md:justify-end">
-                      <button onClick={() => setViewingOrder(order)} className="flex-1 md:flex-none p-3 bg-gray-50 text-[#3E442B] rounded-2xl hover:bg-[#3E442B] hover:text-white transition-all shadow-sm"><Eye size={18}/></button>
-                      <button onClick={() => handleDelete(order._id)} className="flex-1 md:flex-none p-3 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm"><Trash2 size={18}/></button>
+                      <button 
+                        onClick={() => setViewingOrder(order)} 
+                        className="flex-1 md:flex-none p-3 bg-gray-50 text-[#3E442B] rounded-2xl hover:bg-[#3E442B] hover:text-white transition-all shadow-sm"
+                      >
+                        <Eye size={18}/>
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(order._id)} 
+                        className="flex-1 md:flex-none p-3 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                      >
+                        <Trash2 size={18}/>
+                      </button>
                     </div>
                   </div>
                 );
               })
             ) : (
-              <div className="p-20 text-center text-gray-300 uppercase text-[10px] font-black tracking-widest">No orders found.</div>
+              <div className="p-20 text-center text-gray-300 uppercase text-[10px] font-black tracking-widest">
+                No orders found.
+              </div>
             )}
           </div>
         </div>
 
-        {/* --- BRAND-ALIGNED PAGINATION --- */}
+        {/* BRAND-ALIGNED PAGINATION */}
         {totalPages > 1 && (
           <div className="flex flex-col items-center justify-center gap-6 mt-16">
             <div className="flex items-center gap-2 p-1.5 bg-white shadow-xl rounded-full border border-gray-50">
@@ -268,14 +340,27 @@ export default function AdminOrdersPage() {
           </div>
         )}
 
+        {/* BULK ACTION BAR */}
         {selectedOrders.length > 0 && (
           <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-[90%] max-w-lg bg-[#3E442B] text-white p-5 rounded-[2.5rem] shadow-2xl flex items-center justify-between z-[100]">
-            <div className="flex flex-col ml-4"><span className="text-[9px] font-black uppercase text-[#FBB6E6] tracking-widest">Selection</span><span className="text-sm font-black">{selectedOrders.length} Records</span></div>
-            <button className="px-8 py-3.5 bg-[#EA638C] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg flex items-center gap-2"><Trash size={14} /> Wipe Data</button>
+            <div className="flex flex-col ml-4">
+              <span className="text-[9px] font-black uppercase text-[#FBB6E6] tracking-widest">Selection</span>
+              <span className="text-sm font-black">{selectedOrders.length} Records</span>
+            </div>
+            <button className="px-8 py-3.5 bg-[#EA638C] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg flex items-center gap-2">
+              <Trash size={14} /> Wipe Data
+            </button>
           </div>
         )}
 
-        {viewingOrder && <OrderDetailsModal key={viewingOrder._id} order={viewingOrder} onClose={() => setViewingOrder(null)} />}
+        {/* ORDER DETAILS MODAL */}
+        {viewingOrder && (
+          <OrderDetailsModal 
+            key={viewingOrder._id} 
+            order={viewingOrder} 
+            onClose={() => setViewingOrder(null)} 
+          />
+        )}
       </div>
     </div>
   );

@@ -5,17 +5,20 @@ import { useParams, useRouter } from "next/navigation";
 import { getOrderById, updateOrderStatus } from "@/actions/order";
 import { 
   ArrowLeft, Printer, Truck, Package, User, MapPin, 
-  Calendar, CheckCircle, Clock, 
-  Phone, Mail, ChevronDown, Save, ExternalLink, FileText, ShoppingBag, Loader2, RefreshCw
+  CheckCircle, Clock, 
+  Phone, Mail, ChevronDown, FileText, ShoppingBag, Loader2, RefreshCw,
+  CreditCard, Hash, ShieldCheck, Wallet, Info, PhoneCall
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
+// Brand Colors: Green: #3E442B | Pink: #EA638C | lightPink: #FBB6E6
+
 const statusSteps = ["Pending", "Processing", "Shipped", "Delivered"];
 
-// 🟢 NEW: Pathao Live Status Component (Keeps logic isolated)
+// 🟢 Pathao Live Status Component
 const PathaoLiveIntelligence = ({ trackingId }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -128,7 +131,23 @@ export default function OrderDetailsPage() {
     }
   };
 
+  const getItemImage = (item) => {
+    return (
+      item.variant?.image ||
+      item.variant?.img ||
+      item.productImage ||
+      item.product?.imageUrl ||
+      "/placeholder.png"
+    );
+  };
+
+  const getItemVariantName = (item) => {
+    if (typeof item.variant === "string") return item.variant;
+    return item.variant?.name || item.variant?.size || "Standard";
+  };
+
   const downloadProductList = () => {
+    if (!order) return;
     const doc = new jsPDF();
     doc.setFontSize(18);
     doc.setTextColor(62, 68, 43); 
@@ -142,14 +161,14 @@ export default function OrderDetailsPage() {
     const tableColumn = ["#", "Product Item", "Variant / Size", "Qty", "Unit Price", "Subtotal"];
     const tableRows = [];
 
-    order.items.forEach((item, index) => {
+    order.items?.forEach((item, index) => {
       tableRows.push([
         index + 1,
-        item.productName,
-        item.variant?.name || "Standard",
+        item.productName || item.product?.name || "Product",
+        getItemVariantName(item),
         item.quantity,
-        `Tk ${item.price.toLocaleString()}`,
-        `Tk ${(item.price * item.quantity).toLocaleString()}`,
+        `Tk ${(item.price || 0).toLocaleString()}`,
+        `Tk ${((item.price || 0) * item.quantity).toLocaleString()}`,
       ]);
     });
 
@@ -165,7 +184,7 @@ export default function OrderDetailsPage() {
     const finalY = doc.lastAutoTable.finalY + 10;
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
-    doc.text(`Total Payable: Tk ${order.totalAmount.toLocaleString()}`, 140, finalY);
+    doc.text(`Total Payable: Tk ${(order.totalAmount || 0).toLocaleString()}`, 140, finalY);
 
     doc.save(`Items_Order_${order._id.slice(-8)}.pdf`);
   };
@@ -178,6 +197,18 @@ export default function OrderDetailsPage() {
   );
 
   const currentStepIndex = statusSteps.indexOf(order.status);
+
+  // Financial calculations
+  const paymentDetails = order.paymentDetails || {};
+  const transactionId = paymentDetails.transactionId || order.tran_id || order.transactionId || "";
+  const senderPhone = paymentDetails.sourcePhone || paymentDetails.source || "";
+  
+  const subtotal = order.items?.reduce((acc, item) => acc + (item.price * item.quantity), 0) || 0;
+  const deliveryCharge = order.deliveryCharge || 0;
+  const mfsFee = order.mobileBankingFee || 0;
+  const grandTotal = order.totalAmount || (subtotal + deliveryCharge + mfsFee);
+  const paidAmount = order.paidAmount || 0;
+  const dueAmount = order.dueAmount !== undefined ? order.dueAmount : (grandTotal - paidAmount);
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] pt-24 pb-20 px-4 md:px-12">
@@ -259,10 +290,10 @@ export default function OrderDetailsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
             
-            {/* 🟢 NEW: LIVE PATHAO INTELLIGENCE */}
+            {/* LIVE PATHAO INTELLIGENCE */}
             <PathaoLiveIntelligence trackingId={order.trackingNumber} />
 
-            {/* LOGISTICS (Logic preserved exactly) */}
+            {/* LOGISTICS */}
             {(order.status === "Shipped" || order.status === "Delivered") && (
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border-2 border-dashed border-[#EA638C]/30 flex flex-col md:flex-row items-center gap-6">
                 <div className="w-14 h-14 bg-[#FBB6E6] text-[#EA638C] rounded-2xl flex items-center justify-center">
@@ -285,52 +316,87 @@ export default function OrderDetailsPage() {
               </div>
             )}
 
-            {/* PACKAGE ITEMS (Logic preserved exactly) */}
+            {/* PACKAGE ITEMS */}
             <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-10 py-8 border-b border-gray-50 bg-gray-50/30">
-                <h3 className="text-xs font-black uppercase tracking-widest text-[#3E442B]">Bag Contents ({order.items.length})</h3>
+                <h3 className="text-xs font-black uppercase tracking-widest text-[#3E442B]">Bag Contents ({order.items?.length || 0})</h3>
                 <Package size={18} className="text-[#EA638C]" />
               </div>
               <div className="divide-y divide-gray-50">
-                {order.items.map((item, i) => (
+                {order.items?.map((item, i) => (
                   <div key={i} className="flex items-center gap-8 px-10 py-8 group">
                     <div className="relative">
                       <img 
-                        src={item.variant?.image || item.productImage || "/placeholder.png"} 
+                        src={getItemImage(item)} 
                         className="w-24 h-24 object-cover rounded-[2rem] border-2 border-gray-100 shadow-sm transition-transform group-hover:scale-105" 
                         onError={(e) => e.target.src = "/placeholder.png"}
+                        alt="Product Item"
                       />
                       <div className="absolute -top-2 -right-2 bg-[#EA638C] text-white text-[10px] font-black w-8 h-8 rounded-full flex items-center justify-center border-4 border-white shadow-sm">
                         {item.quantity}
                       </div>
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-xs font-black uppercase text-[#3E442B] tracking-tight">{item.productName}</h4>
+                      <h4 className="text-xs font-black uppercase text-[#3E442B] tracking-tight">{item.productName || item.product?.name}</h4>
                       <p className="text-[9px] font-black text-gray-300 uppercase mt-1">
-                        Size: <span className="text-[#EA638C]">{item.variant?.size || "STD"}</span>
+                        Variant / Size: <span className="text-[#EA638C]">{getItemVariantName(item)}</span>
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] font-bold text-gray-400 line-through">৳{item.price.toLocaleString()}</p>
-                      <p className="text-sm font-black text-[#3E442B]">৳{(item.price * item.quantity).toLocaleString()}</p>
+                      <p className="text-[10px] font-bold text-gray-400 line-through">৳{(item.price || 0).toLocaleString()}</p>
+                      <p className="text-sm font-black text-[#3E442B]">৳{((item.price || 0) * item.quantity).toLocaleString()}</p>
                     </div>
                   </div>
                 ))}
               </div>
+
+              {/* DETAILED FINANCIAL BREAKDOWN */}
+              <div className="px-10 py-6 bg-gray-50/80 border-t border-gray-100 space-y-2">
+                <div className="flex justify-between text-[10px] font-bold uppercase text-gray-400">
+                  <span>Subtotal</span>
+                  <span>৳{subtotal.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-bold uppercase text-gray-400">
+                  <span className="flex items-center gap-1"><Truck size={12} /> Shipping Charge</span>
+                  <span>+ ৳{deliveryCharge.toLocaleString()}</span>
+                </div>
+                {mfsFee > 0 && (
+                  <div className="flex justify-between text-[10px] font-bold uppercase text-[#EA638C]">
+                    <span className="flex items-center gap-1"><CreditCard size={12} /> Mobile Banking Fee</span>
+                    <span>+ ৳{mfsFee.toLocaleString()}</span>
+                  </div>
+                )}
+                {paidAmount > 0 && (
+                  <div className="flex justify-between text-[10px] font-bold uppercase text-green-600">
+                    <span className="flex items-center gap-1"><Wallet size={12} /> Amount Paid</span>
+                    <span>- ৳{paidAmount.toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+
               <div className="px-10 py-8 bg-[#3E442B] text-white flex justify-between items-center">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-50">Grand Total</span>
-                <span className="text-2xl font-black italic">৳{order.totalAmount.toLocaleString()}</span>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-50 block">Grand Total</span>
+                  {dueAmount > 0 && (
+                    <span className="text-[9px] font-black uppercase text-[#FBB6E6] tracking-wider">
+                      Balance Due (COD): ৳{dueAmount.toLocaleString()}
+                    </span>
+                  )}
+                </div>
+                <span className="text-2xl font-black italic">৳{grandTotal.toLocaleString()}</span>
               </div>
             </div>
           </div>
 
-          {/* SIDEBAR (Logic preserved exactly) */}
+          {/* SIDEBAR */}
           <div className="space-y-6">
+            
+            {/* CUSTOMER INFO */}
             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm relative overflow-hidden">
               <div className="relative z-10">
                 <div className="flex items-center gap-4 mb-8">
                   <div className="w-12 h-12 rounded-2xl bg-[#FBB6E6] text-[#EA638C] flex items-center justify-center"><User size={20} /></div>
-                  <h3 className="text-xs font-black uppercase text-[#3E442B]">Customer</h3>
+                  <h3 className="text-xs font-black uppercase text-[#3E442B]">Customer Details</h3>
                 </div>
                 <div className="space-y-4">
                    <div className="p-4 bg-gray-50 rounded-2xl flex items-center gap-3">
@@ -339,12 +405,49 @@ export default function OrderDetailsPage() {
                    </div>
                    <div className="p-4 bg-gray-50 rounded-2xl flex items-center gap-3">
                       <Phone size={14} className="text-[#EA638C]"/>
-                      <span className="text-[10px] font-black text-[#3E442B]">{order.shippingAddress?.phone}</span>
+                      <span className="text-[10px] font-black text-[#3E442B]">{order.shippingAddress?.phone || 'N/A'}</span>
                    </div>
                 </div>
               </div>
             </div>
 
+            {/* PAYMENT VERIFICATION & GATEWAY */}
+            <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center">
+                  <CreditCard size={20} />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black uppercase text-[#3E442B]">Payment Info</h3>
+                  <p className="text-[8px] font-bold text-gray-400 uppercase">{order.paymentMethod || "N/A"}</p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-black text-gray-400 uppercase">Gateway Status</span>
+                  <span className="text-[8px] font-black text-green-600 uppercase flex items-center gap-1">
+                    <ShieldCheck size={10} /> {order.paymentStatus || "Verified"}
+                  </span>
+                </div>
+
+                {transactionId && (
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                    <span className="text-[8px] font-black text-gray-400 uppercase flex items-center gap-1"><Hash size={10} /> TXN ID</span>
+                    <span className="text-[9px] font-mono font-black text-[#EA638C]">{transactionId}</span>
+                  </div>
+                )}
+
+                {senderPhone && (
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[8px] font-black text-gray-400 uppercase flex items-center gap-1"><PhoneCall size={10} /> Sender</span>
+                    <span className="text-[9px] font-bold text-[#3E442B]">{senderPhone}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* DESTINATION */}
             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-12 h-12 rounded-2xl bg-[#3E442B] text-white flex items-center justify-center"><MapPin size={20} /></div>
@@ -352,10 +455,11 @@ export default function OrderDetailsPage() {
               </div>
               <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 text-[11px] font-black uppercase leading-loose text-gray-500 italic">
                 <span className="text-[#3E442B] not-italic text-sm block mb-1">{order.shippingAddress?.name}</span>
-                {order.shippingAddress?.address}<br />
-                {order.shippingAddress?.city}, {order.shippingAddress?.postalCode}
+                {order.shippingAddress?.street || order.shippingAddress?.address}<br />
+                {order.shippingAddress?.city}{order.shippingAddress?.postalCode ? `, ${order.shippingAddress.postalCode}` : ""}
               </div>
             </div>
+
           </div>
         </div>
       </div>

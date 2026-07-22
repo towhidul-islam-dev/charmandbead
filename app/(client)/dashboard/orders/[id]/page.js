@@ -18,6 +18,7 @@ import {
   Star,
   Copy,
   Check,
+  XCircle, // Added for Cancelled state
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -46,7 +47,6 @@ const PathaoTracker = ({ consignmentId }) => {
     }
   };
 
-  // Auto-fetch if consignmentId exists
   useEffect(() => {
     if (consignmentId) fetchTracking();
   }, [consignmentId]);
@@ -167,6 +167,7 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
 
   const itemsSubtotal = order?.items?.reduce((acc, item) => acc + (Number(item.price || 0) * Number(item.quantity || 0)), 0) || 0;
   const isDelivered = order?.status === "Delivered";
+  const isCancelled = order?.status === "Cancelled";
 
   const steps = [
     { label: "Placed", status: "Pending", icon: CalendarCheck },
@@ -175,7 +176,7 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
     { label: "Delivered", status: "Delivered", icon: CheckCircle },
   ];
 
-  const activeIndex = order?.status === "Cancelled" ? -1 : steps.findIndex((s) => s.status === order?.status);
+  const activeIndex = isCancelled ? -1 : steps.findIndex((s) => s.status === order?.status);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-screen">
@@ -198,7 +199,7 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
           <ArrowLeft size={14} /> Back to History
         </Link>
 
-        <div className="bg-white p-6 md:p-12 rounded-[3.5rem] shadow-sm border border-gray-100">
+        <div className={`bg-white p-6 md:p-12 rounded-[3.5rem] shadow-sm border ${isCancelled ? 'border-red-100' : 'border-gray-100'}`}>
           <div className="flex flex-col items-start justify-between gap-6 mb-16 md:flex-row md:items-center">
             <div>
               <h2 className="text-4xl italic font-black tracking-tighter text-[#3E442B] uppercase">Order Summary</h2>
@@ -211,12 +212,13 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
                 </div>
               </div>
             </div>
-            <div className={`px-8 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] ${order.status === "Cancelled" ? "bg-red-50 text-red-500" : "bg-[#EA638C]/10 text-[#EA638C]"}`}>
+            <div className={`px-8 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] flex items-center gap-2 ${isCancelled ? "bg-red-50 text-red-500" : "bg-[#EA638C]/10 text-[#EA638C]"}`}>
+              {isCancelled && <XCircle size={14} />}
               {order.status}
             </div>
           </div>
 
-          {order.status !== "Cancelled" ? (
+          {!isCancelled ? (
             <>
               {/* STATUS STEPPER */}
               <div className="relative flex justify-between max-w-3xl px-2 mx-auto mb-20">
@@ -238,12 +240,16 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
                 </div>
               </div>
 
-              {/* 🟢 LIVE PATHAO TRACKER INJECTED HERE */}
+              {/* 🟢 Pathao Tracker Only shows if not cancelled */}
               <PathaoTracker consignmentId={order.consignmentId} />
             </>
           ) : (
-            <div className="p-6 mb-20 text-center border-2 border-dashed border-red-100 bg-red-50/50 rounded-[2rem]">
-              <p className="text-xs font-black tracking-widest text-red-500 uppercase">Transaction Voided / Cancelled</p>
+            <div className="p-10 mb-20 text-center border-2 border-dashed border-red-100 bg-red-50/30 rounded-[3rem] flex flex-col items-center gap-3">
+              <XCircle size={40} className="text-red-300" />
+              <div>
+                <p className="text-sm font-black tracking-widest text-red-500 uppercase">Transaction Voided</p>
+                <p className="text-[10px] font-bold text-red-400/60 uppercase">This order has been cancelled and will not be processed.</p>
+              </div>
             </div>
           )}
 
@@ -258,7 +264,7 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
                   const displayImage = getProductImage(item);
                   
                   return (
-                    <div key={idx} className="flex flex-col sm:flex-row items-center gap-6 p-6 border border-gray-50 bg-gray-50/30 rounded-[2.5rem] transition-all hover:shadow-md">
+                    <div key={idx} className={`flex flex-col sm:flex-row items-center gap-6 p-6 border border-gray-50 rounded-[2.5rem] transition-all hover:shadow-md ${isCancelled ? 'bg-gray-50/20 grayscale-[0.5]' : 'bg-gray-50/30'}`}>
                       <div className="relative flex-shrink-0 w-24 h-24 overflow-hidden bg-white border border-gray-100 shadow-inner rounded-3xl">
                         <Image 
                           src={displayImage || "/placeholder.png"} 
@@ -282,7 +288,7 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
                           <button onClick={() => handleBuyAgain(item)} className="flex items-center gap-1.5 px-4 py-2 bg-[#3E442B] text-white rounded-xl text-[9px] font-black uppercase hover:bg-[#EA638C] transition-all active:scale-95">
                             <Zap size={12} fill="currentColor" /> Buy Again
                           </button>
-                          {isDelivered && (
+                          {isDelivered && !isCancelled && (
                             <Link href={`/dashboard/reviews/new?productId=${pId}&orderId=${order._id}`} className="flex items-center gap-1.5 px-4 py-2 bg-white border border-gray-200 text-[#3E442B] rounded-xl text-[9px] font-black uppercase hover:border-[#EA638C]">
                               <Star size={12} className="text-[#EA638C]" /> Review
                             </Link>
@@ -310,14 +316,15 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
                 </p>
               </div>
 
-              <div className="bg-[#3E442B] text-white p-8 rounded-[3rem] shadow-2xl relative overflow-hidden">
+              {/* PAYMENT CARD - Updated for Cancelled state */}
+              <div className={`${isCancelled ? 'bg-gray-400' : 'bg-[#3E442B]'} text-white p-8 rounded-[3rem] shadow-2xl relative overflow-hidden transition-colors duration-500`}>
                 <div className="relative z-10">
                   <div className="pb-8 mb-8 space-y-4 border-b border-white/10">
-                    <div className="flex justify-between text-[11px] font-black uppercase text-gray-400">
+                    <div className="flex justify-between text-[11px] font-black uppercase text-white/50">
                       <span>Subtotal</span>
                       <span>৳{itemsSubtotal.toLocaleString()}</span>
                     </div>
-                    <div className="flex justify-between text-[11px] font-black uppercase text-gray-400">
+                    <div className="flex justify-between text-[11px] font-black uppercase text-white/50">
                       <span>Shipping Fee</span>
                       <span>+ ৳{(order.deliveryCharge || 0).toLocaleString()}</span>
                     </div>
@@ -326,20 +333,29 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
                       <span>- ৳{Number(order.paidAmount || 0).toLocaleString()}</span>
                     </div>
                   </div>
+                  
                   <div className="flex items-end justify-between">
                     <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Total Due</p>
-                      <p className="text-5xl font-black tracking-tighter text-white">৳{Number(order.dueAmount || 0).toLocaleString()}</p>
+                      <p className="text-[10px] font-black text-white/50 uppercase mb-1">
+                        {isCancelled ? "Original Total" : "Total Due"}
+                      </p>
+                      <p className={`text-5xl font-black tracking-tighter text-white ${isCancelled ? 'line-through opacity-50' : ''}`}>
+                        ৳{Number(order.dueAmount || 0).toLocaleString()}
+                      </p>
+                      {isCancelled && <p className="text-[10px] font-black uppercase text-[#FBB6E6] mt-2">No Payment Required</p>}
                     </div>
-                    <div className="p-4 bg-[#EA638C] rounded-[1.5rem] shadow-xl shadow-[#EA638C]/20">
-                      <Wallet size={28} />
+                    <div className={`${isCancelled ? 'bg-white/20' : 'bg-[#EA638C]'} p-4 rounded-[1.5rem] shadow-xl`}>
+                      {isCancelled ? <XCircle size={28} /> : <Wallet size={28} />}
                     </div>
                   </div>
-                  <button onClick={() => window.print()} className="w-full mt-10 flex items-center justify-center gap-3 py-5 bg-[#EA638C] text-white rounded-[2rem] text-[11px] font-black uppercase tracking-[0.2em] transition-all hover:bg-[#d54d76] shadow-xl shadow-[#EA638C]/40">
-                    <Download size={16} /> Download Invoice
-                  </button>
+
+                  {!isCancelled && (
+                    <button onClick={() => window.print()} className="w-full mt-10 flex items-center justify-center gap-3 py-5 bg-[#EA638C] text-white rounded-[2rem] text-[11px] font-black uppercase tracking-[0.2em] transition-all hover:bg-[#d54d76] shadow-xl shadow-[#EA638C]/40">
+                      <Download size={16} /> Download Invoice
+                    </button>
+                  )}
                 </div>
-                <div className="absolute top-0 right-0 w-32 h-32 bg-[#EA638C]/10 rounded-full -mr-16 -mt-16 blur-3xl" />
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl" />
               </div>
             </div>
           </div>

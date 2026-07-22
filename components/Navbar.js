@@ -55,7 +55,6 @@ const ClientHeader = ({ pathname, dbImage }) => {
   const moreRef = useRef(null);
   const [displayImage, setDisplayImage] = useState("");
 
-  // Prevent scroll when mobile menu is open
   useEffect(() => {
     if (isMenuOpen) {
       document.body.style.overflow = 'hidden';
@@ -110,12 +109,18 @@ const ClientHeader = ({ pathname, dbImage }) => {
             {mainLinks.map((link) => (
               <Link key={link.name} href={link.href} className={getLinkClasses(link.href)}>{link.name}</Link>
             ))}
-            <div className="relative" ref={moreRef}>
+            {/* Added Hover Handlers to More Menu */}
+            <div 
+              className="relative py-4" 
+              ref={moreRef}
+              onMouseEnter={() => setIsMoreOpen(true)}
+              onMouseLeave={() => setIsMoreOpen(false)}
+            >
               <button onClick={() => setIsMoreOpen(!isMoreOpen)} className={`${getLinkClasses("#")} ${isMoreOpen ? 'text-[#EA638C] bg-[#EA638C]/5' : ''}`}>
                 More <ChevronDownIcon className={`w-3 h-3 transition-transform duration-200 ${isMoreOpen ? 'rotate-180' : ''}`} />
               </button>
               {isMoreOpen && (
-                <div className="absolute left-0 w-48 p-2 mt-3 bg-white border border-gray-100 shadow-2xl rounded-2xl animate-in fade-in zoom-in slide-in-from-top-2">
+                <div className="absolute left-0 w-48 p-2 mt-0 bg-white border border-gray-100 shadow-2xl rounded-2xl animate-in fade-in zoom-in slide-in-from-top-2">
                   {moreLinks.map((link) => (
                     <Link key={link.name} href={link.href} onClick={() => setIsMoreOpen(false)} className={getLinkClasses(link.href, true)}>{link.name}</Link>
                   ))}
@@ -146,7 +151,13 @@ const ClientHeader = ({ pathname, dbImage }) => {
             )}
 
             {status === "authenticated" ? (
-              <div className="relative" ref={profileRef}>
+              /* Added Hover Handlers to Profile Menu */
+              <div 
+                className="relative py-2" 
+                ref={profileRef}
+                onMouseEnter={() => setIsProfileOpen(true)}
+                onMouseLeave={() => setIsProfileOpen(false)}
+              >
                 <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center gap-2 p-1 bg-white border border-gray-100 shadow-sm rounded-2xl hover:border-[#EA638C]/30 transition-all active:scale-95">
                   <div className="relative w-8 h-8 md:w-9 md:h-9 overflow-hidden border-2 border-white shadow-sm rounded-xl bg-gray-50">
                     {displayImage && (
@@ -164,7 +175,7 @@ const ClientHeader = ({ pathname, dbImage }) => {
                   </div>
                 </button>
                 {isProfileOpen && (
-                  <div className="absolute right-0 w-56 p-2 mt-3 bg-white border border-gray-100 shadow-2xl rounded-2xl animate-in fade-in zoom-in origin-top-right">
+                  <div className="absolute right-0 w-56 p-2 mt-0 bg-white border border-gray-100 shadow-2xl rounded-2xl animate-in fade-in zoom-in origin-top-right">
                     <div className="px-3 py-3 mb-1 border-b border-gray-50">
                       <p className="text-[9px] font-black text-[#EA638C] uppercase tracking-[0.2em]">{session.user.role === 'admin' ? 'Authorized Admin' : 'Customer Account'}</p>
                       <p className="text-sm font-bold text-[#3E442B] truncate">{session.user.name}</p>
@@ -189,108 +200,106 @@ const ClientHeader = ({ pathname, dbImage }) => {
         </div>
 
         {/* 🟢 BLURRY GLASSMORPHISM MOBILE DRAWER */}
-<AnimatePresence>
-  {isMenuOpen && (
-    <div className="fixed inset-0 z-[9999] md:hidden">
-      {/* 🟢 Smooth Backdrop Fade */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.4, ease: "easeInOut" }}
-        className="fixed inset-0 bg-[#3E442B]/40 backdrop-blur-md h-screen w-screen"
-        onClick={() => setIsMenuOpen(false)}
-      />
-
-      {/* 🟢 Smooth Drawer Slide (Brand Green: #3E442B) */}
-      <motion.div
-        initial={{ x: "100%" }}
-        animate={{ x: 0 }}
-        exit={{ x: "100%" }}
-        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className="fixed inset-y-0 right-0 w-[300px] h-screen bg-[#3E442B] border-l border-white/10 shadow-2xl flex flex-col z-[10000]"
-      >
-        {/* Header Section */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 shrink-0">
-          <span className="text-[10px] font-black text-[#FBB6E6] uppercase tracking-[0.3em]">
-            Navigation
-          </span>
-          <button
-            onClick={() => setIsMenuOpen(false)}
-            className="p-2 -mr-2 text-white bg-white/10 rounded-full hover:bg-[#EA638C] transition-colors"
-          >
-            <XMarkIcon className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Navigation Links */}
-        <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-2">
-          {[...mainLinks, { name: "Home", href: "/" }].reverse().map((link) => {
-            const isActive = pathname === link.href;
-            return (
-              <Link
-                key={link.name}
-                href={link.href}
+        <AnimatePresence>
+          {isMenuOpen && (
+            <div className="fixed inset-0 z-[9999] md:hidden">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.4, ease: "easeInOut" }}
+                className="fixed inset-0 bg-[#3E442B]/40 backdrop-blur-md h-full w-full"
                 onClick={() => setIsMenuOpen(false)}
-                className={`font-black uppercase transition-all flex items-center gap-1 text-[11px] tracking-widest px-5 py-4 w-full rounded-xl 
-                  ${isActive 
-                    ? "bg-[#EA638C] text-white shadow-lg shadow-black/20" 
-                    : "text-white/90 hover:bg-white/5 hover:text-[#EA638C]"}`}
-              >
-                {link.name}
-              </Link>
-            );
-          })}
+              />
 
-          <div className="pt-8 pb-2 mt-4 border-t border-white/10">
-            <p className="px-4 mb-4 text-[9px] font-black text-white/30 uppercase tracking-widest">
-              Discover More
-            </p>
-            {moreLinks.map((link) => (
-              <Link
-                key={link.name}
-                href={link.href}
-                onClick={() => setIsMenuOpen(false)}
-                className="font-black uppercase transition-all flex items-center gap-1 text-[11px] tracking-widest px-5 py-3 w-full text-white/70 hover:text-[#EA638C]"
+              <motion.div
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                className="fixed inset-y-0 right-0 w-[280px] sm:w-[320px] h-full bg-[#3E442B] border-l border-white/10 shadow-2xl flex flex-col z-[10000] overflow-hidden"
               >
-                {link.name}
-              </Link>
-            ))}
-          </div>
-        </nav>
+                <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 shrink-0">
+                  <span className="text-[10px] font-black text-[#FBB6E6] uppercase tracking-[0.3em]">
+                    Navigation
+                  </span>
+                  <button
+                    onClick={() => setIsMenuOpen(false)}
+                    className="p-2 -mr-2 text-white bg-white/10 rounded-full hover:bg-[#EA638C] transition-colors"
+                  >
+                    <XMarkIcon className="w-6 h-6" />
+                  </button>
+                </div>
 
-        {/* Bottom Action Section */}
-        <div className="p-6 bg-black/20 border-t border-white/10 shrink-0 pb-10">
-          {!session ? (
-            <div className="flex flex-col gap-3">
-              <Link
-                href="/login"
-                onClick={() => setIsMenuOpen(false)}
-                className="w-full py-4 text-center text-[11px] font-black uppercase text-white border border-white/20 rounded-2xl"
-              >
-                Login
-              </Link>
-              <Link
-                href="/register"
-                onClick={() => setIsMenuOpen(false)}
-                className="w-full py-4 text-center text-[11px] font-black uppercase bg-[#EA638C] text-white rounded-2xl shadow-lg"
-              >
-                Join Charm&Bead
-              </Link>
+                <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-2 scrollbar-hide">
+                  {[...mainLinks, { name: "Home", href: "/" }].reverse().map((link) => {
+                    const isActive = pathname === link.href;
+                    return (
+                      <Link
+                        key={link.name}
+                        href={link.href}
+                        onClick={() => setIsMenuOpen(false)}
+                        className={`font-black uppercase transition-all flex items-center gap-1 text-[11px] tracking-widest px-5 py-4 w-full rounded-xl 
+                          ${isActive 
+                            ? "bg-[#EA638C] text-white shadow-lg shadow-black/20" 
+                            : "text-white/90 hover:bg-white/5 hover:text-[#EA638C]"}`}
+                      >
+                        {link.name}
+                      </Link>
+                    );
+                  })}
+
+                  <div className="pt-8 pb-4 mt-4 border-t border-white/10">
+                    <p className="px-4 mb-4 text-[9px] font-black text-white/30 uppercase tracking-widest">
+                      Discover More
+                    </p>
+                    {moreLinks.map((link) => (
+                      <Link
+                        key={link.name}
+                        href={link.href}
+                        onClick={() => setIsMenuOpen(false)}
+                        className="font-black uppercase transition-all flex items-center gap-1 text-[11px] tracking-widest px-5 py-3 w-full text-white/70 hover:text-[#EA638C]"
+                      >
+                        {link.name}
+                      </Link>
+                    ))}
+                  </div>
+                </nav>
+
+                <div className="p-6 bg-black/20 border-t border-white/10 shrink-0 pb-8 md:pb-6">
+                  {!session ? (
+                    <div className="flex flex-col gap-3">
+                      <Link
+                        href="/login"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="w-full py-4 text-center text-[11px] font-black uppercase text-white border border-white/20 rounded-2xl active:scale-95 transition-transform"
+                      >
+                        Login
+                      </Link>
+                      <Link
+                        href="/register"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="w-full py-4 text-center text-[11px] font-black uppercase bg-[#EA638C] text-white rounded-2xl shadow-lg active:scale-95 transition-transform"
+                      >
+                        Join Charm&Bead
+                      </Link>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        signOut({ callbackUrl: "/" });
+                      }}
+                      className="flex items-center justify-center gap-3 w-full py-4 text-[11px] font-black uppercase text-red-400 bg-red-950/30 border border-red-900/50 rounded-2xl active:scale-95 transition-transform"
+                    >
+                      <ArrowRightOnRectangleIcon className="w-5 h-5" /> Sign Out
+                    </button>
+                  )}
+                </div>
+              </motion.div>
             </div>
-          ) : (
-            <button
-              onClick={() => signOut({ callbackUrl: "/" })}
-              className="flex items-center justify-center gap-3 w-full py-4 text-[11px] font-black uppercase text-red-400 bg-red-950/30 border border-red-900/50 rounded-2xl"
-            >
-              <ArrowRightOnRectangleIcon className="w-5 h-5" /> Sign Out
-            </button>
           )}
-        </div>
-      </motion.div>
-    </div>
-  )}
-</AnimatePresence>
+        </AnimatePresence>
       </header>
       <div className="h-16 md:h-20" />
     </>

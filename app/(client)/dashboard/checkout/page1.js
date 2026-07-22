@@ -17,7 +17,6 @@ import {
   Info,
   ChevronRight,
   BadgePercent,
-  QrCode,
 } from "lucide-react";
 
 const DHAKA_ZONES = [
@@ -37,12 +36,8 @@ export default function CheckoutPage() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [userAddress, setUserAddress] = useState(null);
   const [phone, setPhone] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("COD"); // "COD" or "Online"
+  const [paymentMethod, setPaymentMethod] = useState("COD");
   const [shippingCharge, setShippingCharge] = useState(130);
-
-  // Bangla QR Fields
-  const [qrSenderPhone, setQrSenderPhone] = useState("");
-  const [qrTxnId, setQrTxnId] = useState("");
 
   useEffect(() => {
     async function initCheckout() {
@@ -65,7 +60,7 @@ export default function CheckoutPage() {
           const isInsideDhaka = DHAKA_ZONES.some(
             (zone) =>
               city.toLowerCase().includes(zone.toLowerCase()) ||
-              city.toLowerCase() === "dhaka"
+              city.toLowerCase() === "dhaka",
           );
           setShippingCharge(isInsideDhaka ? 80 : 130);
         }
@@ -75,7 +70,7 @@ export default function CheckoutPage() {
     initCheckout();
   }, [cart, router, status, session]);
 
-  // Dynamic Calculations
+  // --- 🟢 DYNAMIC CALCULATIONS ---
   const { subtotal, totalSavings } = useMemo(() => {
     return checkoutItems.reduce(
       (acc, item) => {
@@ -110,16 +105,7 @@ export default function CheckoutPage() {
     
     const bdPhoneRegex = /^(?:\+88|88)?(01[3-9]\d{8})$/;
     if (!phone || !bdPhoneRegex.test(phone)) {
-      toast.error("Valid BD phone number is required for shipping updates");
-      return;
-    }
-
-    if (!qrSenderPhone || !bdPhoneRegex.test(qrSenderPhone)) {
-      toast.error("Valid sender account/phone number is required for payment confirmation");
-      return;
-    }
-    if (!qrTxnId.trim()) {
-      toast.error("Transaction ID (TxnID) is required");
+      toast.error("Valid BD phone number is required");
       return;
     }
 
@@ -128,81 +114,57 @@ export default function CheckoutPage() {
 
       const orderData = {
         userId: session?.user?.id,
-        items: checkoutItems.map((item) => {
-          // 🟢 1. Resolve Variant Name
-          const variantName = typeof item.variant === "string" 
-            ? item.variant 
-            : (item.variant?.name || item.color || "Default");
-
-          // 🟢 2. Precise Variant Image Resolution Logic
-          let variantImg = 
-            item.variant?.image || 
-            item.variant?.img || 
-            item.variant?.thumbnail || 
-            item.variantImage || 
-            item.selectedVariant?.image;
-
-          // If image not directly on variant, try matching by index from product images array
-          if (!variantImg) {
-            const imagesArr = item.images || item.product?.images || item.productImages;
-            if (Array.isArray(imagesArr) && imagesArr.length > 0) {
-              let idx = -1;
-              if (typeof item.variantIndex === "number") idx = item.variantIndex;
-              else if (typeof item.variant === "number") idx = item.variant;
-              else if (typeof variantName === "string") {
-                const parsed = parseInt(variantName, 10);
-                if (!isNaN(parsed)) idx = parsed - 1; // Converts 1-based "1" or "2" to 0-based array index
-              }
-
-              if (idx >= 0 && idx < imagesArr.length) {
-                variantImg = imagesArr[idx];
-              } else {
-                variantImg = imagesArr[0]; // Fallback to first image in product array
-              }
-            }
-          }
-
-          // Final fallback if no array or variant match exists
-          if (!variantImg) {
-            variantImg = item.image || item.thumbnail || item.product?.imageUrl || null;
-          }
-
-          return {
-            productId: item.productId || item._id,
-            productName: item.name || item.productName || "Product",
-            variant: {
-              name: variantName,
-              size: item.size || "N/A",
-              variantId: item.variantId || item.variant?._id || null,
-              image: variantImg, 
-            },
-            quantity: Number(item.quantity),
-            price: Number(item.price), 
-            sku: item.sku || "C&B-GEN",
-          };
-        }),
+        items: checkoutItems.map((item) => ({
+          productId: item.productId || item._id,
+          productName: item.name || item.productName || "Product",
+          variant: {
+            name: item.color || item.variant?.name || "Default",
+            size: item.size || "N/A",
+            variantId: item.variantId || item.variant?._id || null,
+          },
+          quantity: Number(item.quantity),
+          price: Number(item.price), // 🟢 Discounted Price
+          sku: item.sku || "C&B-GEN",
+        })),
         totalAmount: Number((finalTotal + mobileBankingFee).toFixed(2)),
         paidAmount: Number(payableNow.toFixed(2)),
         dueAmount: Number(dueOnDelivery.toFixed(2)),
         deliveryCharge: Number(shippingCharge),
-        paymentMethod: paymentMethod === "COD" ? "Partial_COD_BanglaQR" : "Full_PrePay_BanglaQR", 
+        paymentMethod: paymentMethod === "Online" ? "bKash" : "COD", 
         mobileBankingFee: Number(mobileBankingFee.toFixed(2)),
         phone: phone,
         paymentDetails: {
-          sourcePhone: qrSenderPhone,
-          transactionId: qrTxnId.trim(),
-          gatewayStatus: "MANUAL_VERIFICATION" 
+          sourcePhone: phone,
+          gatewayStatus: "PENDING_REDIRECT" 
         },
-        paymentStatus: "Verifying",
+        paymentStatus: "Pending",
         shippingAddress: userAddress,
       };
 
       const result = await createOrder(orderData);
 
       if (result.success) {
-        toast.success("Order submitted successfully! Verifying your payment tokens.");
-        localStorage.removeItem("checkoutItems");
-        router.push(`/dashboard/orders/success?orderId=${result.orderId}`);
+        const safeOrderId = String(result.orderId);
+        const res = await fetch(`/api/payment?orderId=${safeOrderId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: safeOrderId,
+            amount: Number(payableNow.toFixed(2)),
+            customerName: userAddress.fullName || session?.user?.name,
+            customerEmail: session?.user?.email || "guest@mail.com",
+            customerPhone: phone,
+          }),
+        });
+
+        if (!res.ok) throw new Error("Gateway failed to respond");
+
+        const payData = await res.json();
+        if (payData.url) {
+          window.location.replace(payData.url);
+        } else {
+          toast.error("Could not generate payment URL.");
+        }
       } else {
         toast.error(result.message || "Order creation failed.");
       }
@@ -222,9 +184,9 @@ export default function CheckoutPage() {
     );
 
   return (
-    <div className="relative grid max-w-6xl grid-cols-1 gap-12 px-4 py-10 pt-6 mx-auto lg:grid-cols-3 bg-[#FAFAFA]">
+    <div className="relative grid max-w-6xl grid-cols-1 gap-12 px-4 py-10 pt-32 mx-auto lg:grid-cols-3 bg-[#FAFAFA]">
       <div className="space-y-10 lg:col-span-2">
-        {/* SECTION 01: DESTINATION */}
+        {/* --- SECTION 01: DESTINATION --- */}
         <section className="space-y-6">
           <h2 className="flex items-center gap-3 text-2xl font-bold font-serif text-[#3E442B] uppercase italic">
             <MapPin className="text-[#EA638C]" size={28} /> 01. Destination
@@ -257,96 +219,35 @@ export default function CheckoutPage() {
           </div>
         </section>
 
-        {/* SECTION 02: PAYMENT PLAN */}
+        {/* --- SECTION 02: PAYMENT PLAN --- */}
         <section className="space-y-6">
           <h2 className="flex items-center gap-3 text-2xl font-bold font-serif text-[#3E442B] uppercase italic">
             <CreditCard className="text-[#EA638C]" size={28} /> 02. Payment Plan
           </h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {[
-              { id: "COD", label: "Partial COD", sub: `Pay Shipping Now (৳${shippingCharge}) & Rest on Delivery` },
-              { id: "Online", label: "Full Pre-pay", sub: `Pay Entire Invoice Now (৳${finalTotal})` },
+              { id: "COD", label: "Partial COD", sub: "Pay Shipping Now" },
+              { id: "Online", label: "Full Pre-pay", sub: "100% Secure Payment" },
             ].map((method) => (
               <button
                 key={method.id}
-                type="button"
                 onClick={() => setPaymentMethod(method.id)}
-                className={`p-6 rounded-[2.5rem] border-2 flex flex-col gap-1 items-start text-left transition-all ${paymentMethod === method.id ? "border-[#EA638C] bg-[#3E442B] text-white shadow-xl scale-[1.02]" : "border-gray-100 text-gray-400 bg-white"}`}
+                className={`p-8 rounded-[2.5rem] border-2 flex flex-col gap-1 items-start transition-all ${paymentMethod === method.id ? "border-[#EA638C] bg-[#3E442B] text-white shadow-xl scale-[1.02]" : "border-gray-100 text-gray-400 bg-white"}`}
               >
                 <span className={`text-sm italic font-bold font-serif tracking-widest uppercase ${paymentMethod === method.id ? "text-[#FBB6E6]" : "text-[#3E442B]"}`}>
                   {method.label}
                 </span>
                 <span className="text-[10px] font-black uppercase tracking-wider opacity-60">
-                  {method.sub}
+                  {method.sub} (+1.5% fee)
                 </span>
               </button>
             ))}
           </div>
         </section>
-
-        {/* SECTION 03: LIVE BANGLA QR VERIFICATION */}
-        <section className="space-y-6 border-2 border-[#3E442B] p-8 rounded-[2.5rem] bg-white transition-all">
-          <h2 className="flex items-center gap-3 text-xl font-bold font-serif text-[#3E442B] uppercase italic">
-            <QrCode className="text-[#EA638C]" size={24} /> Islami Bank Bangla QR Payment
-          </h2>
-          
-          <div className="flex flex-col items-center gap-6 md:flex-row md:items-start">
-            <div className="bg-[#FBB6E6] p-4 rounded-[2rem] text-center w-full md:w-auto shrink-0">
-              <div className="inline-block p-2 bg-white rounded-2xl shadow-sm">
-                <img 
-                  src="/ibbl-bangla-qr.jpg" 
-                  alt="Islami Bank Bangla QR" 
-                  className="w-52 h-52 object-contain mx-auto"
-                />
-              </div>
-              <p className="text-[10px] font-black uppercase text-[#3E442B] tracking-wider mt-2">
-                Scan via bKash, Nagad, or CellFin
-              </p>
-            </div>
-
-            <div className="w-full space-y-4">
-              <p className="text-xs italic text-gray-500 font-medium">
-                Please scan the QR code above with your app to complete your payment of{" "}
-                <strong className="text-[#EA638C] text-sm font-bold">৳{payableNow.toFixed(2)}</strong> (Includes +1.5% gateway processing fees).
-                {paymentMethod === "COD" && (
-                  <span className="block mt-1 text-gray-400 font-bold">
-                    * The remaining merchandise balance of ৳{dueOnDelivery.toLocaleString()} will be handled as Cash on Delivery.
-                  </span>
-                )}
-              </p>
-              
-              <div>
-                <label className="block text-[10px] font-black text-[#3E442B] uppercase tracking-wider mb-1">
-                  Sender Account / Phone Number
-                </label>
-                <input
-                  type="tel"
-                  placeholder="e.g. 01XXXXXXXXX"
-                  value={qrSenderPhone}
-                  onChange={(e) => setQrSenderPhone(e.target.value)}
-                  className="w-full p-4 rounded-xl border border-gray-200 outline-none focus:border-[#EA638C] font-semibold text-sm text-[#3E442B]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-[#3E442B] uppercase tracking-wider mb-1">
-                  Transaction ID (TxnID)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 8N76D3W2A"
-                  value={qrTxnId}
-                  onChange={(e) => setQrTxnId(e.target.value)}
-                  className="w-full p-4 rounded-xl border border-gray-200 outline-none focus:border-[#EA638C] font-semibold text-sm text-[#3E442B]"
-                />
-              </div>
-            </div>
-          </div>
-        </section>
       </div>
 
-      {/* SIDEBAR: SUMMARY */}
-      <div className="h-auto lg:sticky lg:top-6">
+      {/* --- SIDEBAR: SUMMARY --- */}
+      <div className="h-auto lg:sticky lg:top-32">
         <div className="bg-[#3E442B] border-t-8 border-[#EA638C] rounded-[3rem] p-6 md:p-8 shadow-2xl w-full overflow-hidden">
           <h2 className="mb-6 font-serif text-xl italic font-bold text-white uppercase">Checkout Summary</h2>
           <div className="mb-8 space-y-4">
@@ -355,6 +256,7 @@ export default function CheckoutPage() {
               <span className="font-serif text-xs italic text-white">৳{subtotal.toLocaleString()}</span>
             </div>
 
+            {/* 🟢 Wholesale Savings Badge */}
             {totalSavings > 0 && (
               <div className="flex justify-between items-center gap-2 text-[9px] font-black text-[#FBB6E6] uppercase tracking-widest bg-[#EA638C]/20 p-3 rounded-xl border border-[#EA638C]/30 animate-pulse">
                 <span className="flex items-center gap-1.5"><BadgePercent size={12} /> Wholesale Savings</span>
@@ -403,9 +305,7 @@ export default function CheckoutPage() {
             <div className="bg-white p-3 rounded-full text-[#EA638C] shadow-lg">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
             </div>
-            <span className="flex-1 font-black text-center">
-              {loading ? "SUBMITTING..." : "PLACE ORDER"}
-            </span>
+            <span className="flex-1 font-black text-center">{loading ? "INITIATING..." : `SECURE CHECKOUT`}</span>
           </button>
         </div>
       </div>

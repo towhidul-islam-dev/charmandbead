@@ -68,14 +68,24 @@ export const CartProvider = ({ children }) => {
       const finalProductId = (product._id?.$oid || product._id || product.productId).toString();
       const finalVariantId = (variantOrDelta?._id?.$oid || variantOrDelta?._id || product.variantId)?.toString() || null;
 
+      // 🟢 Build structural fallback name matching creator row properties if missing
+      let computedVariantName = product.variantName || variantOrDelta?.name || "";
+      if (!computedVariantName && (variantOrDelta?.color || variantOrDelta?.size)) {
+        computedVariantName = `${variantOrDelta.color || ""} ${variantOrDelta.size || ""}`.trim();
+      } else if (!computedVariantName && variantOrDelta?.sku) {
+        computedVariantName = `SKU: ${variantOrDelta.sku}`;
+      } else if (!computedVariantName) {
+        computedVariantName = "Standard Variant";
+      }
+
       const newItem = {
         productId: finalProductId, 
         variantId: finalVariantId,
         uniqueKey: targetUniqueKey,
         name: product.name,
-        // Store base price and tiers for dynamic calculation
+        variantName: computedVariantName, // 🟢 Added explicit target tracking
         basePrice: Number(variantOrDelta?.price || product.price || 0),
-        price: Number(variantOrDelta?.price || product.price || 0), // Default price
+        price: Number(variantOrDelta?.price || product.price || 0), 
         pricingTiers: product.pricingTiers || [], 
         imageUrl: variantOrDelta?.image || variantOrDelta?.imageUrl || product.imageUrl || "/placeholder.png",
         size: variantOrDelta?.size || product.size || "N/A",
@@ -90,21 +100,17 @@ export const CartProvider = ({ children }) => {
     });
   };
 
-  // --- 🟢 NEW: DYNAMIC PRICE CALCULATION ---
-  // This memoized cart applies wholesale discounts based on TOTAL quantity per product
+  // --- 🟢 DYNAMIC PRICE CALCULATION ---
   const processedCart = useMemo(() => {
-    // 1. Group quantities by productId
     const productTotals = cart.reduce((acc, item) => {
       acc[item.productId] = (acc[item.productId] || 0) + item.quantity;
       return acc;
     }, {});
 
-    // 2. Map cart items to their discounted prices
     return cart.map(item => {
       const totalQtyForThisProduct = productTotals[item.productId];
       let activePrice = item.basePrice || item.price;
 
-      // Check if product has tiers and if total quantity hits any tier
       if (item.pricingTiers && item.pricingTiers.length > 0) {
         const sortedTiers = [...item.pricingTiers].sort((a, b) => b.minQuantity - a.minQuantity);
         const applicableTier = sortedTiers.find(tier => totalQtyForThisProduct >= tier.minQuantity);
@@ -129,7 +135,6 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = () => setCart([]);
 
-  // Use processedCart for totals so discounts are reflected
   const cartTotal = useMemo(() => {
     return processedCart.reduce((acc, item) => acc + item.price * item.quantity, 0);
   }, [processedCart]);
@@ -141,8 +146,8 @@ export const CartProvider = ({ children }) => {
   return (
     <CartContext.Provider
       value={{
-        cart: processedCart, // Export the version with discounted prices
-        rawCart: cart,       // Export raw cart if ever needed
+        cart: processedCart, 
+        rawCart: cart,       
         addToCart,
         removeFromCart,
         deleteSelectedItems,
