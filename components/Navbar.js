@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
+import { createPortal as renderPortal } from "react-dom" // Standard react-dom import below
 import { motion, AnimatePresence } from "framer-motion";
 import {
   HeartIcon,
@@ -50,10 +51,15 @@ const ClientHeader = ({ pathname, dbImage }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [mounted, setMounted] = useState(false);
   
   const profileRef = useRef(null);
   const moreRef = useRef(null);
   const [displayImage, setDisplayImage] = useState("");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isMenuOpen) {
@@ -61,6 +67,9 @@ const ClientHeader = ({ pathname, dbImage }) => {
     } else {
       document.body.style.overflow = 'unset';
     }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
   }, [isMenuOpen]);
 
   useEffect(() => {
@@ -91,7 +100,7 @@ const ClientHeader = ({ pathname, dbImage }) => {
 
   return (
     <>
-      <header className="fixed top-0 left-0 z-50 w-full h-16 border-b border-gray-100 md:h-20 bg-white/80 backdrop-blur-md">
+      <header className="fixed top-0 left-0 z-30 w-full h-16 border-b border-gray-100 md:h-20 bg-white/95 backdrop-blur-md">
         <div className="flex items-center justify-between h-full px-4 mx-auto md:px-6 max-w-7xl">
           
           <Link href="/" className="flex items-center gap-2 md:gap-3 group shrink-0">
@@ -109,7 +118,6 @@ const ClientHeader = ({ pathname, dbImage }) => {
             {mainLinks.map((link) => (
               <Link key={link.name} href={link.href} className={getLinkClasses(link.href)}>{link.name}</Link>
             ))}
-            {/* Added Hover Handlers to More Menu */}
             <div 
               className="relative py-4" 
               ref={moreRef}
@@ -120,7 +128,7 @@ const ClientHeader = ({ pathname, dbImage }) => {
                 More <ChevronDownIcon className={`w-3 h-3 transition-transform duration-200 ${isMoreOpen ? 'rotate-180' : ''}`} />
               </button>
               {isMoreOpen && (
-                <div className="absolute left-0 w-48 p-2 mt-0 bg-white border border-gray-100 shadow-2xl rounded-2xl animate-in fade-in zoom-in slide-in-from-top-2">
+                <div className="absolute left-0 w-48 p-2 mt-0 bg-white border border-gray-100 shadow-2xl rounded-2xl animate-in fade-in zoom-in slide-in-from-top-2 z-40">
                   {moreLinks.map((link) => (
                     <Link key={link.name} href={link.href} onClick={() => setIsMoreOpen(false)} className={getLinkClasses(link.href, true)}>{link.name}</Link>
                   ))}
@@ -151,7 +159,6 @@ const ClientHeader = ({ pathname, dbImage }) => {
             )}
 
             {status === "authenticated" ? (
-              /* Added Hover Handlers to Profile Menu */
               <div 
                 className="relative py-2" 
                 ref={profileRef}
@@ -175,7 +182,7 @@ const ClientHeader = ({ pathname, dbImage }) => {
                   </div>
                 </button>
                 {isProfileOpen && (
-                  <div className="absolute right-0 w-56 p-2 mt-0 bg-white border border-gray-100 shadow-2xl rounded-2xl animate-in fade-in zoom-in origin-top-right">
+                  <div className="absolute right-0 w-56 p-2 mt-0 bg-white border border-gray-100 shadow-2xl rounded-2xl animate-in fade-in zoom-in origin-top-right z-40">
                     <div className="px-3 py-3 mb-1 border-b border-gray-50">
                       <p className="text-[9px] font-black text-[#EA638C] uppercase tracking-[0.2em]">{session.user.role === 'admin' ? 'Authorized Admin' : 'Customer Account'}</p>
                       <p className="text-sm font-bold text-[#3E442B] truncate">{session.user.name}</p>
@@ -198,40 +205,47 @@ const ClientHeader = ({ pathname, dbImage }) => {
             </button>
           </div>
         </div>
+      </header>
+      <div className="h-16 md:h-20" />
 
-        {/* 🟢 BLURRY GLASSMORPHISM MOBILE DRAWER */}
+      {/* 🚀 PORTAL TO BODY: MOVES DRAWER OUTSIDE ALL PAGE CONTAINERS */}
+      {mounted && renderPortal(
         <AnimatePresence>
           {isMenuOpen && (
-            <div className="fixed inset-0 z-[9999] md:hidden">
+            <div className="fixed inset-0 z-[999999] md:hidden">
+              {/* BACKDROP */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.4, ease: "easeInOut" }}
-                className="fixed inset-0 bg-[#3E442B]/40 backdrop-blur-md h-full w-full"
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 bg-[#3E442B]/70 backdrop-blur-md"
                 onClick={() => setIsMenuOpen(false)}
               />
 
+              {/* SLIDE-OUT PANEL */}
               <motion.div
                 initial={{ x: "100%" }}
                 animate={{ x: 0 }}
                 exit={{ x: "100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="fixed inset-y-0 right-0 w-[280px] sm:w-[320px] h-full bg-[#3E442B] border-l border-white/10 shadow-2xl flex flex-col z-[10000] overflow-hidden"
+                transition={{ type: "spring", damping: 25, stiffness: 220 }}
+                className="fixed top-0 right-0 bottom-0 w-[280px] sm:w-[320px] h-full bg-[#3E442B] shadow-2xl flex flex-col z-[1000000] overflow-hidden border-l border-white/10"
               >
-                <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 shrink-0">
+                {/* DRAWER SOLID HEADER BAR */}
+                <div className="flex items-center justify-between px-6 py-5 bg-[#3E442B] border-b border-white/10 shrink-0">
                   <span className="text-[10px] font-black text-[#FBB6E6] uppercase tracking-[0.3em]">
-                    Navigation
+                    NAVIGATION
                   </span>
                   <button
                     onClick={() => setIsMenuOpen(false)}
                     className="p-2 -mr-2 text-white bg-white/10 rounded-full hover:bg-[#EA638C] transition-colors"
                   >
-                    <XMarkIcon className="w-6 h-6" />
+                    <XMarkIcon className="w-5 h-5" />
                   </button>
                 </div>
 
-                <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-2 scrollbar-hide">
+                {/* DRAWER CONTENT */}
+                <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-2">
                   {[...mainLinks, { name: "Home", href: "/" }].reverse().map((link) => {
                     const isActive = pathname === link.href;
                     return (
@@ -241,7 +255,7 @@ const ClientHeader = ({ pathname, dbImage }) => {
                         onClick={() => setIsMenuOpen(false)}
                         className={`font-black uppercase transition-all flex items-center gap-1 text-[11px] tracking-widest px-5 py-4 w-full rounded-xl 
                           ${isActive 
-                            ? "bg-[#EA638C] text-white shadow-lg shadow-black/20" 
+                            ? "bg-[#EA638C] text-white shadow-lg" 
                             : "text-white/90 hover:bg-white/5 hover:text-[#EA638C]"}`}
                       >
                         {link.name}
@@ -250,7 +264,7 @@ const ClientHeader = ({ pathname, dbImage }) => {
                   })}
 
                   <div className="pt-8 pb-4 mt-4 border-t border-white/10">
-                    <p className="px-4 mb-4 text-[9px] font-black text-white/30 uppercase tracking-widest">
+                    <p className="px-4 mb-4 text-[9px] font-black text-white/40 uppercase tracking-widest">
                       Discover More
                     </p>
                     {moreLinks.map((link) => (
@@ -299,9 +313,9 @@ const ClientHeader = ({ pathname, dbImage }) => {
               </motion.div>
             </div>
           )}
-        </AnimatePresence>
-      </header>
-      <div className="h-16 md:h-20" />
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 };
@@ -316,7 +330,7 @@ export default function Navbar({ dbImage }) {
 
     return (
       <>
-        <header className="fixed top-0 left-0 z-50 flex items-center w-full h-16 px-8 text-white shadow-lg bg-[#3E442B]">
+        <header className="fixed top-0 left-0 z-30 flex items-center w-full h-16 px-8 text-white shadow-lg bg-[#3E442B]">
           <Link href="/admin/dashboard" className="flex items-center gap-2 group">
             <Image src="/logo_new.svg" alt="Admin Logo" width={32} height={32} className="invert group-hover:rotate-12 transition-transform" priority />
             <span className="text-xl font-bold tracking-tight text-[#EA638C]">Admin Console</span>
