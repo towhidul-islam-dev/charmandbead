@@ -21,7 +21,7 @@ export default function ClientProviders({
         <WishlistProvider>
           <LoginNotifier />
           {/* SINGLE GLOBAL TOASTER CONTAINER */}
-          <Toaster
+          {/* <Toaster
             position="top-right"
             toastOptions={{
               duration: 3000,
@@ -46,7 +46,7 @@ export default function ClientProviders({
                 },
               },
             }}
-          />
+          /> */}
           <ConnectivityListener />
 
           <div
