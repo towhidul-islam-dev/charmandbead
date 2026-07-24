@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image"; 
 import { useWishlist } from "@/Context/WishlistContext";
 import { useSession } from "next-auth/react"; 
-import { Heart, Sparkles, Share2, Package, Tag } from "lucide-react"; 
+import { Heart, Sparkles, Share2, Package } from "lucide-react"; 
 import toast from "react-hot-toast";
 
 const ProductCard = ({ product, index = 0 }) => {
@@ -15,14 +15,14 @@ const ProductCard = ({ product, index = 0 }) => {
   const isOutOfStock = product?.stock <= 0;
   const isLowStock = product?.stock > 0 && product?.stock <= 5;
 
-  // 🟢 Sale & Pricing Logic
+  // Sale & Pricing Logic
   const hasSale = product?.isOnSale && product?.discountPrice > 0;
   const hasWholesale = product?.pricingTiers && product?.pricingTiers.length > 0;
 
-  // 🟢 Logic for MOQ
+  // Logic for MOQ
   const moqValue = product?.minOrderQuantity || product?.variants?.[0]?.minOrderQuantity || 0;
 
-  // 🟢 Logic for New Badge
+  // Logic for New Badge
   const isRecentlyCreated = product?.createdAt 
     ? (new Date() - new Date(product.createdAt)) < (48 * 60 * 60 * 1000) 
     : false;
@@ -72,7 +72,7 @@ const ProductCard = ({ product, index = 0 }) => {
 
           {/* MOQ BADGE */}
           {moqValue > 0 && !isOutOfStock && (
-            <div className="absolute z-20 transition-all duration-500 transform translate-y-2 opacity-0 bottom-3 left-3 group-hover:translate-y-0 group-hover:opacity-100">
+            <div className="absolute z-10 transition-all duration-500 transform translate-y-2 opacity-0 bottom-3 left-3 group-hover:translate-y-0 group-hover:opacity-100">
               <div className="bg-[#3E442B] border-2 border-[#FBB6E6]/40 px-3 py-1.5 rounded-xl shadow-2xl flex items-center gap-2">
                 <span className="text-[10px] font-black text-[#FBB6E6] uppercase tracking-wider">
                   MOQ :
@@ -91,37 +91,37 @@ const ProductCard = ({ product, index = 0 }) => {
         {/* TOP BADGES */}
         <div className="absolute z-10 flex flex-col gap-1 top-3 left-3">
           {showNewBadge && (
-            <div className="flex items-center gap-1 px-3 py-1 text-[9px] font-black text-white bg-[#EA638C] rounded-lg shadow-md uppercase">
+            <div className="flex items-center gap-1 px-2.5 py-1 text-[9px] font-black text-white bg-[#EA638C] rounded-lg shadow-md uppercase">
               <Sparkles size={10} /> NEW
             </div>
           )}
           {hasWholesale && !isOutOfStock && (
-            <div className="flex items-center gap-1 px-3 py-1 text-[9px] font-black text-white bg-[#3E442B] rounded-lg shadow-md uppercase">
+            <div className="flex items-center gap-1 px-2.5 py-1 text-[9px] font-black text-white bg-[#3E442B] rounded-lg shadow-md uppercase">
               <Package size={10} /> WHOLESALE
             </div>
           )}
           {isOutOfStock && (
-            <div className="px-3 py-1 text-[9px] font-black text-white bg-gray-500 rounded-lg uppercase">SOLD</div>
+            <div className="px-2.5 py-1 text-[9px] font-black text-white bg-gray-500 rounded-lg uppercase">SOLD</div>
           )}
         </div>
 
-        {/* FLOATING ACTIONS */}
+        {/* FLOATING ACTIONS (Strict Z-Index z-10) */}
         {user && (
-          <div className="absolute z-30 flex flex-col gap-2 transition-all duration-300 translate-x-12 opacity-0 top-3 right-3 group-hover:translate-x-0 group-hover:opacity-100">
+          <div className="absolute z-10 flex flex-col gap-1.5 top-2.5 right-2.5 transition-all duration-300 md:opacity-0 md:translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0">
             <button 
               onClick={handleWishlistClick} 
               aria-label={isFavorite ? "Remove from wishlist" : "Add to wishlist"}
-              className="p-2.5 rounded-full bg-white shadow-md hover:bg-[#EA638C] group/heart transition-colors"
+              className="p-2 rounded-full bg-white/90 backdrop-blur-sm shadow-md hover:bg-[#EA638C] group/heart transition-colors"
             >
-              <Heart size={16} className={isFavorite ? "fill-[#EA638C] text-[#EA638C]" : "text-gray-400 group-hover/heart:text-white"} />
+              <Heart size={14} className={isFavorite ? "fill-[#EA638C] text-[#EA638C]" : "text-gray-400 group-hover/heart:text-white"} />
             </button>
             
             <button 
               onClick={handleShare} 
               aria-label="Share product link"
-              className="p-2.5 rounded-full bg-white shadow-md hover:bg-[#3E442B] group/share transition-colors"
+              className="p-2 rounded-full bg-white/90 backdrop-blur-sm shadow-md hover:bg-[#3E442B] group/share transition-colors"
             >
-              <Share2 size={16} className="text-gray-400 group-hover/share:text-white" />
+              <Share2 size={14} className="text-gray-400 group-hover/share:text-white" />
             </button>
           </div>
         )}
@@ -139,13 +139,13 @@ const ProductCard = ({ product, index = 0 }) => {
               {/* MOBILE MOQ */}
               {moqValue > 0 && (
                 <div className="flex items-center gap-1 mt-1 md:hidden">
-                    <Package size={10} className="text-[#3E442B]" />
-                    <span className="text-[10px] font-black text-[#3E442B] uppercase tracking-tighter">MOQ : {moqValue}</span>
+                  <Package size={10} className="text-[#3E442B]" />
+                  <span className="text-[10px] font-black text-[#3E442B] uppercase tracking-tighter">MOQ : {moqValue}</span>
                 </div>
               )}
             </div>
 
-            {/* 🟢 PRICE LOGIC: Sale vs Regular */}
+            {/* PRICE LOGIC */}
             <div className="flex flex-col items-end shrink-0 ml-2">
               {hasSale ? (
                 <>
@@ -172,16 +172,15 @@ const ProductCard = ({ product, index = 0 }) => {
                 style={{ width: `${Math.min((product.stock / 20) * 100, 100)}%` }} 
               />
             </div>
-            <div className="flex justify-between items-center mt-1">
-                <p className={`text-[8px] font-black uppercase ${isLowStock ? 'text-[#EA638C]' : 'text-gray-400'}`}>
+            <div className="flex items-center justify-between mt-1">
+              <p className={`text-[8px] font-black uppercase ${isLowStock ? 'text-[#EA638C]' : 'text-gray-400'}`}>
                 {isLowStock ? `Only ${product.stock} Left` : `${product.stock} in stock`}
-                </p>
-                {/* 🟢 Wholesale tag in info section */}
-                {hasWholesale && (
-                   <span className="text-[7px] font-black bg-gray-100 text-[#3E442B] px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
-                     Bulk Available
-                   </span>
-                )}
+              </p>
+              {hasWholesale && (
+                <span className="text-[7px] font-black bg-gray-100 text-[#3E442B] px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
+                  Bulk Available
+                </span>
+              )}
             </div>
           </div>
         )}
