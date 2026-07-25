@@ -14,6 +14,57 @@ import {
   MagnifyingGlassPlusIcon, BanknotesIcon
 } from "@heroicons/react/24/outline";
 
+/**
+ * CLIENT-SIDE IMAGE COMPRESSOR
+ * Converts large mobile camera photos (10MB+) down to web-optimized JPEGs (~200KB)
+ */
+const compressImage = (file, maxWidth = 1200, quality = 0.75) => {
+  return new Promise((resolve) => {
+    // If file is not an image or is already small (< 500KB), don't compress
+    if (!file || !file.type.startsWith("image/") || file.size < 500 * 1024) {
+      return resolve(file);
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return resolve(file);
+            const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = () => resolve(file);
+    };
+    reader.onerror = () => resolve(file);
+  });
+};
+
 export default function ProductForm({ initialData }) {
   const formRef = useRef(null);
   const { addNotification } = useNotifications();
@@ -117,47 +168,81 @@ export default function ProductForm({ initialData }) {
     setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
+  // --- CLIENT ACTION WITH IMAGE COMPRESSION & NUMBER SANITIZATION ---
   const clientAction = async (formData) => {
-    formData.set("id", initialData?._id || "");
-    formData.set("hasVariants", useVariants.toString());
-    formData.set("isNewArrival", isNewArrival.toString());
-    
-    if (mainFile) {
-      formData.append("mainImage", mainFile);
-    } else {
-      formData.set("imageUrl", initialData?.imageUrl || "");
-    }
-    
-    formData.set("isOnSale", isOnSale.toString());
-    formData.set("discountPrice", Number(discountPrice) || 0);
-    const validTiers = pricingTiers.filter(t => t.minQuantity > 0 && t.unitPrice > 0);
-    formData.set("pricingTiers", JSON.stringify(validTiers));
+    try {
+      toast.loading("Optimizing images & saving...", { id: "saving" });
 
-    if (mainCategory) {
-      formData.set("categoryId", mainCategory);
-      formData.set("categoryName", getCategoryDisplayName(mainCategory));
-    }
-    if (subCategory) {
-      formData.set("subCategoryId", subCategory);
-      formData.set("subCategoryName", getCategoryDisplayName(subCategory));
-    }
-    
-    formData.set("price", Number(previewPrice) || 0);
-    const existingGallery = galleryPreviews.filter(p => !p.isNew);
-    formData.set("existingGallery", JSON.stringify(existingGallery));
-    galleryPreviews.forEach((p, i) => { if (p.isNew) formData.append(`galleryFile_${i}`, p.file); });
+      formData.set("id", initialData?._id || "");
+      formData.set("hasVariants", useVariants.toString());
+      formData.set("isNewArrival", isNewArrival.toString());
+      
+      // 1. Compress & Append Main Image
+      if (mainFile) {
+        const compressedMain = await compressImage(mainFile);
+        formData.append("mainImage", compressedMain);
+      } else {
+        formData.set("imageUrl", initialData?.imageUrl || "");
+      }
+      
+      formData.set("isOnSale", isOnSale.toString());
+      formData.set("discountPrice", Number(discountPrice) || 0);
+      
+      // Sanitize Pricing Tiers
+      const validTiers = pricingTiers
+        .map(t => ({ minQuantity: Number(t.minQuantity) || 0, unitPrice: Number(t.unitPrice) || 0 }))
+        .filter(t => t.minQuantity > 0 && t.unitPrice > 0);
+      formData.set("pricingTiers", JSON.stringify(validTiers));
 
-    if (useVariants) {
-      const variantsData = variants.map(({ preview, file, ...rest }) => ({
-        ...rest,
-        minOrderQuantity: Number(rest.minOrderQuantity) || 1,
-        price: Number(rest.price) || 0,
-        stock: Number(rest.stock) || 0
-      }));
-      formData.set("variantsJson", JSON.stringify(variantsData));
-      variants.forEach((v, i) => { if (v.file) formData.append(`variantFile_${i}`, v.file); });
+      if (mainCategory) {
+        formData.set("categoryId", mainCategory);
+        formData.set("categoryName", getCategoryDisplayName(mainCategory));
+      }
+      if (subCategory) {
+        formData.set("subCategoryId", subCategory);
+        formData.set("subCategoryName", getCategoryDisplayName(subCategory));
+      }
+      
+      formData.set("price", Number(previewPrice) || 0);
+      
+      // 2. Compress & Append Gallery Images
+      const existingGallery = galleryPreviews.filter(p => !p.isNew);
+      formData.set("existingGallery", JSON.stringify(existingGallery));
+      
+      for (let i = 0; i < galleryPreviews.length; i++) {
+        const p = galleryPreviews[i];
+        if (p.isNew && p.file) {
+          const compressedGalleryImg = await compressImage(p.file);
+          formData.append(`galleryFile_${i}`, compressedGalleryImg);
+        }
+      }
+
+      // 3. Compress & Append Variant Images + Sanitize Numbers
+      if (useVariants) {
+        const variantsData = variants.map(({ preview, file, ...rest }) => ({
+          ...rest,
+          minOrderQuantity: Number(rest.minOrderQuantity) || 1,
+          price: Number(rest.price) || 0,
+          stock: Number(rest.stock) || 0
+        }));
+        formData.set("variantsJson", JSON.stringify(variantsData));
+        
+        for (let i = 0; i < variants.length; i++) {
+          const v = variants[i];
+          if (v.file) {
+            const compressedVariantImg = await compressImage(v.file);
+            formData.append(`variantFile_${i}`, compressedVariantImg);
+          }
+        }
+      }
+
+      toast.dismiss("saving");
+      formAction(formData);
+    } catch (err) {
+      toast.dismiss("saving");
+      toast.error("Failed to prepare submission data.");
+      console.error(err);
     }
-    formAction(formData);
   };
 
   useEffect(() => {
@@ -302,7 +387,7 @@ export default function ProductForm({ initialData }) {
                           <input placeholder="Stock" type="number" value={v.stock} onChange={e => { const n = [...variants]; n[i].stock = e.target.value; setVariants(n); }} className={variantInputClass} />
                           <input placeholder="MOQ" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className={`${variantInputClass} bg-pink-50 text-[#EA638C]`} />
                       </div>
-                      <input type="file" id={`v-img-${i}`} className="hidden" onChange={(e) => {
+                      <input type="file" id={`v-img-${i}`} className="hidden" accept="image/*" onChange={(e) => {
                         const file = e.target.files[0];
                         if (file) {
                           const newV = [...variants];
@@ -337,7 +422,7 @@ export default function ProductForm({ initialData }) {
                 <div className="w-full h-64 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative" onClick={() => mainPreview ? setPreviewModalImg(mainPreview) : document.getElementById('main-img').click()}>
                   {mainPreview ? <><img src={mainPreview} className="object-cover w-full h-full" /><div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/20"><MagnifyingGlassPlusIcon className="w-10 h-10 text-white" /></div></> : <PhotoIcon className="w-12 h-12 text-gray-200" />}
                 </div>
-                <input id="main-img" type="file" className="hidden" onChange={(e) => { 
+                <input id="main-img" type="file" className="hidden" accept="image/*" onChange={(e) => { 
                   if(e.target.files[0]) {
                     setMainFile(e.target.files[0]); 
                     setMainPreview(URL.createObjectURL(e.target.files[0])); 
