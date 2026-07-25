@@ -457,7 +457,7 @@ export default function ProductForm({ initialData }) {
                   </button>
                 </div>
                 <button type="submit" disabled={isPending} className="w-full py-5 bg-[#EA638C] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl hover:scale-[1.02] transition-all disabled:opacity-50">
-                  {isPending ? "Syncing DNA..." : (initialData ? "Update Product" : "Save Product")}
+                  {isPending ? "Syncing DNA...." : (initialData ? "Update Product" : "Save Product")}
                 </button>
               </section>
             </div>
