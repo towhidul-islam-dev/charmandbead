@@ -98,13 +98,15 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
     addToCart(item, delta);
   };
 
-  // 🟢 FIX: Properly attach variant images before passing data to Checkout
-  // 🟢 FIX: Save items to localStorage, delete them from Cart Context, and navigate
+  const handleDeleteItem = (uniqueKey) => {
+    deleteSelectedItems([uniqueKey]);
+    setSelectedItems((prev) => prev.filter((id) => id !== uniqueKey));
+  };
+
   const handleCheckout = () => {
     if (selectedItems.length === 0 || isPending) return;
     setIsPending(true); 
     try {
-      // 1. Filter selected items & attach variant image fields
       const itemsToPurchase = cart
         .filter((item) => selectedItems.includes(item.uniqueKey))
         .map((item) => {
@@ -121,13 +123,8 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
           };
         });
 
-      // 2. Save snapshot to localStorage for CheckoutPage
       localStorage.setItem("checkoutItems", JSON.stringify(itemsToPurchase));
-
-      // 3. Remove selected items from global CartContext immediately
       deleteSelectedItems(selectedItems);
-
-      // 4. Reset selected state & Navigate to checkout
       setSelectedItems([]);
       router.push("/dashboard/checkout");
     } catch (err) {
@@ -167,7 +164,7 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
           <div className="space-y-8 lg:col-span-2">
             {groupedCart.map((product) => (
               <div key={product.productId} className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
-                <div className="flex flex-wrap items-center justify-between gap-4 px-8 py-5 border-b border-gray-100 bg-gray-50/80">
+                <div className="flex flex-wrap items-center justify-between gap-4 px-6 md:px-8 py-5 border-b border-gray-100 bg-gray-50/80">
                   <div className="flex items-center gap-4">
                     <input 
                       type="checkbox" 
@@ -196,10 +193,12 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                     const isDiscounted = variant.price < (variant.basePrice || variant.price);
 
                     return (
-                      <div key={variant.uniqueKey} className={`p-6 px-8 transition-all duration-500 ${isSelected ? 'bg-[#EA638C]/5' : ''}`}>
-                        <div className="grid items-center grid-cols-1 gap-4 md:grid-cols-12">
-                          <div className="flex items-center gap-4 md:col-span-5">
-                            <input type="checkbox" className="w-4 h-4 accent-[#EA638C] cursor-pointer" checked={isSelected} onChange={() => toggleSelect(variant.uniqueKey)} />
+                      <div key={variant.uniqueKey} className={`p-4 md:p-6 md:px-8 transition-all duration-500 ${isSelected ? 'bg-[#EA638C]/5' : ''}`}>
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                          
+                          {/* Item info & checkbox */}
+                          <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
+                            <input type="checkbox" className="w-4 h-4 accent-[#EA638C] cursor-pointer shrink-0" checked={isSelected} onChange={() => toggleSelect(variant.uniqueKey)} />
                             <div className="relative w-16 h-16 overflow-hidden bg-white border border-gray-100 shadow-sm rounded-2xl shrink-0">
                               <img src={variant.imageUrl || variant.image} className="object-cover w-full h-full" alt={variant.color || "Variant"} />
                             </div>
@@ -217,7 +216,7 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                                 </div>
                               )}
 
-                              <div className={`mt-3 flex items-center gap-2 px-3 py-1.5 rounded-full w-fit transition-all duration-300 shadow-sm
+                              <div className={`mt-2 flex items-center gap-2 px-3 py-1 rounded-full w-fit transition-all duration-300 shadow-sm
                                 ${isMaxed ? 'bg-[#3E442B] text-[#FBB6E6]' : 
                                   isLowStock ? 'bg-[#EA638C]/10 text-[#EA638C] border border-[#EA638C]/20' : 
                                   'bg-[#FBB6E6]/30 text-[#3E442B] border border-[#FBB6E6]/50'}`}>
@@ -228,16 +227,18 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between gap-10 md:col-span-7 md:justify-end">
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-1.5 px-4 shadow-sm">
-                                <button onClick={() => handleQuantityUpdate(variant, -moq)} disabled={variant.quantity <= moq} className="p-1 text-[#3E442B] hover:text-[#EA638C] disabled:opacity-20"><MinusIcon className="w-4 h-4 stroke-[3px]" /></button>
-                                <span className="w-6 text-sm font-black text-center text-[#3E442B]">{variant.quantity}</span>
-                                <button onClick={() => handleQuantityUpdate(variant, moq)} disabled={variant.quantity + moq > variant.stock} className="p-1 text-[#3E442B] hover:text-[#EA638C] disabled:opacity-10"><PlusIcon className="w-4 h-4 stroke-[3px]" /></button>
-                              </div>
+                          {/* Controls, Pricing & Delete Button */}
+                          <div className="flex items-center justify-between w-full md:w-auto gap-4 md:gap-8 pt-2 md:pt-0 border-t md:border-t-0 border-gray-100">
+                            
+                            {/* Quantity buttons */}
+                            <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-1.5 px-3 md:px-4 shadow-sm">
+                              <button onClick={() => handleQuantityUpdate(variant, -moq)} disabled={variant.quantity <= moq} className="p-1 text-[#3E442B] hover:text-[#EA638C] disabled:opacity-20"><MinusIcon className="w-4 h-4 stroke-[3px]" /></button>
+                              <span className="w-6 text-sm font-black text-center text-[#3E442B]">{variant.quantity}</span>
+                              <button onClick={() => handleQuantityUpdate(variant, moq)} disabled={variant.quantity + moq > variant.stock} className="p-1 text-[#3E442B] hover:text-[#EA638C] disabled:opacity-10"><PlusIcon className="w-4 h-4 stroke-[3px]" /></button>
                             </div>
 
-                            <div className="text-right min-w-[120px]">
+                            {/* Price */}
+                            <div className="text-right">
                               <div className="flex flex-col">
                                 {isDiscounted && (
                                   <span className="text-[10px] text-gray-300 line-through font-bold">
@@ -250,8 +251,18 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                               </div>
                               <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest">Sub-Total</p>
                             </div>
-                            <button onClick={() => deleteSelectedItems([variant.uniqueKey])} className="p-1 text-gray-300 transition-colors hover:text-red-500"><TrashIcon className="w-5 h-5" /></button>
+
+                            {/* Fixed Delete Button */}
+                            <button 
+                              onClick={() => handleDeleteItem(variant.uniqueKey)} 
+                              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all shrink-0"
+                              title="Remove item"
+                            >
+                              <TrashIcon className="w-5 h-5 stroke-[2px]" />
+                            </button>
+
                           </div>
+
                         </div>
                       </div>
                     );
@@ -261,6 +272,7 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
             ))}
           </div>
 
+          {/* Bag Summary */}
           <div className="lg:col-span-1">
             <div className="bg-white p-8 rounded-[3rem] shadow-2xl border border-gray-50 sticky top-32">
               <h2 className="mb-8 text-xl italic font-bold font-serif tracking-tighter text-[#3E442B] uppercase">Bag Summary</h2>
