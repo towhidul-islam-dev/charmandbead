@@ -274,6 +274,9 @@ export async function getDashboardStats(period = "all") {
     else if (period === "30days") startDate = new Date(now.setDate(now.getDate() - 30));
     else if (period === "year") startDate = new Date(now.setFullYear(now.getFullYear() - 1));
 
+    // 🟢 Fetch total registered users count dynamically
+    const totalUsers = await User.countDocuments();
+
     const financialData = await Order.aggregate([
       { $match: { status: { $ne: "Cancelled" }, createdAt: { $gte: startDate } } },
       {
@@ -286,7 +289,15 @@ export async function getDashboardStats(period = "all") {
         },
       },
     ]);
+
     const financials = financialData[0] || { grossRevenue: 0, totalMfsFees: 0, totalDeliveryCharges: 0, orderCount: 0 };
+
+    // 🟢 Dynamic conversion rate calculation (Orders / Users * 100)
+    let conversionRate = 0;
+    if (totalUsers > 0) {
+      conversionRate = Number(((financials.orderCount / totalUsers) * 100).toFixed(1));
+    }
+
     return {
       success: true,
       stats: {
@@ -295,6 +306,8 @@ export async function getDashboardStats(period = "all") {
         gatewayCosts: financials.totalMfsFees,
         deliveryCosts: financials.totalDeliveryCharges,
         orderCount: financials.orderCount,
+        totalUsers: totalUsers || 0,         // 🟢 Dynamic Total Users
+        conversionRate: conversionRate || 0, // 🟢 Dynamic Conversion Rate
       },
     };
   } catch (error) { return { success: false }; }
