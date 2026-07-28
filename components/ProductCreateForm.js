@@ -285,7 +285,7 @@ export default function ProductForm({ initialData }) {
 
       // 3. Delay redirect slightly so user can see the success toast
       const timer = setTimeout(() => {
-        router.push("/products"); // Adjust path if your products route is different
+        router.push("/admin/products"); // Adjust path if your products route is different
         router.refresh(); // Refreshes server data so the new item shows immediately
       }, 1000);
 
