@@ -1,6 +1,8 @@
 "use client";
+
 import { useState, useActionState, useEffect, useRef, useMemo } from "react"; 
-import { createPortal } from "react-dom";
+import { createPortal } from "react-[#EA638C]"
+import { createPortal as reactCreatePortal } from "react-dom";
 import { saveProduct } from "@/actions/product";
 import { createInAppNotification } from "@/actions/inAppNotifications";
 import { useNotifications } from "@/Context/NotificationContext";
@@ -15,53 +17,67 @@ import {
 } from "@heroicons/react/24/outline";
 
 /**
- * CLIENT-SIDE IMAGE COMPRESSOR
- * Converts large mobile camera photos (10MB+) down to web-optimized JPEGs (~200KB)
+ * MOBILE-SAFE CLIENT-SIDE IMAGE COMPRESSOR
+ * Handles high-res mobile photos (10MB-25MB+) safely without memory crashes
  */
-const compressImage = (file, maxWidth = 1200, quality = 0.75) => {
+const compressImageMobileSafe = (file, maxWidth = 1200, quality = 0.75) => {
   return new Promise((resolve) => {
-    // If file is not an image or is already small (< 500KB), don't compress
-    if (!file || !file.type.startsWith("image/") || file.size < 500 * 1024) {
+    if (!file || !file.type.startsWith("image/")) {
+      return resolve(file);
+    }
+
+    // Skip compression if file is already small (< 400KB)
+    if (file.size < 400 * 1024) {
       return resolve(file);
     }
 
     const reader = new FileReader();
-    reader.readAsDataURL(file);
+    reader.onerror = () => resolve(file);
     reader.onload = (event) => {
       const img = new Image();
-      img.src = event.target.result;
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
-        }
-
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) return resolve(file);
-            const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
-              type: "image/jpeg",
-              lastModified: Date.now(),
-            });
-            resolve(compressedFile);
-          },
-          "image/jpeg",
-          quality
-        );
-      };
       img.onerror = () => resolve(file);
+      img.onload = () => {
+        try {
+          let width = img.width;
+          let height = img.height;
+
+          // Scale down dimensions proportionally
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext("2d", { alpha: false });
+          if (!ctx) return resolve(file);
+
+          // Draw image to canvas
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) return resolve(file);
+              const compressedFile = new File(
+                [blob], 
+                file.name.replace(/\.[^/.]+$/, "") + ".jpg", 
+                { type: "image/jpeg", lastModified: Date.now() }
+              );
+              resolve(compressedFile);
+            },
+            "image/jpeg",
+            quality
+          );
+        } catch (err) {
+          console.warn("Mobile canvas compression fallback triggered:", err);
+          resolve(file); // Safe fallback to original file if mobile canvas fails
+        }
+      };
+      img.src = event.target.result;
     };
-    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
   });
 };
 
@@ -69,13 +85,11 @@ export default function ProductForm({ initialData }) {
   const formRef = useRef(null);
   const { addNotification } = useNotifications();
 
-  // --- EXISTING STATE ---
+  // --- STATE MANAGEMENT ---
   const [useVariants, setUseVariants] = useState(initialData?.hasVariants || false);
   const [variants, setVariants] = useState(initialData?.variants || []);
   const [isNewArrival, setIsNewArrival] = useState(initialData?.isNewArrival || false);
   const [mainPreview, setMainPreview] = useState(initialData?.imageUrl || null);
-  
-  // State to hold the actual File object for the main image
   const [mainFile, setMainFile] = useState(null);
 
   const [mainCategory, setMainCategory] = useState(initialData?.categoryId || "");
@@ -93,6 +107,7 @@ export default function ProductForm({ initialData }) {
   const [galleryPreviews, setGalleryPreviews] = useState(
     initialData?.gallery?.map(url => ({ url: url, isNew: false })) || []
   );
+  
   const [state, formAction, isPending] = useActionState(saveProduct, null);
 
   useEffect(() => { setIsMounted(true); }, []);
@@ -152,7 +167,6 @@ export default function ProductForm({ initialData }) {
     createdAt: new Date(),
   };
 
-  // --- FORM HANDLERS ---
   const handleCategoryChange = (e) => {
     setMainCategory(e.target.value);
     setSubCategory(""); 
@@ -168,18 +182,18 @@ export default function ProductForm({ initialData }) {
     setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
-  // --- CLIENT ACTION WITH IMAGE COMPRESSION & NUMBER SANITIZATION ---
+  // --- ROBUST MOBILE SUBMISSION HANDLER ---
   const clientAction = async (formData) => {
     try {
-      toast.loading("Optimizing images & saving...", { id: "saving" });
+      toast.loading("Optimizing mobile images...", { id: "saving" });
 
       formData.set("id", initialData?._id || "");
       formData.set("hasVariants", useVariants.toString());
       formData.set("isNewArrival", isNewArrival.toString());
       
-      // 1. Compress & Append Main Image
+      // 1. Compress & Append Main Image safely
       if (mainFile) {
-        const compressedMain = await compressImage(mainFile);
+        const compressedMain = await compressImageMobileSafe(mainFile);
         formData.append("mainImage", compressedMain);
       } else {
         formData.set("imageUrl", initialData?.imageUrl || "");
@@ -205,19 +219,19 @@ export default function ProductForm({ initialData }) {
       
       formData.set("price", Number(previewPrice) || 0);
       
-      // 2. Compress & Append Gallery Images
+      // 2. Process Gallery Images
       const existingGallery = galleryPreviews.filter(p => !p.isNew);
       formData.set("existingGallery", JSON.stringify(existingGallery));
       
       for (let i = 0; i < galleryPreviews.length; i++) {
         const p = galleryPreviews[i];
         if (p.isNew && p.file) {
-          const compressedGalleryImg = await compressImage(p.file);
+          const compressedGalleryImg = await compressImageMobileSafe(p.file);
           formData.append(`galleryFile_${i}`, compressedGalleryImg);
         }
       }
 
-      // 3. Compress & Append Variant Images + Sanitize Numbers
+      // 3. Process Variants
       if (useVariants) {
         const variantsData = variants.map(({ preview, file, ...rest }) => ({
           ...rest,
@@ -230,26 +244,29 @@ export default function ProductForm({ initialData }) {
         for (let i = 0; i < variants.length; i++) {
           const v = variants[i];
           if (v.file) {
-            const compressedVariantImg = await compressImage(v.file);
+            const compressedVariantImg = await compressImageMobileSafe(v.file);
             formData.append(`variantFile_${i}`, compressedVariantImg);
           }
         }
       }
 
-      toast.dismiss("saving");
+      toast.loading("Uploading to server...", { id: "saving" });
       formAction(formData);
+
     } catch (err) {
       toast.dismiss("saving");
-      toast.error("Failed to prepare submission data.");
-      console.error(err);
+      toast.error("Mobile upload failed. Please try again.");
+      console.error("Mobile upload process error:", err);
     }
   };
 
   useEffect(() => {
     if (state?.success) {
-      toast.success(state.message || "Treasure Saved! ✨");
+      toast.dismiss("saving");
+      toast.success(state.message || "Product Saved Successfully! ✨");
     } else if (state?.success === false) {
-      toast.error(state.message || "Sync failed.");
+      toast.dismiss("saving");
+      toast.error(state.message || "Upload failed.");
     }
   }, [state]);
 
@@ -259,7 +276,7 @@ export default function ProductForm({ initialData }) {
 
   const PreviewModal = () => {
     if (!isMounted || !previewModalImg) return null;
-    return createPortal(
+    return reactCreatePortal(
       <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setPreviewModalImg(null)}>
         <div className="relative max-w-4xl max-h-[90vh] w-full bg-white rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
           <button onClick={() => setPreviewModalImg(null)} className="absolute top-5 right-5 p-2.5 bg-[#EA638C] text-white rounded-full hover:rotate-90 transition-all z-10 shadow-lg">
