@@ -14,23 +14,23 @@ const OrderSchema = new mongoose.Schema(
         productName: String,
         variant: {
           name: String,
-          image: String, // 🟢 Variant image URL saved properly
+          image: String,
           size: String,
-          variantId: mongoose.Schema.Types.ObjectId, 
+          variantId: { type: String, default: null }, // Standardized to String to avoid BSON type mismatches
         },
         quantity: { type: Number, required: true },
         price: { type: Number, required: true },
-        sku: String, 
+        sku: String,
       },
     ],
     totalAmount: Number,
     deliveryCharge: { type: Number, default: 0 },
     paidAmount: { type: Number, default: 0 },
     dueAmount: { type: Number, default: 0 },
-    
-    // 🟢 Financial Ledger Support
+
+    // Financial Ledger Support
     mobileBankingFee: { type: Number, default: 0 },
-    
+
     shippingAddress: Object,
     status: {
       type: String,
@@ -44,30 +44,25 @@ const OrderSchema = new mongoose.Schema(
       default: "Unpaid",
     },
 
-    // --- 💳 EXTENDED PAYMENT SOURCE TRACKING ---
-    paymentMethod: { 
-      type: String, 
-      enum: [
-        "bKash", "Nagad", "Rocket", "Upay", 
-        "Card", "Bank Transfer", "COD", "Other",
-        "Partial_COD_BanglaQR", "Full_PrePay_BanglaQR"
-      ],
+    // EXTENDED PAYMENT SOURCE TRACKING
+    paymentMethod: {
+      type: String,
       default: "COD",
-      index: true 
+      index: true,
     },
-    
+
     // The Unique Transaction ID from Gateway
     tran_id: { type: String, sparse: true },
 
     paymentDetails: {
-      source: String,           // 🟢 Phone number (MFS) or Account Number
-      sourcePhone: String,      // 🟢 Alias for sender phone number (prevents UI missing key)
-      transactionId: String,    // 🟢 Transaction ID copy inside paymentDetails
-      gatewayStatus: String,    // Gateway verification state
-      cardType: String,         // Visa, Mastercard, AMEX
-      cardIssuer: String,       // City Bank, EBL, etc.
-      bankApp: String,          // City Touch, EBL Skybank, etc.
-      gatewayResponse: Object,  // Raw JSON
+      source: String, // Phone number (MFS) or Account Number
+      sourcePhone: String, // Sender phone number
+      transactionId: String, // Transaction ID copy
+      gatewayStatus: String, // Gateway verification state
+      cardType: String, // Visa, Mastercard, AMEX
+      cardIssuer: String, // City Bank, EBL, etc.
+      bankApp: String, // City Touch, EBL Skybank, etc.
+      gatewayResponse: Object, // Raw JSON
     },
 
     trackingNumber: { type: String, default: "" },
@@ -82,44 +77,46 @@ const OrderSchema = new mongoose.Schema(
     ],
     isStockReduced: { type: Boolean, default: false, index: true },
   },
-  { 
+  {
     timestamps: true,
     toJSON: { virtuals: true },
-    toObject: { virtuals: true }
-  },
+    toObject: { virtuals: true },
+  }
 );
 
-// --- SEARCH INDEXES ---
+// SEARCH INDEXES
 OrderSchema.index({ createdAt: -1 });
 OrderSchema.index({
   "shippingAddress.name": "text",
   "shippingAddress.phone": "text",
-  "tran_id": "text",
+  tran_id: "text",
   "paymentDetails.source": "text",
   "paymentDetails.sourcePhone": "text",
-  "paymentDetails.transactionId": "text"
+  "paymentDetails.transactionId": "text",
 });
 
-// --- 🛡️ NEXT.JS SERIALIZATION FIX ---
-OrderSchema.set('toJSON', {
+// NEXT.JS SERIALIZATION FIX
+OrderSchema.set("toJSON", {
   transform: (doc, ret) => {
-    ret._id = ret._id.toString();
+    if (ret._id) ret._id = ret._id.toString();
     if (ret.user) ret.user = ret.user.toString();
-    
+
     if (ret.items) {
-      ret.items = ret.items.map(item => ({
+      ret.items = ret.items.map((item) => ({
         ...item,
         _id: item._id?.toString(),
         product: item.product?.toString(),
-        variant: item.variant ? {
-          ...item.variant,
-          variantId: item.variant.variantId?.toString()
-        } : item.variant
+        variant: item.variant
+          ? {
+              ...item.variant,
+              variantId: item.variant.variantId?.toString() || null,
+            }
+          : item.variant,
       }));
     }
     delete ret.__v;
     return ret;
-  }
+  },
 });
 
 export default mongoose.models.Order || mongoose.model("Order", OrderSchema);

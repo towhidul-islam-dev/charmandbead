@@ -34,7 +34,7 @@ export const CartProvider = ({ children }) => {
         targetUniqueKey = product.uniqueKey;
         qChange = variantOrDelta;
       } else {
-        const pId = (product._id?.$oid || product._id || product.productId).toString();
+        const pId = (product._id?.$oid || product._id || product.productId)?.toString();
         const vId = (variantOrDelta?._id?.$oid || variantOrDelta?._id || product.variantId)?.toString();
         
         targetUniqueKey = product.uniqueKey || `${pId}-${vId || "std"}`;
@@ -51,11 +51,10 @@ export const CartProvider = ({ children }) => {
         const itemMoq = Number(item.minOrderQuantity) || 1;
         const availableStock = Number(item.stock) || 0;
 
-        let newQty = item.quantity + qChange;
-        if (newQty > availableStock) newQty = availableStock;
-        if (!isNewAddition && newQty < itemMoq) newQty = itemMoq;
+        let rawQty = isNewAddition ? item.quantity + qChange : item.quantity + qChange;
+        let newQty = Math.min(availableStock, Math.max(itemMoq, rawQty));
 
-        if (item.quantity === newQty && !isNewAddition) return prev;
+        if (item.quantity === newQty) return prev;
 
         updatedCart[existingIndex] = { ...item, quantity: newQty };
         return updatedCart;
@@ -65,10 +64,9 @@ export const CartProvider = ({ children }) => {
       const itemMoq = Number(product.minOrderQuantity || variantOrDelta?.minOrderQuantity || 1);
       const availableStock = Number(variantOrDelta?.stock ?? product.stock ?? 0);
       
-      const finalProductId = (product._id?.$oid || product._id || product.productId).toString();
+      const finalProductId = (product._id?.$oid || product._id || product.productId)?.toString();
       const finalVariantId = (variantOrDelta?._id?.$oid || variantOrDelta?._id || product.variantId)?.toString() || null;
 
-      // 🟢 Build structural fallback name matching creator row properties if missing
       let computedVariantName = product.variantName || variantOrDelta?.name || "";
       if (!computedVariantName && (variantOrDelta?.color || variantOrDelta?.size)) {
         computedVariantName = `${variantOrDelta.color || ""} ${variantOrDelta.size || ""}`.trim();
@@ -83,7 +81,7 @@ export const CartProvider = ({ children }) => {
         variantId: finalVariantId,
         uniqueKey: targetUniqueKey,
         name: product.name,
-        variantName: computedVariantName, // 🟢 Added explicit target tracking
+        variantName: computedVariantName,
         basePrice: Number(variantOrDelta?.price || product.price || 0),
         price: Number(variantOrDelta?.price || product.price || 0), 
         pricingTiers: product.pricingTiers || [], 
@@ -107,13 +105,13 @@ export const CartProvider = ({ children }) => {
       return acc;
     }, {});
 
-    return cart.map(item => {
+    return cart.map((item) => {
       const totalQtyForThisProduct = productTotals[item.productId];
       let activePrice = item.basePrice || item.price;
 
       if (item.pricingTiers && item.pricingTiers.length > 0) {
         const sortedTiers = [...item.pricingTiers].sort((a, b) => b.minQuantity - a.minQuantity);
-        const applicableTier = sortedTiers.find(tier => totalQtyForThisProduct >= tier.minQuantity);
+        const applicableTier = sortedTiers.find((tier) => totalQtyForThisProduct >= tier.minQuantity);
         
         if (applicableTier) {
           activePrice = applicableTier.unitPrice;
@@ -124,16 +122,31 @@ export const CartProvider = ({ children }) => {
     });
   }, [cart]);
 
-  const removeFromCart = (uniqueKey) => {
+  const removeFromCart = useCallback((uniqueKey) => {
     setCart((prev) => prev.filter((item) => item.uniqueKey !== uniqueKey));
-  };
-
-  const deleteSelectedItems = useCallback((selectedKeys) => {
-    if (!selectedKeys || selectedKeys.length === 0) return;
-    setCart((prev) => prev.filter((item) => !selectedKeys.includes(item.uniqueKey)));
   }, []);
 
-  const clearCart = () => setCart([]);
+  // --- 🟢 ROBUST MULTI-KEY DELETE ---
+  const deleteSelectedItems = useCallback((selectedKeys) => {
+    if (!selectedKeys || !Array.isArray(selectedKeys) || selectedKeys.length === 0) return;
+
+    const keyset = new Set(selectedKeys.map((k) => (k?.$oid || k || "").toString()));
+
+    setCart((prev) =>
+      prev.filter((item) => {
+        const itemKey = (item.uniqueKey || "").toString();
+        const itemProdId = (item.productId || "").toString();
+        const itemVarId = (item.variantId || "").toString();
+
+        return !(keyset.has(itemKey) || keyset.has(itemProdId) || keyset.has(itemVarId));
+      })
+    );
+  }, []);
+
+  const clearCart = useCallback(() => {
+    setCart([]);
+    localStorage.removeItem("charm_cart");
+  }, []);
 
   const cartTotal = useMemo(() => {
     return processedCart.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -147,7 +160,7 @@ export const CartProvider = ({ children }) => {
     <CartContext.Provider
       value={{
         cart: processedCart, 
-        rawCart: cart,       
+        rawCart: cart,      
         addToCart,
         removeFromCart,
         deleteSelectedItems,

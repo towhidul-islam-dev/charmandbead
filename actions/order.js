@@ -9,6 +9,11 @@ import { revalidatePath } from "next/cache";
 import InventoryLog from "@/models/InventoryLog";
 import { createInAppNotification } from "@/actions/inAppNotifications";
 
+// Helper to safely escape regex search strings to avoid MongoDB query crashes
+function escapeRegex(text) {
+  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+}
+
 export async function createOrder(orderData) {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -31,17 +36,22 @@ export async function createOrder(orderData) {
     } = orderData;
 
     if (!userId) throw new Error("User ID is required.");
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      throw new Error("Cannot create an order with empty items.");
+    }
 
-    // --- 🟢 FINANCIAL CALCULATIONS ---
+    // --- FINANCIAL CALCULATIONS ---
     let finalMobileBankingFee = frontendFee || 0;
     if (!finalMobileBankingFee && paymentMethod !== "COD") {
       finalMobileBankingFee = Number((totalAmount * 0.015).toFixed(2)); 
     }
 
-    // 1. Idempotency Check
+    const normalizedTotal = Number(Number(totalAmount).toFixed(2));
+
+    // 1. Idempotency Check (Prevents duplicate accidental submissions)
     const existingOrder = await Order.findOne({
       user: userId,
-      totalAmount: totalAmount,
+      totalAmount: normalizedTotal,
       createdAt: { $gte: new Date(Date.now() - 30 * 1000) }
     }).session(session);
 
@@ -54,7 +64,7 @@ export async function createOrder(orderData) {
     const extractedTxnId = paymentDetails?.transactionId || tran_id || orderData.transactionId || "";
     const extractedSenderPhone = paymentDetails?.sourcePhone || orderData.senderPhone || "";
 
-    // 3. Create the Order
+    // 3. Create the Order Document
     const [newOrder] = await Order.create([{
         user: userId, 
         items: items.map(i => ({
@@ -63,66 +73,119 @@ export async function createOrder(orderData) {
           variant: {
             name: i.variant?.name || i.color || "Default",
             size: i.size || i.variant?.size || "N/A",
-            variantId: i.variantId || i.variant?._id,
-            image: i.variant?.image || i.image || null // 🟢 FIX 1: Save Variant Image URL explicitly
+            variantId: i.variantId || i.variant?._id || i.variant?.variantId || null,
+            image: i.variant?.image || i.image || null
           },
-          quantity: Number(i.quantity),
-          price: Number(i.price),
+          quantity: Math.max(1, Number(i.quantity) || 1),
+          price: Number(i.price) || 0,
           sku: i.sku || "N/A"
         })),
         shippingAddress,
-        totalAmount,
+        totalAmount: normalizedTotal,
         paidAmount,
         dueAmount,
         paymentMethod,
         deliveryCharge: Number(deliveryCharge || 0),
         mobileBankingFee: Number(finalMobileBankingFee), 
-        tran_id: extractedTxnId, // 🟢 FIX 2: Ensure Top-Level Txn ID is populated
+        tran_id: extractedTxnId,
         paymentDetails: {
-          sourcePhone: extractedSenderPhone, // 🟢 FIX 3: Preserves the customer's payment phone
-          transactionId: extractedTxnId,    // 🟢 FIX 4: Explicit transaction ID inside paymentDetails
-          deliveryPhone: phone,              // Saved separately for reference
+          sourcePhone: extractedSenderPhone,
+          transactionId: extractedTxnId,
+          deliveryPhone: phone,
           gatewayStatus: paymentDetails?.gatewayStatus || "MANUAL_VERIFICATION"
         },
         status: "Pending",
         isStockReduced: false
     }], { session });
 
-    // 4. Inventory Logic (Reduces stock based on wholesale quantities)
+    // 4. Group Deductions per Product & Variant
     const productDeductions = items.reduce((acc, item) => {
-      const pId = (item.productId || item.product || item._id).toString();
-      const name = item.productName || item.name || "Product"; 
-      if (!acc[pId]) acc[pId] = { totalQty: 0, variants: [], name: name };
+      const rawProductId = item.productId || item.product || item._id;
+      if (!rawProductId) return acc;
       
-      const qty = Number(item.quantity);
+      const pId = rawProductId.toString();
+      const name = item.productName || item.name || "Product"; 
+      if (!acc[pId]) acc[pId] = { totalQty: 0, variants: {}, name: name };
+      
+      const qty = Math.max(1, Number(item.quantity) || 1);
       acc[pId].totalQty += qty;
       
-      const vId = item.variantId || item.variant?._id;
-      if (vId) acc[pId].variants.push({ vId: vId.toString(), qty });
+      const vId = item.variantId || item.variant?._id || item.variant?.variantId;
+      const key = vId ? vId.toString() : (item.sku || "default");
+      
+      if (!acc[pId].variants[key]) {
+        acc[pId].variants[key] = { vId: vId ? vId.toString() : null, qty: 0, sku: item.sku };
+      }
+      acc[pId].variants[key].qty += qty;
       
       return acc;
     }, {});
 
     const orderRef = `Order #${newOrder._id.toString().slice(-6).toUpperCase()}`;
 
+    // 5. Process Stock Deductions
     for (const [productId, data] of Object.entries(productDeductions)) {
       const product = await Product.findById(productId).session(session);
-      if (!product) throw new Error(`Product ${data.name} not found.`);
+      if (!product) throw new Error(`Product "${data.name}" not found.`);
 
-      if (product.hasVariants) {
-        data.variants.forEach(orderedVar => {
-          const target = product.variants.id(orderedVar.vId);
-          if (!target) throw new Error(`Variant not found for ${data.name}`);
-          if (target.stock < orderedVar.qty) throw new Error(`Stock error for ${data.name}: ${target.color} is out of stock.`);
-          target.stock -= orderedVar.qty;
-        });
-        product.stock = product.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
-      } else {
-        if (product.stock < data.totalQty) throw new Error(`Stock error: ${data.name} is out of stock.`);
-        product.stock -= data.totalQty;
+      // Server-Side Minimum Order Quantity (MOQ) Validation
+      const minQty = Number(product.minOrderQuantity) || 1;
+      if (data.totalQty < minQty) {
+        throw new Error(`Order quantity for ${data.name} (${data.totalQty}) is below Minimum Order Quantity (${minQty}).`);
       }
 
-      await product.save({ session });
+      if (product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0) {
+        for (const orderedVar of Object.values(data.variants)) {
+          const searchId = orderedVar.vId;
+          
+          let target = product.variants.find((v) => {
+            const idMatch = v._id && v._id.toString() === searchId;
+            const skuMatch = orderedVar.sku && v.sku && v.sku === orderedVar.sku;
+            return idMatch || skuMatch;
+          });
+
+          if (!target && searchId && typeof product.variants.id === "function") {
+            target = product.variants.id(searchId);
+          }
+
+          if (!target && product.variants.length === 1) {
+            target = product.variants[0];
+          }
+
+          if (!target) {
+            throw new Error(`Variant selection not found for product "${data.name}".`);
+          }
+
+          const currentVariantStock = Number(target.stock) || 0;
+          if (currentVariantStock < orderedVar.qty) {
+            throw new Error(`Insufficient stock for ${data.name} (${target.name || target.color || target.size || "Variant"}): Only ${currentVariantStock} left.`);
+          }
+
+          // Atomic deduction on variant stock
+          await Product.updateOne(
+            { _id: productId, "variants._id": target._id, "variants.stock": { $gte: orderedVar.qty } },
+            { $inc: { "variants.$.stock": -orderedVar.qty } },
+            { session }
+          );
+        }
+
+        // Re-fetch product to update overall stock
+        const updatedProd = await Product.findById(productId).session(session);
+        updatedProd.stock = updatedProd.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+        await updatedProd.save({ session });
+
+      } else {
+        const currentStock = Number(product.stock) || 0;
+        if (currentStock < data.totalQty) {
+          throw new Error(`Stock error: ${data.name} only has ${currentStock} units in stock.`);
+        }
+
+        await Product.updateOne(
+          { _id: productId, stock: { $gte: data.totalQty } },
+          { $inc: { stock: -data.totalQty } },
+          { session }
+        );
+      }
 
       await InventoryLog.create([{
         productId,
@@ -133,7 +196,8 @@ export async function createOrder(orderData) {
       }], { session });
     }
 
-    await Order.updateOne({ _id: newOrder._id }, { isStockReduced: true }, { session });
+    newOrder.isStockReduced = true;
+    await newOrder.save({ session });
     
     await createInAppNotification({
       title: "Order Placed! 🎉",
@@ -148,12 +212,16 @@ export async function createOrder(orderData) {
     revalidatePath("/admin/products");
     revalidatePath("/admin/orders");
     revalidatePath("/dashboard/orders");
+    revalidatePath("/products");
+    revalidatePath("/");
 
     return { success: true, orderId: newOrder._id.toString() };
 
   } catch (error) {
-    if (session.transaction.state !== 'TRANSACTION_ABORTED') {
+    try {
       await session.abortTransaction();
+    } catch (e) {
+      // Transaction already aborted
     }
     console.error("CREATE ORDER ERROR:", error);
     return { success: false, message: error.message };
@@ -184,11 +252,11 @@ export async function updateOrderStatus(orderId, newStatus, trackingNumber = "")
     if (newStatus === "Shipped") {
       notifyTitle = "Order Shipped! 🚚";
       notifyMessage = `Good news! Your order #INV-${orderTag} is on the way. ${trackingNumber ? `Track: ${trackingNumber}` : ''}`;
-      if (trackingNumber) order.trackingNumber = trackingNumber; // 🟢 Save tracking ID
+      if (trackingNumber) order.trackingNumber = trackingNumber;
     } else if (newStatus === "Delivered") {
       notifyTitle = "Package Delivered! ✨";
       notifyMessage = `Your order #INV-${orderTag} has been successfully delivered.`;
-      order.paymentStatus = "Paid"; // 🟢 Assume paid on delivery
+      order.paymentStatus = "Paid";
       order.dueAmount = 0;
       order.paidAmount = order.totalAmount;
     } else if (newStatus === "Cancelled") {
@@ -197,35 +265,58 @@ export async function updateOrderStatus(orderId, newStatus, trackingNumber = "")
     }
 
     if (order.user) {
-        await createInAppNotification({
-          title: notifyTitle,
-          message: notifyMessage,
-          type: "order",
-          recipientId: order.user,
-          link: "/dashboard/orders"
-        });
+      await createInAppNotification({
+        title: notifyTitle,
+        message: notifyMessage,
+        type: "order",
+        recipientId: order.user,
+        link: "/dashboard/orders"
+      });
     }
 
-    // 2. Stock Restoration
+    // 2. Stock Restoration on Cancellation
     if (newStatus === "Cancelled" && oldStatus !== "Cancelled" && order.isStockReduced) {
       const orderRef = `Cancel #${orderTag}`;
       for (const item of order.items) {
+        if (!item.product) continue;
         const product = await Product.findById(item.product).session(session);
         if (!product) continue;
-        if (product.hasVariants && item.variant?.variantId) {
-          const target = product.variants.id(item.variant.variantId);
+        
+        const itemQty = Number(item.quantity) || 0;
+
+        if (product.hasVariants && (item.variant?.variantId || item.variant?._id)) {
+          const targetId = (item.variant.variantId || item.variant._id).toString();
+          let target = product.variants.find(
+            (v) => (v._id && v._id.toString() === targetId) || (v.sku && v.sku === item.sku)
+          );
+
+          if (!target && typeof product.variants.id === "function") {
+            target = product.variants.id(targetId);
+          }
+
           if (target) {
-            target.stock += item.quantity;
-            product.stock = product.variants.reduce((sum, v) => sum + (v.stock || 0), 0);
+            await Product.updateOne(
+              { _id: product._id, "variants._id": target._id },
+              { $inc: { "variants.$.stock": itemQty } },
+              { session }
+            );
+
+            const updatedProd = await Product.findById(product._id).session(session);
+            updatedProd.stock = updatedProd.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+            await updatedProd.save({ session });
           }
         } else {
-          product.stock += item.quantity;
+          await Product.updateOne(
+            { _id: product._id },
+            { $inc: { stock: itemQty } },
+            { session }
+          );
         }
-        await product.save({ session });
+
         await InventoryLog.create([{
           productId: product._id,
           productName: product.name,
-          change: item.quantity,
+          change: itemQty,
           reason: "Order Cancellation",
           performedBy: orderRef
         }], { session });
@@ -237,15 +328,104 @@ export async function updateOrderStatus(orderId, newStatus, trackingNumber = "")
     await order.save({ session });
     await session.commitTransaction();
 
+    revalidatePath("/admin/products");
     revalidatePath("/admin/orders");
     revalidatePath("/dashboard/orders");
+    revalidatePath("/products");
+    revalidatePath("/");
     
     if (newStatus === "Delivered" && order.user) await syncVIPStatus(order.user);
 
     return { success: true, order: JSON.parse(JSON.stringify(order)) };
   } catch (error) {
-    if (session.inAtomicallyExecutableOperation()) await session.abortTransaction();
+    try {
+      await session.abortTransaction();
+    } catch (e) {
+      // Transaction already aborted
+    }
     return { success: false, message: "Failed to update status: " + error.message };
+  } finally {
+    session.endSession();
+  }
+}
+
+export async function deleteOrder(orderId) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    await dbConnect();
+    const order = await Order.findById(orderId).session(session);
+    if (!order) {
+      await session.abortTransaction();
+      return { success: false, error: "Order not found" };
+    }
+
+    // Restore stock if the order had reduced stock
+    if (order.isStockReduced && order.status !== "Cancelled") {
+      const orderTag = order._id.toString().slice(-6).toUpperCase();
+      const orderRef = `Deletion #${orderTag}`;
+
+      for (const item of order.items) {
+        if (!item.product) continue;
+        const product = await Product.findById(item.product).session(session);
+        if (!product) continue;
+
+        const itemQty = Number(item.quantity) || 0;
+
+        if (product.hasVariants && (item.variant?.variantId || item.variant?._id)) {
+          const targetId = (item.variant.variantId || item.variant._id).toString();
+          let target = product.variants.find(
+            (v) => (v._id && v._id.toString() === targetId) || (v.sku && v.sku === item.sku)
+          );
+
+          if (target) {
+            await Product.updateOne(
+              { _id: product._id, "variants._id": target._id },
+              { $inc: { "variants.$.stock": itemQty } },
+              { session }
+            );
+
+            const updatedProd = await Product.findById(product._id).session(session);
+            updatedProd.stock = updatedProd.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+            await updatedProd.save({ session });
+          }
+        } else {
+          await Product.updateOne(
+            { _id: product._id },
+            { $inc: { stock: itemQty } },
+            { session }
+          );
+        }
+
+        await InventoryLog.create([{
+          productId: product._id,
+          productName: product.name,
+          change: itemQty,
+          reason: "Order Deletion",
+          performedBy: orderRef
+        }], { session });
+      }
+    }
+
+    const userId = order.user;
+    await Order.findByIdAndDelete(orderId).session(session);
+    await session.commitTransaction();
+
+    if (userId) await syncVIPStatus(userId);
+
+    revalidatePath("/admin/products");
+    revalidatePath("/admin/orders");
+    revalidatePath("/dashboard/orders");
+    revalidatePath("/products");
+    revalidatePath("/");
+
+    return { success: true };
+  } catch (error) { 
+    try {
+      await session.abortTransaction();
+    } catch (e) {}
+    return { success: false, error: "Database error: " + error.message }; 
   } finally {
     session.endSession();
   }
@@ -254,15 +434,19 @@ export async function updateOrderStatus(orderId, newStatus, trackingNumber = "")
 export async function syncVIPStatus(userId) {
   try {
     await dbConnect();
+    const targetUserId = typeof userId === "string" ? new mongoose.Types.ObjectId(userId) : userId;
+
     const stats = await Order.aggregate([
-      { $match: { user: userId, status: "Delivered" } },
+      { $match: { user: targetUserId, status: "Delivered" } },
       { $group: { _id: null, total: { $sum: "$totalAmount" } } },
     ]);
     const totalSpent = stats.length > 0 ? stats[0].total : 0;
     const isVIP = totalSpent >= 10000;
     await User.findByIdAndUpdate(userId, { totalSpent, isVIP });
     return { success: true, totalSpent, isVIP };
-  } catch (error) { return { success: false }; }
+  } catch (error) { 
+    return { success: false, error: error.message }; 
+  }
 }
 
 export async function getDashboardStats(period = "all") {
@@ -274,7 +458,6 @@ export async function getDashboardStats(period = "all") {
     else if (period === "30days") startDate = new Date(now.setDate(now.getDate() - 30));
     else if (period === "year") startDate = new Date(now.setFullYear(now.getFullYear() - 1));
 
-    // 🟢 Fetch total registered users count dynamically
     const totalUsers = await User.countDocuments();
 
     const financialData = await Order.aggregate([
@@ -292,7 +475,6 @@ export async function getDashboardStats(period = "all") {
 
     const financials = financialData[0] || { grossRevenue: 0, totalMfsFees: 0, totalDeliveryCharges: 0, orderCount: 0 };
 
-    // 🟢 Dynamic conversion rate calculation (Orders / Users * 100)
     let conversionRate = 0;
     if (totalUsers > 0) {
       conversionRate = Number(((financials.orderCount / totalUsers) * 100).toFixed(1));
@@ -306,8 +488,8 @@ export async function getDashboardStats(period = "all") {
         gatewayCosts: financials.totalMfsFees,
         deliveryCosts: financials.totalDeliveryCharges,
         orderCount: financials.orderCount,
-        totalUsers: totalUsers || 0,         // 🟢 Dynamic Total Users
-        conversionRate: conversionRate || 0, // 🟢 Dynamic Conversion Rate
+        totalUsers: totalUsers || 0,
+        conversionRate: conversionRate || 0,
       },
     };
   } catch (error) { return { success: false }; }
@@ -321,19 +503,16 @@ export async function getAllOrders(page = 1, limit = 10, search = "", status = "
     if (status !== "All") query.status = status;
 
     if (search) {
-      // 🟢 Check if the search string is a valid MongoDB ObjectId (24 hex characters)
       const isObjectId = /^[0-9a-fA-F]{24}$/.test(search);
 
       if (isObjectId) {
-        // If it's an ID, match it exactly
         query._id = search;
       } else {
-        // If it's not an ID, search other string fields
+        const safeSearch = escapeRegex(search);
         query.$or = [
-          { "shippingAddress.name": { $regex: search, $options: "i" } },
-          { "shippingAddress.phone": { $regex: search, $options: "i" } },
-          // You can also search by the "status" text if needed
-          { status: { $regex: search, $options: "i" } },
+          { "shippingAddress.name": { $regex: safeSearch, $options: "i" } },
+          { "shippingAddress.phone": { $regex: safeSearch, $options: "i" } },
+          { status: { $regex: safeSearch, $options: "i" } },
         ];
       }
     }
@@ -369,11 +548,10 @@ export async function getAllOrders(page = 1, limit = 10, search = "", status = "
 export async function getOrderById(orderId) {
   try {
     await dbConnect();
-    // 🟢 Added population to match Admin Registry logic
     const order = await Order.findById(orderId)
       .populate({
         path: 'items.product',
-        select: 'imageUrl minOrderQuantity', // Pulling fields needed for Buy Again
+        select: 'imageUrl minOrderQuantity',
         model: Product
       })
       .lean();
@@ -385,23 +563,9 @@ export async function getOrderById(orderId) {
   }
 }
 
-export async function deleteOrder(orderId) {
-  try {
-    await dbConnect();
-    const order = await Order.findById(orderId);
-    if (!order) return { success: false, error: "Order not found" };
-    const userId = order.user;
-    await Order.findByIdAndDelete(orderId);
-    if (userId) await syncVIPStatus(userId);
-    revalidatePath("/admin/orders");
-    return { success: true };
-  } catch (error) { return { success: false, error: "Database error" }; }
-}
-
 export async function getUserOrders(userId) {
   try {
     await dbConnect();
-    // 🟢 Added population here too so the Order History list shows images correctly
     const orders = await Order.find({ user: userId })
       .sort({ createdAt: -1 })
       .populate({

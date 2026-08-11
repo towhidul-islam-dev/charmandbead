@@ -1,7 +1,7 @@
 "use client";
-import { useState, useActionState, useEffect, useRef, useMemo } from "react"; 
+import { useState, useActionState, useEffect, useRef, useMemo, startTransition } from "react"; 
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation"; // 👈 Added Router Import
+import { useRouter } from "next/navigation";
 import { saveProduct } from "@/actions/product";
 import { createInAppNotification } from "@/actions/inAppNotifications";
 import { useNotifications } from "@/Context/NotificationContext";
@@ -17,14 +17,12 @@ import {
 
 /**
  * MOBILE-SAFE CLIENT-SIDE IMAGE COMPRESSOR
- * Handles high-res mobile photos (10MB-25MB+) safely without memory crashes
  */
 const compressImageMobileSafe = (file, maxWidth = 1200, quality = 0.75) => {
   return new Promise((resolve) => {
     if (!file || !file.type.startsWith("image/")) {
       return resolve(file);
     }
-    // Skip compression if file is already small (< 400KB)
     if (file.size < 400 * 1024) {
       return resolve(file);
     }
@@ -68,7 +66,7 @@ const compressImageMobileSafe = (file, maxWidth = 1200, quality = 0.75) => {
           );
         } catch (err) {
           console.warn("Mobile canvas compression fallback triggered:", err);
-          resolve(file); // Safe fallback to original file if memory fails
+          resolve(file);
         }
       };
       img.src = event.target.result;
@@ -79,16 +77,28 @@ const compressImageMobileSafe = (file, maxWidth = 1200, quality = 0.75) => {
 
 export default function ProductForm({ initialData }) {
   const formRef = useRef(null);
-  const router = useRouter(); // 👈 Initialized router
+  const router = useRouter();
   const { addNotification } = useNotifications();
 
   // --- STATE MANAGEMENT ---
   const [useVariants, setUseVariants] = useState(initialData?.hasVariants || false);
-  const [variants, setVariants] = useState(initialData?.variants || []);
+  
+  const [variants, setVariants] = useState(
+    initialData?.variants?.map(v => ({
+      sku: v.sku || "",
+      size: v.size || "",
+      color: v.color || "",
+      price: v.price || "",
+      stock: v.stock || "",
+      minOrderQuantity: v.minOrderQuantity || 1,
+      imageUrl: v.imageUrl || null,
+      preview: null,
+      file: null
+    })) || []
+  );
+
   const [isNewArrival, setIsNewArrival] = useState(initialData?.isNewArrival || false);
   const [mainPreview, setMainPreview] = useState(initialData?.imageUrl || null);
-  
-  // State to hold the actual File object for the main image
   const [mainFile, setMainFile] = useState(null);
 
   const [mainCategory, setMainCategory] = useState(initialData?.categoryId || "");
@@ -96,9 +106,7 @@ export default function ProductForm({ initialData }) {
   const [previewName, setPreviewName] = useState(initialData?.name || "");
   const [previewPrice, setPreviewPrice] = useState(initialData?.price || 0);
 
-  // --- DISCOUNT & TIER STATES ---
-  const [isOnSale, setIsOnSale] = useState(initialData?.isOnSale || false);
-  const [discountPrice, setDiscountPrice] = useState(initialData?.discountPrice || 0);
+  // --- SINGLE GLOBAL WHOLESALE TIERS STATE ---
   const [pricingTiers, setPricingTiers] = useState(initialData?.pricingTiers || []);
   
   const [previewModalImg, setPreviewModalImg] = useState(null);
@@ -125,7 +133,7 @@ export default function ProductForm({ initialData }) {
     toast.success("Batch SKUs generated! ⚡");
   };
 
-  // --- TIER HANDLERS ---
+  // --- GLOBAL WHOLESALE TIER HANDLERS ---
   const addTier = () => setPricingTiers([...pricingTiers, { minQuantity: "", unitPrice: "" }]);
   const removeTier = (index) => setPricingTiers(pricingTiers.filter((_, i) => i !== index));
   const updateTier = (index, field, value) => {
@@ -136,10 +144,14 @@ export default function ProductForm({ initialData }) {
 
   // --- BEST PRICE PREVIEW LOGIC ---
   const getBestPrice = () => {
-    let prices = [Number(previewPrice)];
-    if (isOnSale && discountPrice > 0) prices.push(Number(discountPrice));
-    pricingTiers.forEach(t => { if(Number(t.unitPrice) > 0) prices.push(Number(t.unitPrice)) });
-    return Math.min(...prices.filter(p => p > 0));
+    let basePrices = useVariants && variants.length > 0 
+      ? variants.map(v => Number(v.price)).filter(p => p > 0)
+      : [Number(previewPrice)];
+
+    let tierPrices = pricingTiers.map(t => Number(t.unitPrice)).filter(p => p > 0);
+    let allPrices = [...basePrices, ...tierPrices];
+
+    return allPrices.length > 0 ? Math.min(...allPrices) : Number(previewPrice);
   };
 
   const getCategoryDisplayName = (id) => {
@@ -159,7 +171,7 @@ export default function ProductForm({ initialData }) {
         : (mainCategory ? getCategoryDisplayName(mainCategory) : "Category"),
     price: useVariants ? (variants[0]?.price || previewPrice) : previewPrice,
     discountPrice: getBestPrice(),
-    isOnSale: isOnSale || pricingTiers.length > 0,
+    isOnSale: pricingTiers.length > 0,
     imageUrl: mainPreview,
     isNewArrival: isNewArrival,
     createdAt: new Date(),
@@ -181,7 +193,7 @@ export default function ProductForm({ initialData }) {
     setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
-  // --- ROBUST MOBILE SUBMISSION HANDLER ---
+  // --- CLIENT SUBMISSION HANDLER ---
   const clientAction = async (formData) => {
     try {
       toast.loading("Optimizing mobile images...", { id: "saving" });
@@ -190,7 +202,6 @@ export default function ProductForm({ initialData }) {
       formData.set("hasVariants", useVariants.toString());
       formData.set("isNewArrival", isNewArrival.toString());
       
-      // 1. Compress & Append Main Image safely
       if (mainFile) {
         const compressedMain = await compressImageMobileSafe(mainFile);
         formData.append("mainImage", compressedMain);
@@ -198,10 +209,6 @@ export default function ProductForm({ initialData }) {
         formData.set("imageUrl", initialData?.imageUrl || "");
       }
       
-      formData.set("isOnSale", isOnSale.toString());
-      formData.set("discountPrice", Number(discountPrice) || 0);
-      
-      // Sanitize Pricing Tiers
       const validTiers = pricingTiers
         .map(t => ({ minQuantity: Number(t.minQuantity) || 0, unitPrice: Number(t.unitPrice) || 0 }))
         .filter(t => t.minQuantity > 0 && t.unitPrice > 0);
@@ -218,7 +225,6 @@ export default function ProductForm({ initialData }) {
       
       formData.set("price", Number(previewPrice) || 0);
       
-      // 2. Process Gallery Images
       const existingGallery = galleryPreviews.filter(p => !p.isNew);
       formData.set("existingGallery", JSON.stringify(existingGallery));
       
@@ -230,13 +236,12 @@ export default function ProductForm({ initialData }) {
         }
       }
 
-      // 3. Process Variants
       if (useVariants) {
         const variantsData = variants.map(({ preview, file, ...rest }) => ({
           ...rest,
           minOrderQuantity: Number(rest.minOrderQuantity) || 1,
           price: Number(rest.price) || 0,
-          stock: Number(rest.stock) || 0
+          stock: Number(rest.stock) || 0,
         }));
         formData.set("variantsJson", JSON.stringify(variantsData));
         
@@ -251,7 +256,10 @@ export default function ProductForm({ initialData }) {
 
       toast.dismiss("saving");
       toast.loading("Uploading to server...", { id: "saving" });
-      formAction(formData);
+      
+      startTransition(() => {
+        formAction(formData);
+      });
     } catch (err) {
       toast.dismiss("saving");
       toast.error("Mobile upload failed. Please try again.");
@@ -259,16 +267,16 @@ export default function ProductForm({ initialData }) {
     }
   };
 
-  // --- SUCCESS & REDIRECT HANDLER ---
+  // --- SUCCESS & RESET HANDLER ---
   useEffect(() => {
     if (state?.success) {
       toast.dismiss("saving");
       toast.success(state.message || "Product Saved Successfully! ✨");
 
-      // 1. Reset native form inputs
+      // Reset Native Form Inputs
       formRef.current?.reset();
 
-      // 2. Reset custom React state completely
+      // Complete State Reset
       setUseVariants(false);
       setVariants([]);
       setIsNewArrival(false);
@@ -278,15 +286,12 @@ export default function ProductForm({ initialData }) {
       setSubCategory("");
       setPreviewName("");
       setPreviewPrice(0);
-      setIsOnSale(false);
-      setDiscountPrice(0);
       setPricingTiers([]);
       setGalleryPreviews([]);
 
-      // 3. Delay redirect slightly so user can see the success toast
       const timer = setTimeout(() => {
-        router.push("/admin/products"); // Adjust path if your products route is different
-        router.refresh(); // Refreshes server data so the new item shows immediately
+        router.push("/admin/products");
+        router.refresh();
       }, 1000);
 
       return () => clearTimeout(timer);
@@ -296,9 +301,9 @@ export default function ProductForm({ initialData }) {
     }
   }, [state, router]);
 
-  const inputClass = "w-full bg-gray-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/20 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-[16px] md:text-sm block";
+  const inputClass = "w-full bg-gray-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/30 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-[16px] md:text-sm block";
   const sectionClass = "bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-6";
-  const variantInputClass = "w-full bg-white px-3 py-3 rounded-xl text-[13px] md:text-[11px] font-bold outline-none border border-transparent focus:border-[#EA638C]/20 text-gray-900";
+  const variantInputClass = "w-full bg-white px-3 py-3 rounded-xl text-[13px] md:text-[11px] font-bold outline-none border border-transparent focus:border-[#EA638C]/30 text-gray-900 shadow-sm";
 
   const PreviewModal = () => {
     if (!isMounted || !previewModalImg) return null;
@@ -330,7 +335,9 @@ export default function ProductForm({ initialData }) {
             
             <section className={sectionClass}>
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-pink-50 rounded-xl text-[#EA638C]"><TagIcon className="w-5 h-5" /></div>
+                <div className="p-2 bg-[#FBB6E6]/30 rounded-xl text-[#EA638C]">
+                  <TagIcon className="w-5 h-5" />
+                </div>
                 <h3 className="text-[11px] font-black tracking-widest text-[#3E442B] uppercase">Product Essence</h3>
               </div>
               <div className="space-y-5">
@@ -357,7 +364,7 @@ export default function ProductForm({ initialData }) {
                 </div>
                 <div className="flex items-center gap-2">
                   {useVariants && (
-                    <button type="button" onClick={generateAutoSKUs} className="px-4 py-2 bg-gray-900 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-black transition-all shadow-sm">
+                    <button type="button" onClick={generateAutoSKUs} className="px-4 py-2 bg-[#3E442B] text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-[#3E442B]/90 transition-all shadow-sm">
                         <CommandLineIcon className="w-3.5 h-3.5" /> Auto SKU
                     </button>
                   )}
@@ -380,56 +387,48 @@ export default function ProductForm({ initialData }) {
                     </div>
                     <div className="space-y-1">
                       <span className="text-[9px] font-black uppercase text-[#EA638C] ml-2">Min. Order (MOQ)</span>
-                      <input name="minOrderQuantity" type="number" defaultValue={initialData?.minOrderQuantity || 1} className={`${inputClass} text-[#EA638C] bg-pink-50/50 ring-1 ring-[#EA638C]/10`} placeholder="1" />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 pt-4 border-t border-gray-50 md:grid-cols-2">
-                    <div className="p-5 border border-gray-100 bg-gray-50/50 rounded-3xl">
-                      <div className="flex items-center justify-between mb-4">
-                        <span className="text-[9px] font-black uppercase text-[#3E442B]">Flash Sale</span>
-                        <button type="button" onClick={() => setIsOnSale(!isOnSale)} className={`w-10 h-5 flex items-center rounded-full px-1 transition-colors ${isOnSale ? 'bg-[#EA638C]' : 'bg-gray-300'}`}>
-                          <div className={`w-3 h-3 bg-white rounded-full transition-transform ${isOnSale ? 'translate-x-5' : 'translate-x-0'}`} />
-                        </button>
-                      </div>
-                      {isOnSale && <input type="number" value={discountPrice} onChange={(e) => setDiscountPrice(e.target.value)} className={`${inputClass} bg-white shadow-sm`} placeholder="Sale Price (TK)" />}
-                    </div>
-
-                    <div className="p-5 border border-gray-100 bg-gray-50/50 rounded-3xl">
-                      <div className="flex items-center justify-between mb-4">
-                        <span className="text-[9px] font-black uppercase text-[#3E442B]">Wholesale Tiers</span>
-                        <button type="button" onClick={addTier} className="text-[9px] font-black text-[#EA638C] uppercase flex items-center gap-1 hover:scale-105"><PlusIcon className="w-3 h-3 stroke-[3]" /> Add</button>
-                      </div>
-                      <div className="space-y-2">
-                        {pricingTiers.map((tier, idx) => (
-                          <div key={idx} className="flex items-center gap-2 group">
-                            <input type="number" placeholder="Qty" value={tier.minQuantity} onChange={(e) => updateTier(idx, 'minQuantity', e.target.value)} className="w-1/2 p-3 text-[11px] font-bold border-none rounded-xl bg-white shadow-sm" />
-                            <input type="number" placeholder="Price" value={tier.unitPrice} onChange={(e) => updateTier(idx, 'unitPrice', e.target.value)} className="w-1/2 p-3 text-[11px] font-bold border-none rounded-xl bg-white shadow-sm text-[#EA638C]" />
-                            <button type="button" onClick={() => removeTier(idx)} className="p-2 text-gray-400 transition-opacity opacity-0 group-hover:opacity-100 hover:text-red-500"><XMarkIcon className="w-4 h-4" /></button>
-                          </div>
-                        ))}
-                      </div>
+                      <input name="minOrderQuantity" type="number" defaultValue={initialData?.minOrderQuantity || 1} className={`${inputClass} text-[#EA638C] bg-[#FBB6E6]/20 ring-1 ring-[#EA638C]/20`} placeholder="1" />
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {variants.map((v, i) => (
-                    <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100">
-                      <div className="flex items-center gap-4 mb-5">
-                          <div onClick={() => (v.preview || v.imageUrl) ? setPreviewModalImg(v.preview || v.imageUrl) : document.getElementById(`v-img-${i}`).click()} className="relative flex items-center justify-center w-16 h-16 overflow-hidden bg-white border-2 border-dashed cursor-pointer rounded-2xl group/v shrink-0">
-                            {(v.preview || v.imageUrl) ? <><img src={v.preview || v.imageUrl} className="object-cover w-full h-full" /><div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/v:opacity-100 bg-black/20"><MagnifyingGlassPlusIcon className="w-5 h-5 text-white" /></div></> : <CameraIcon className="w-6 h-6 text-gray-300" />}
+                    <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100 space-y-4">
+                      <div className="flex items-center gap-4">
+                          <div onClick={() => (v.preview || v.imageUrl) ? setPreviewModalImg(v.preview || v.imageUrl) : document.getElementById(`v-img-${i}`).click()} className="relative flex items-center justify-center w-16 h-16 overflow-hidden bg-white border-2 border-dashed cursor-pointer rounded-2xl group/v shrink-0 border-[#FBB6E6]">
+                            {(v.preview || v.imageUrl) ? <><img src={v.preview || v.imageUrl} className="object-cover w-full h-full" /><div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/v:opacity-100 bg-black/20"><MagnifyingGlassPlusIcon className="w-5 h-5 text-white" /></div></> : <CameraIcon className="w-6 h-6 text-[#EA638C]/50" />}
                           </div>
-                          <input placeholder="SKU" value={v.sku} onChange={e => { const n = [...variants]; n[i].sku = e.target.value; setVariants(n); }} className={variantInputClass} />
-                          <button type="button" onClick={() => setVariants(variants.filter((_, idx) => idx !== i))} className="p-2 text-red-400 transition-all bg-white rounded-full shadow-sm hover:bg-red-50"><XMarkIcon className="w-5 h-5" /></button>
+                          <div className="flex-1">
+                            <span className="text-[9px] font-black uppercase text-gray-400 ml-1">SKU</span>
+                            <input placeholder="SKU" value={v.sku} onChange={e => { const n = [...variants]; n[i].sku = e.target.value; setVariants(n); }} className={variantInputClass} />
+                          </div>
+                          <button type="button" onClick={() => setVariants(variants.filter((_, idx) => idx !== i))} className="p-2 mt-4 text-red-400 transition-all bg-white rounded-full shadow-sm hover:bg-red-50"><XMarkIcon className="w-5 h-5" /></button>
                       </div>
+
                       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-                          <input placeholder="Size" value={v.size} onChange={e => { const n = [...variants]; n[i].size = e.target.value; setVariants(n); }} className={variantInputClass} />
-                          <input placeholder="Color" value={v.color} onChange={e => { const n = [...variants]; n[i].color = e.target.value; setVariants(n); }} className={variantInputClass} />
-                          <input placeholder="Price" type="number" value={v.price} onChange={e => { const n = [...variants]; n[i].price = e.target.value; setVariants(n); }} className={variantInputClass} />
-                          <input placeholder="Stock" type="number" value={v.stock} onChange={e => { const n = [...variants]; n[i].stock = e.target.value; setVariants(n); }} className={variantInputClass} />
-                          <input placeholder="MOQ" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className={`${variantInputClass} bg-pink-50 text-[#EA638C]`} />
+                          <div>
+                            <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Size</span>
+                            <input placeholder="Size" value={v.size} onChange={e => { const n = [...variants]; n[i].size = e.target.value; setVariants(n); }} className={variantInputClass} />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Color</span>
+                            <input placeholder="Color" value={v.color} onChange={e => { const n = [...variants]; n[i].color = e.target.value; setVariants(n); }} className={variantInputClass} />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Price</span>
+                            <input placeholder="Price" type="number" value={v.price} onChange={e => { const n = [...variants]; n[i].price = e.target.value; setVariants(n); }} className={variantInputClass} />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Stock</span>
+                            <input placeholder="Stock" type="number" value={v.stock} onChange={e => { const n = [...variants]; n[i].stock = e.target.value; setVariants(n); }} className={variantInputClass} />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-black uppercase text-[#EA638C] ml-1">MOQ</span>
+                            <input placeholder="MOQ" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className={`${variantInputClass} bg-[#FBB6E6]/20 text-[#EA638C] ring-1 ring-[#EA638C]/20`} />
+                          </div>
                       </div>
+
                       <input type="file" id={`v-img-${i}`} className="hidden" accept="image/*" onChange={(e) => {
                         const file = e.target.files[0];
                         if (file) {
@@ -441,11 +440,40 @@ export default function ProductForm({ initialData }) {
                       }} />
                     </div>
                   ))}
-                  <button type="button" onClick={() => setVariants([...variants, { size: "", color: "", price: "", stock: "", sku: "", minOrderQuantity: 1, preview: null }])} className="w-full py-5 border-2 border-dashed border-gray-100 rounded-[2.5rem] text-[10px] font-black uppercase text-gray-400 hover:bg-gray-50 transition-all flex items-center justify-center gap-2">
-                    <PlusIcon className="w-4 h-4" /> Add Row
+                  <button type="button" onClick={() => setVariants([...variants, { size: "", color: "", price: "", stock: "", sku: "", minOrderQuantity: 1, preview: null, file: null }])} className="w-full py-5 border-2 border-dashed border-gray-200 rounded-[2.5rem] text-[10px] font-black uppercase text-[#3E442B] hover:bg-[#FBB6E6]/10 transition-all flex items-center justify-center gap-2">
+                    <PlusIcon className="w-4 h-4 text-[#EA638C]" /> Add Row
                   </button>
                 </div>
               )}
+
+              {/* Wholesale Tiers Block */}
+              <div className="pt-6 mt-6 border-t border-gray-100">
+                <div className="p-5 border border-gray-100 bg-gray-50/50 rounded-3xl">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-[#3E442B] block">Global Wholesale Tiers</span>
+                      <span className="text-[9px] font-semibold text-gray-400 block">Applies across all variants & base pricing</span>
+                    </div>
+                    <button type="button" onClick={addTier} className="text-[9px] font-black text-[#EA638C] uppercase flex items-center gap-1 hover:scale-105 transition-transform">
+                      <PlusIcon className="w-3 h-3 stroke-[3]" /> Add Tier
+                    </button>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {pricingTiers.map((tier, idx) => (
+                      <div key={idx} className="flex items-center gap-2 group">
+                        <input type="number" placeholder="Min Qty" value={tier.minQuantity} onChange={(e) => updateTier(idx, 'minQuantity', e.target.value)} className="w-1/2 p-3 text-[11px] font-bold border-none rounded-xl bg-white shadow-sm outline-none focus:ring-1 focus:ring-[#EA638C]/30" />
+                        <input type="number" placeholder="Unit Price" value={tier.unitPrice} onChange={(e) => updateTier(idx, 'unitPrice', e.target.value)} className="w-1/2 p-3 text-[11px] font-bold border-none rounded-xl bg-white shadow-sm text-[#EA638C] outline-none focus:ring-1 focus:ring-[#EA638C]/30" />
+                        <button type="button" onClick={() => removeTier(idx)} className="p-2 text-gray-400 transition-opacity opacity-80 group-hover:opacity-100 hover:text-red-500">
+                          <XMarkIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {pricingTiers.length === 0 && (
+                      <p className="text-[10px] font-semibold text-gray-300 italic text-center py-2">No wholesale discount tiers added yet.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </section>
           </div>
 
@@ -453,7 +481,7 @@ export default function ProductForm({ initialData }) {
             <div className="lg:sticky lg:top-6">
               <div className="hidden sm:block">
                 <div className="flex items-center gap-2 mb-4 ml-4">
-                  <EyeIcon className="w-4 h-4 text-[#EA638C]" /><span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Shop Preview</span>
+                  <EyeIcon className="w-4 h-4 text-[#EA638C]" /><span className="text-[10px] font-black uppercase text-[#3E442B] tracking-widest">Shop Preview</span>
                 </div>
                 <div className="mb-6 origin-top scale-95 pointer-events-none">
                   <ProductCard product={previewProduct} />
@@ -461,9 +489,9 @@ export default function ProductForm({ initialData }) {
               </div>
 
               <section className={sectionClass}>
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Main Image</h3>
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-[#3E442B] mb-4">Main Image</h3>
                 <div className="w-full h-64 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative" onClick={() => mainPreview ? setPreviewModalImg(mainPreview) : document.getElementById('main-img').click()}>
-                  {mainPreview ? <><img src={mainPreview} className="object-cover w-full h-full" /><div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/20"><MagnifyingGlassPlusIcon className="w-10 h-10 text-white" /></div></> : <PhotoIcon className="w-12 h-12 text-gray-200" />}
+                  {mainPreview ? <><img src={mainPreview} className="object-cover w-full h-full" /><div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/20"><MagnifyingGlassPlusIcon className="w-10 h-10 text-white" /></div></> : <PhotoIcon className="w-12 h-12 text-[#EA638C]/30" />}
                 </div>
                 <input id="main-img" type="file" className="hidden" accept="image/*" onChange={(e) => { 
                   if(e.target.files[0]) {
@@ -475,10 +503,10 @@ export default function ProductForm({ initialData }) {
 
               <section className={sectionClass}>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[10px] font-black uppercase text-gray-400">Gallery</h3>
+                  <h3 className="text-[10px] font-black uppercase text-[#3E442B]">Gallery</h3>
                   <button type="button" onClick={() => document.getElementById('gallery-input').click()} className="text-[10px] font-black text-[#EA638C] uppercase">+ Add</button>
                 </div>
-                <div className="grid grid-cols-3 gap-3 min-h-[100px] p-2 rounded-2xl bg-gray-50/50 border-2 border-dashed border-transparent hover:border-[#EA638C]/20 transition-all">
+                <div className="grid grid-cols-3 gap-3 min-h-[100px] p-2 rounded-2xl bg-gray-50/50 border-2 border-dashed border-transparent hover:border-[#EA638C]/30 transition-all">
                   {galleryPreviews.map((p, idx) => (
                     <div key={idx} className="relative overflow-hidden bg-white border border-gray-100 shadow-sm aspect-square rounded-2xl group/gal">
                       <img src={p.url} className="object-cover w-full h-full cursor-zoom-in" onClick={() => setPreviewModalImg(p.url)} />
@@ -492,10 +520,10 @@ export default function ProductForm({ initialData }) {
               <section className="bg-[#3E442B] p-8 rounded-[3rem] shadow-xl text-white">
                 <div className="flex items-center justify-between mb-8">
                   <div className="flex items-center gap-3">
-                    <SparklesIcon className={`w-6 h-6 ${isNewArrival ? 'text-[#EA638C]' : 'text-gray-600'}`} />
+                    <SparklesIcon className={`w-6 h-6 ${isNewArrival ? 'text-[#FBB6E6]' : 'text-gray-400'}`} />
                     <span className="text-[10px] font-black uppercase tracking-widest">New Arrival</span>
                   </div>
-                  <button type="button" onClick={() => setIsNewArrival(!isNewArrival)} className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${isNewArrival ? 'bg-[#EA638C]' : 'bg-gray-700'}`}>
+                  <button type="button" onClick={() => setIsNewArrival(!isNewArrival)} className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${isNewArrival ? 'bg-[#EA638C]' : 'bg-gray-600'}`}>
                     <div className={`w-4 h-4 bg-white rounded-full transition-transform ${isNewArrival ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
                 </div>
