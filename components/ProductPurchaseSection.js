@@ -3,7 +3,6 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Minus,
   Plus,
-  Package,
   TrendingDown,
   ShoppingBag,
   X,
@@ -88,6 +87,16 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
       return sum + qty * getEffectiveUnitPrice(v);
     }, 0);
   }, [quantities, variants, tiers, totalSelected]);
+
+  // --- 🟢 CURRENT ACTIVE UNIT PRICE FOR HEADER ---
+  const currentActiveUnitPrice = useMemo(() => {
+    const activeTier = [...tiers]
+      .reverse()
+      .find((tier) => totalSelected >= tier.minQuantity);
+    return activeTier
+      ? activeTier.unitPrice
+      : tiers[0]?.unitPrice || product?.price || variants[0]?.price || 0;
+  }, [tiers, totalSelected, product, variants]);
 
   // --- 🟢 FIXED QUANTITY UPDATE HANDLER ---
   const handleUpdateQty = (vKey, direction, moqVal, stockVal, variant) => {
@@ -199,63 +208,63 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
 
   return (
     <div className="flex flex-col w-full max-w-full gap-6 mt-10">
-      {/* WHOLESALE TIER TABLE */}
+      {/* SINGLE BULK SAVINGS CONTAINER WITH UPDATED RANGES & FULL WIDTH GRID */}
       {tiers.length > 0 && (
-        <div className="mb-4 duration-700 animate-in fade-in slide-in-from-top-4">
-          <div className="flex items-center gap-2 px-2 mb-4">
-            <div className="p-2 bg-[#3E442B] rounded-xl shrink-0">
-              <Package className="w-4 h-4 text-[#FBB6E6]" />
+        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-5 shadow-sm duration-700 animate-in fade-in slide-in-from-top-4 w-full">
+          <div className="flex items-center gap-3 px-2 mb-4">
+            <div className="p-2.5 bg-[#3E442B] rounded-2xl shrink-0">
+              <TrendingDown className="w-4 h-4 text-[#FBB6E6]" />
             </div>
             <div>
               <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#3E442B]">
-                Bulk Savings Tiers
+                Bulk Savings
               </h3>
-              <p className="text-[8px] font-bold text-gray-400 uppercase">
-                Combined variant quantities apply
+              <p className="text-[9px] font-bold text-gray-400 uppercase">
+                Current Rate: <span className="text-[#EA638C] font-black">৳{currentActiveUnitPrice} / Unit</span>
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div
+            className="grid w-full overflow-hidden border border-gray-100 bg-gray-50/50 rounded-[2rem]"
+            style={{
+              gridTemplateColumns: `repeat(${tiers.length}, minmax(0, 1fr))`,
+            }}
+          >
             {tiers.map((tier, i) => {
               const isAchieved = totalSelected >= tier.minQuantity;
+              const nextTierItem = tiers[i + 1];
+
+              // Calculates range (e.g., 1 - 49 PCS, 50 - 99 PCS, 100+ PCS)
+              const rangeText = nextTierItem
+                ? `${tier.minQuantity} - ${nextTierItem.minQuantity - 1}`
+                : `${tier.minQuantity}+`;
+
               return (
                 <div
                   key={i}
-                  className={`border rounded-[1.5rem] p-4 shadow-sm flex flex-col items-center justify-center text-center transition-all duration-500 ${
+                  className={`p-5 flex flex-col items-center justify-center text-center transition-all duration-500 w-full ${
+                    i !== 0 ? "border-l border-gray-100" : ""
+                  } ${
                     isAchieved
-                      ? "bg-[#EA638C] border-[#EA638C] scale-105 shadow-md"
-                      : "bg-white border-gray-100"
+                      ? "bg-[#EA638C] text-white shadow-sm"
+                      : "bg-white text-gray-800"
                   }`}
                 >
                   <span
                     className={`text-[9px] font-black uppercase mb-1 ${
-                      isAchieved ? "text-white/70" : "text-gray-400"
+                      isAchieved ? "text-white/80" : "text-gray-400"
                     }`}
                   >
-                    {tier.minQuantity}+ Pcs
+                    {rangeText} PCS
                   </span>
                   <span
-                    className={`text-lg font-black ${
+                    className={`text-xl font-black ${
                       isAchieved ? "text-white" : "text-[#EA638C]"
                     }`}
                   >
                     ৳{tier.unitPrice}
                   </span>
-                  <div
-                    className={`mt-1 px-2 py-0.5 text-[7px] font-black rounded-full uppercase ${
-                      isAchieved
-                        ? "bg-white text-[#EA638C]"
-                        : "bg-green-50 text-green-600"
-                    }`}
-                  >
-                    {isAchieved
-                      ? "Tier Active"
-                      : `Save ৳${
-                          (product.price || variants[0]?.price || 0) -
-                          tier.unitPrice
-                        }`}
-                  </div>
                 </div>
               );
             })}
