@@ -17,61 +17,74 @@ import {
 
 /**
  * MOBILE-SAFE CLIENT-SIDE IMAGE COMPRESSOR
+ * Updated to prevent memory leaks and payload limit errors on mobile devices
  */
-const compressImageMobileSafe = (file, maxWidth = 1200, quality = 0.75) => {
+const compressImageMobileSafe = (file, maxWidth = 1000, quality = 0.7) => {
   return new Promise((resolve) => {
     if (!file || !file.type.startsWith("image/")) {
       return resolve(file);
     }
-    if (file.size < 400 * 1024) {
-      return resolve(file);
-    }
 
-    const reader = new FileReader();
-    reader.onerror = () => resolve(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onerror = () => resolve(file);
-      img.onload = () => {
-        try {
-          let width = img.width;
-          let height = img.height;
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
 
-          if (width > maxWidth) {
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    };
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      try {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
             height = Math.round((height * maxWidth) / width);
             width = maxWidth;
+          } else {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
           }
-
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext("2d", { alpha: false });
-          if (!ctx) return resolve(file);
-
-          ctx.drawImage(img, 0, 0, width, height);
-
-          canvas.toBlob(
-            (blob) => {
-              if (!blob) return resolve(file);
-              const compressedFile = new File(
-                [blob], 
-                file.name.replace(/\.[^/.]+$/, "") + ".jpg", 
-                { type: "image/jpeg", lastModified: Date.now() }
-              );
-              resolve(compressedFile);
-            },
-            "image/jpeg",
-            quality
-          );
-        } catch (err) {
-          console.warn("Mobile canvas compression fallback triggered:", err);
-          resolve(file);
         }
-      };
-      img.src = event.target.result;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d", { alpha: false });
+        if (!ctx) return resolve(file);
+
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return resolve(file);
+            const compressedFile = new File(
+              [blob], 
+              file.name.replace(/\.[^/.]+$/, "") + ".jpg", 
+              { type: "image/jpeg", lastModified: Date.now() }
+            );
+            
+            canvas.width = 0;
+            canvas.height = 0;
+            
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          quality
+        );
+      } catch (err) {
+        console.warn("Mobile canvas compression fallback triggered:", err);
+        resolve(file);
+      }
     };
-    reader.readAsDataURL(file);
+
+    img.src = objectUrl;
   });
 };
 
