@@ -20,40 +20,18 @@ export default function ClientProviders({
       <CartProvider>
         <WishlistProvider>
           <LoginNotifier />
-          {/* SINGLE GLOBAL TOASTER CONTAINER */}
-          {/* <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 3000,
-              style: {
-                background: "#ffffff",
-                color: "#3E442B",
-                border: "1px solid #EA638C",
-                padding: "12px 16px",
-                fontSize: "13px",
-                fontWeight: "700",
-              },
-              success: {
-                iconTheme: {
-                  primary: "#3E442B",
-                  secondary: "#ffffff",
-                },
-              },
-              error: {
-                iconTheme: {
-                  primary: "#EA638C",
-                  secondary: "#ffffff",
-                },
-              },
-            }}
-          /> */}
           <ConnectivityListener />
 
           <div
             className={`${fontVariable} flex flex-col min-h-screen font-serif selection:bg-[#FBB6E6] selection:text-[#3E442B] relative`}
           >
             <Navbar globalData={globalData} dbImage={dbImage} />
-            <main className="flex flex-col flex-1 w-full">{children}</main>
+            
+            {/* 🟢 Added 'grow' and 'items-stretch' so child page components stretch full height */}
+            <main className="flex flex-col flex-1 grow w-full bg-white ">
+              {children}
+            </main>
+            
             <Footer />
           </div>
         </WishlistProvider>
