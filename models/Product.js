@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-// 🟢 NEW: Pricing Tier Sub-schema
+// Pricing Tier Sub-schema
 const PricingTierSchema = new mongoose.Schema({
   minQuantity: { type: Number, required: true },
   unitPrice: { type: Number, required: true },
@@ -11,9 +11,9 @@ const VariantSchema = new mongoose.Schema({
   sku: { type: String, sparse: true },
   size: String,
   color: String,
-  price: { type: Number, default: 0 }, 
-  discountPrice: { type: Number, default: 0 }, 
-  isOnSale: { type: Boolean, default: false }, 
+  price: { type: Number, default: 0 },
+  discountPrice: { type: Number, default: 0 },
+  isOnSale: { type: Boolean, default: false },
   stock: { type: Number, default: 0, min: 0 },
   imageUrl: String,
   minOrderQuantity: { type: Number, default: 1 },
@@ -43,13 +43,13 @@ const ProductSchema = new mongoose.Schema(
     gallery: { type: [String], default: [] },
 
     // Base Product Fields
-    price: { type: Number, default: 0 }, 
-    discountPrice: { type: Number, default: 0 }, 
-    isOnSale: { type: Boolean, default: false }, 
-    
-    // 🟢 NEW: Wholesale Tiers
+    price: { type: Number, default: 0 },
+    discountPrice: { type: Number, default: 0 },
+    isOnSale: { type: Boolean, default: false },
+
+    // Wholesale Tiers
     pricingTiers: { type: [PricingTierSchema], default: [] },
-    
+
     stock: { type: Number, default: 0, min: 0 },
     minOrderQuantity: { type: Number, default: 1 },
     isNewArrival: { type: Boolean, default: false },
@@ -61,44 +61,50 @@ const ProductSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-  },
+  }
 );
 
-const generateSKU = (name, color, size) => {
+const generateSKU = (name, color, size, index = 0) => {
   const p = name.substring(0, 3).toUpperCase().replace(/\s/g, "");
   const c = (color || "XX").substring(0, 2).toUpperCase().replace(/\s/g, "");
   const s = (size || "NA").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-  return `${p}-${c}-${s}-${Math.floor(100 + Math.random() * 900)}`;
+  return `${p}-${c}-${s}-${index + 1}`;
 };
 
-// 🟢 PRE-SAVE Logic
+// PRE-SAVE Logic
 ProductSchema.pre("save", async function () {
   if (this.hasVariants && this.variants?.length > 0) {
-    this.variants.forEach((v) => {
-      if (!v.sku) v.sku = generateSKU(this.name, v.color, v.size);
+    this.variants.forEach((v, idx) => {
+      if (!v.sku) v.sku = generateSKU(this.name, v.color, v.size, idx);
     });
 
     this.stock = this.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
 
-    const activePrices = this.variants.map(v => v.isOnSale && v.discountPrice > 0 ? v.discountPrice : v.price);
-    this.price = Math.min(...this.variants.map(v => v.price));
-    this.discountPrice = Math.min(...activePrices);
-    this.isOnSale = this.variants.some(v => v.isOnSale);
+    const validPrices = this.variants.map((v) => Number(v.price) || 0).filter((p) => p > 0);
+    const activePrices = this.variants
+      .map((v) => (v.isOnSale && v.discountPrice > 0 ? Number(v.discountPrice) : Number(v.price) || 0))
+      .filter((p) => p > 0);
 
-    this.minOrderQuantity = this.variants[0].minOrderQuantity || 1;
+    if (validPrices.length > 0) {
+      this.price = Math.min(...validPrices);
+    }
+    if (activePrices.length > 0) {
+      this.discountPrice = Math.min(...activePrices);
+    }
+
+    this.isOnSale = this.variants.some((v) => v.isOnSale);
+    this.minOrderQuantity = this.variants[0]?.minOrderQuantity || 1;
   } else {
     if (!this.sku) this.sku = generateSKU(this.name, "ST", "ND");
-    
-    // 🟢 Sync MOQ with lowest wholesale tier if applicable
+
     if (this.pricingTiers?.length > 0) {
-      const minTierQty = Math.min(...this.pricingTiers.map(t => t.minQuantity));
-      // Only override if the first tier is lower than current MOQ
+      const minTierQty = Math.min(...this.pricingTiers.map((t) => Number(t.minQuantity) || 1));
       if (minTierQty < this.minOrderQuantity) this.minOrderQuantity = minTierQty;
     }
   }
 });
 
-// 🟢 PRE-UPDATE Logic
+// PRE-UPDATE Logic
 ProductSchema.pre(["findOneAndUpdate", "updateOne"], function () {
   const update = this.getUpdate();
   const data = update.$set || update;
@@ -110,20 +116,19 @@ ProductSchema.pre(["findOneAndUpdate", "updateOne"], function () {
     if (originalPrices.length > 0) data.price = Math.min(...originalPrices);
 
     const salePrices = data.variants
-        .map((v) => (v.isOnSale && v.discountPrice > 0 ? Number(v.discountPrice) : Number(v.price)))
-        .filter((p) => p > 0);
-    
+      .map((v) => (v.isOnSale && v.discountPrice > 0 ? Number(v.discountPrice) : Number(v.price)))
+      .filter((p) => p > 0);
+
     if (salePrices.length > 0) {
-        data.discountPrice = Math.min(...salePrices);
-        data.isOnSale = data.variants.some(v => v.isOnSale);
+      data.discountPrice = Math.min(...salePrices);
+      data.isOnSale = data.variants.some((v) => v.isOnSale);
     }
 
-    data.minOrderQuantity = data.variants[0].minOrderQuantity || 1;
+    data.minOrderQuantity = data.variants[0]?.minOrderQuantity || 1;
   } else if (data.pricingTiers && data.pricingTiers.length > 0) {
-    // 🟢 Sync MOQ for non-variant products with tiers
-    const minTierQty = Math.min(...data.pricingTiers.map(t => Number(t.minQuantity)));
+    const minTierQty = Math.min(...data.pricingTiers.map((t) => Number(t.minQuantity) || 1));
     if (data.minOrderQuantity > minTierQty) {
-        data.minOrderQuantity = minTierQty;
+      data.minOrderQuantity = minTierQty;
     }
   }
 });

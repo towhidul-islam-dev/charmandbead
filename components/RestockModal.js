@@ -8,12 +8,11 @@ import {
 } from "@/actions/inventoryWatcher";
 
 export default function RestockModal({ product, onClose, onRefresh }) {
-  const [activeTab, setActiveTab] = useState("update"); // "update" or "history"
+  const [activeTab, setActiveTab] = useState("update");
   const [loadingId, setLoadingId] = useState(null);
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Fetch history only when the user switches to the history tab
   useEffect(() => {
     if (activeTab === "history") {
       loadHistory();
@@ -39,14 +38,14 @@ export default function RestockModal({ product, onClose, onRefresh }) {
 
     if (res.success) {
       toast.success(`Stock Updated! ${res.notifiedCount || 0} customers notified.`);
-      onRefresh();
+      // 🟢 Pass the updated product data to the callback
+      onRefresh(res.product || res.updatedProduct);
     } else {
       toast.error(res.message || "Failed to update stock");
     }
     setLoadingId(null);
   };
 
-  // 🟢 Logic: Normalize items so the UI works for both Variant and Standard products
   const itemsToManage = product.hasVariants && product.variants?.length > 0
     ? product.variants 
     : [{ 
@@ -61,7 +60,7 @@ export default function RestockModal({ product, onClose, onRefresh }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#3E442B]/20 backdrop-blur-sm p-4">
       <div className="bg-white w-full max-w-md rounded-[2.5rem] p-6 md:p-8 shadow-2xl border-2 border-[#FBB6E6]/30 animate-in fade-in zoom-in duration-200">
         
-        {/* --- Header & Tabs --- */}
+        {/* Header & Tabs */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex p-1 bg-gray-100 rounded-xl w-fit">
             <button
@@ -85,10 +84,8 @@ export default function RestockModal({ product, onClose, onRefresh }) {
           </button>
         </div>
 
-        {/* --- Content Area --- */}
+        {/* Content Area */}
         <div className="max-h-[55vh] overflow-y-auto pr-1 custom-scrollbar">
-          
-          {/* UPDATE TAB */}
           {activeTab === "update" && (
             <div className="space-y-3">
               {itemsToManage.map((v, idx) => {
@@ -107,7 +104,6 @@ export default function RestockModal({ product, onClose, onRefresh }) {
                           <span className="text-sm font-black text-[#3E442B] whitespace-nowrap">
                             Stock: {v.stock}
                           </span>
-                          {/* 🟢 Refined MOQ Badge - Smaller and cleaner */}
                           <span className="flex items-center gap-1 text-[8px] bg-[#EA638C]/10 text-[#EA638C] px-1.5 py-0.5 rounded-md font-black uppercase border border-[#EA638C]/10">
                             MOQ:{v.minOrderQuantity}
                           </span>
@@ -146,13 +142,18 @@ export default function RestockModal({ product, onClose, onRefresh }) {
             </div>
           )}
 
-          {/* HISTORY TAB */}
           {activeTab === "history" && (
             <div className="space-y-2">
-              {/* ... (history mapping with slightly reduced padding/text) */}
-              {history.map((log) => (
-                <div key={log._id} className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 border border-gray-100">
-                   <div className="space-y-0.5">
+              {loadingHistory ? (
+                <div className="flex justify-center p-8 text-gray-400">
+                  <Loader2 size={24} className="animate-spin" />
+                </div>
+              ) : history.length === 0 ? (
+                <p className="p-4 text-center text-xs font-bold text-gray-400">No stock history recorded.</p>
+              ) : (
+                history.map((log) => (
+                  <div key={log._id} className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                    <div className="space-y-0.5">
                       <div className="flex items-center gap-1.5">
                         <span className={`text-[7px] px-2 py-0.5 rounded-full font-black uppercase text-white ${log.reason === "Sale" ? "bg-[#EA638C]" : "bg-[#3E442B]"}`}>
                           {log.reason}
@@ -164,12 +165,13 @@ export default function RestockModal({ product, onClose, onRefresh }) {
                       <p className="text-[8px] font-bold text-gray-400">
                         {new Date(log.createdAt).toLocaleDateString()}
                       </p>
-                   </div>
-                   <div className={`text-base italic font-black ${log.change > 0 ? "text-green-500" : "text-red-500"}`}>
+                    </div>
+                    <div className={`text-base italic font-black ${log.change > 0 ? "text-green-500" : "text-red-500"}`}>
                       {log.change > 0 ? `+${log.change}` : log.change}
-                   </div>
-                </div>
-              ))}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
         </div>

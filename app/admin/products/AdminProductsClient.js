@@ -1,8 +1,9 @@
 "use client";
-import { useState, useMemo } from "react";
+
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useSearchParams, useRouter } from "next/navigation"; // Added for pagination
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Search,
   EyeOff,
@@ -35,6 +36,10 @@ export default function AdminProductsClient({ initialProducts }) {
   const currentPage = Number(searchParams.get("page")) || 1;
   const itemsPerPage = 10;
 
+  useEffect(() => {
+    setProducts(initialProducts);
+  }, [initialProducts]);
+
   // --- Dashboard Stats Logic ---
   const stats = useMemo(() => {
     return {
@@ -46,7 +51,7 @@ export default function AdminProductsClient({ initialProducts }) {
             (p.hasVariants
               ? p.variants.reduce((a, v) => a + (Number(v.stock) || 0), 0)
               : Number(p.stock) || 0),
-        0,
+        0
       ),
       lowStockCount: products.filter((p) => {
         const stock = p.hasVariants
@@ -57,9 +62,19 @@ export default function AdminProductsClient({ initialProducts }) {
     };
   }, [products]);
 
+  const handleRestockSuccess = (updatedProduct) => {
+    if (updatedProduct && updatedProduct._id) {
+      setProducts((prev) =>
+        prev.map((p) => (String(p._id) === String(updatedProduct._id) ? updatedProduct : p))
+      );
+    } else {
+      router.refresh();
+    }
+  };
+
   const handleDeleteSuccess = (productId) => {
     setProducts((current) =>
-      current.filter((p) => String(p._id) !== String(productId)),
+      current.filter((p) => String(p._id) !== String(productId))
     );
   };
 
@@ -72,8 +87,8 @@ export default function AdminProductsClient({ initialProducts }) {
           currentList.map((p) =>
             String(p._id) === String(productId)
               ? { ...p, isArchived: result.newState }
-              : p,
-          ),
+              : p
+          )
         );
         toast.success(
           result.newState ? "Product Archived" : "Product Published",
@@ -100,9 +115,9 @@ export default function AdminProductsClient({ initialProducts }) {
     });
   }, [products, searchTerm, activeCategory]);
 
-  // --- Slice Products for Current Page ---
   const totalProducts = filteredProducts.length;
   const totalPages = Math.ceil(totalProducts / itemsPerPage);
+  
   const paginatedProducts = useMemo(() => {
     return filteredProducts.slice(
       (currentPage - 1) * itemsPerPage,
@@ -129,6 +144,12 @@ export default function AdminProductsClient({ initialProducts }) {
     return ["All", ...uniqueNames.sort(), "Uncategorized"];
   }, [products]);
 
+  const handleFilterResetPage = () => {
+    const params = new URLSearchParams(searchParams);
+    params.set("page", "1");
+    router.push(`?${params.toString()}`);
+  };
+
   return (
     <div className="p-4 mx-auto overflow-x-hidden duration-500 md:p-8 max-w-7xl animate-in fade-in">
       <Toaster position="bottom-right" />
@@ -137,7 +158,10 @@ export default function AdminProductsClient({ initialProducts }) {
         <RestockModal
           product={activeRestockProduct}
           onClose={() => setActiveRestockProduct(null)}
-          onRefresh={() => window.location.reload()}
+          onSuccess={(updatedProduct) => {
+            handleRestockSuccess(updatedProduct);
+            setActiveRestockProduct(null);
+          }}
         />
       )}
 
@@ -162,7 +186,7 @@ export default function AdminProductsClient({ initialProducts }) {
       {/* --- Stats Cards --- */}
       <div className="grid grid-cols-1 gap-4 mb-8 sm:grid-cols-2 md:grid-cols-3">
         <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="p-3 text-[#3E442B] bg-[#3E442B]/5 rounded-xl">
+          <div className="p-3 text-[#3E442B] bg-[#3E442B]/10 rounded-xl">
             <Database size={20} />
           </div>
           <div>
@@ -171,7 +195,7 @@ export default function AdminProductsClient({ initialProducts }) {
           </div>
         </div>
         <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="p-3 text-green-600 bg-green-50 rounded-xl">
+          <div className="p-3 text-[#3E442B] bg-[#FBB6E6]/30 rounded-xl">
             <Banknote size={20} />
           </div>
           <div>
@@ -180,7 +204,7 @@ export default function AdminProductsClient({ initialProducts }) {
           </div>
         </div>
         <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex items-center gap-4 sm:col-span-2 md:col-span-1">
-          <div className="p-3 bg-pink-50 rounded-xl text-[#EA638C]">
+          <div className="p-3 text-[#EA638C] bg-[#EA638C]/10 rounded-xl">
             <AlertTriangle size={20} />
           </div>
           <div>
@@ -198,9 +222,10 @@ export default function AdminProductsClient({ initialProducts }) {
             type="text"
             placeholder="Search products..."
             className="w-full pl-12 pr-4 py-4 bg-white border border-gray-100 rounded-2xl focus:ring-2 focus:ring-[#EA638C]/20 font-bold shadow-sm outline-none transition-all"
+            value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              router.push("?page=1"); // Reset to page 1 on search
+              handleFilterResetPage();
             }}
           />
         </div>
@@ -208,7 +233,7 @@ export default function AdminProductsClient({ initialProducts }) {
           className="w-full md:w-48 px-4 py-4 text-[10px] font-black uppercase tracking-widest text-[#3E442B] bg-white border border-gray-100 rounded-2xl shadow-sm cursor-pointer outline-none focus:ring-2 focus:ring-[#EA638C]/20"
           onChange={(e) => {
             setActiveCategory(e.target.value);
-            router.push("?page=1"); // Reset to page 1 on category change
+            handleFilterResetPage();
           }}
           value={activeCategory}
         >
@@ -226,11 +251,11 @@ export default function AdminProductsClient({ initialProducts }) {
         </div>
       ) : (
         <>
-          {/* --- MOBILE CARD LAYOUT --- */}
+          {/* Mobile Layout */}
           <div className="grid grid-cols-1 gap-6 md:hidden">
             {paginatedProducts.map((product) => {
               const totalStock = product.hasVariants
-                ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
+                ? product.variants?.reduce((acc, v) => acc + (Number(v.stock) || 0), 0) || 0
                 : Number(product.stock) || 0;
 
               return (
@@ -240,7 +265,7 @@ export default function AdminProductsClient({ initialProducts }) {
                 >
                   <div className="flex items-center gap-4 mb-6">
                     <div className="relative w-20 h-20 overflow-hidden border-2 border-white shadow-lg shrink-0 rounded-2xl">
-                      <Image src={product.imageUrl || "/placeholder.png"} alt="" fill className="object-cover" unoptimized />
+                      <Image src={product.imageUrl || "/placeholder.png"} alt={product.name || "Product"} fill className="object-cover" unoptimized />
                     </div>
                     <div className="flex flex-col">
                       <span className="px-2 py-0.5 bg-[#3E442B]/5 text-[8px] font-black uppercase text-[#3E442B] rounded-md w-fit mb-1">
@@ -291,7 +316,7 @@ export default function AdminProductsClient({ initialProducts }) {
             })}
           </div>
 
-          {/* --- DESKTOP TABLE LAYOUT --- */}
+          {/* Desktop Table Layout */}
           <div className="hidden md:block overflow-hidden bg-white rounded-[2.5rem] shadow-2xl border border-gray-50">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-50">
@@ -308,15 +333,15 @@ export default function AdminProductsClient({ initialProducts }) {
                 <tbody className="bg-white divide-y divide-gray-50">
                   {paginatedProducts.map((product) => {
                     const totalStock = product.hasVariants
-                      ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
+                      ? product.variants?.reduce((acc, v) => acc + (Number(v.stock) || 0), 0) || 0
                       : Number(product.stock) || 0;
 
                     return (
-                      <tr key={product._id} className={`transition-all duration-300 ${product.isArchived ? "bg-gray-50/80 opacity-60 grayscale" : "hover:bg-[#FBB6E6]/5"}`}>
+                      <tr key={product._id} className={`transition-all duration-300 ${product.isArchived ? "bg-gray-50/80 opacity-60 grayscale" : "hover:bg-[#FBB6E6]/10"}`}>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-4">
                             <div className="relative w-12 h-12 overflow-hidden border-2 border-white shadow-md shrink-0 rounded-xl">
-                              <Image src={product.imageUrl || "/placeholder.png"} alt="" fill className="object-cover" unoptimized />
+                              <Image src={product.imageUrl || "/placeholder.png"} alt={product.name || "Product"} fill className="object-cover" unoptimized />
                             </div>
                             <div className="flex flex-col">
                               <span className={`text-sm font-black uppercase tracking-tight ${product.isArchived ? "text-gray-400 line-through" : "text-[#3E442B]"}`}>{product.name}</span>
@@ -369,7 +394,7 @@ export default function AdminProductsClient({ initialProducts }) {
             </div>
           </div>
 
-          {/* --- BRANDED PAGINATION --- */}
+          {/* Branded Pagination */}
           {totalPages > 1 && (
             <div className="flex flex-col items-center justify-center gap-6 mt-16">
               <div className="flex items-center gap-2 p-1.5 bg-white shadow-xl rounded-full border border-gray-50">
@@ -383,7 +408,7 @@ export default function AdminProductsClient({ initialProducts }) {
                 <div className="flex items-center gap-1 px-1">
                   {getPageNumbers().map((p, i) => (
                     p === "..." ? (
-                      <span key={`dots-${i}`} className="px-2 text-gray-300 font-bold text-xs">...</span>
+                      <span key={`dots-${i}`} className="px-2 text-xs font-bold text-gray-300">...</span>
                     ) : (
                       <Link
                         key={p}

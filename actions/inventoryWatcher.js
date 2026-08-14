@@ -50,7 +50,13 @@ export async function updateInventoryStock(
       stockDifference = Number(newStockAmount) - oldStock;
       variantKey = `${variant.color}-${variant.size}`;
 
-      if (stockDifference === 0) return { success: true, notifiedCount: 0 };
+      if (stockDifference === 0) {
+        return { 
+          success: true, 
+          notifiedCount: 0, 
+          product: JSON.parse(JSON.stringify(currentProduct)) 
+        };
+      }
 
       updatedProduct = await Product.findOneAndUpdate(
         { _id: productId },
@@ -72,7 +78,13 @@ export async function updateInventoryStock(
       oldStock = currentProduct.stock;
       stockDifference = Number(newStockAmount) - oldStock;
       
-      if (stockDifference === 0) return { success: true, notifiedCount: 0 };
+      if (stockDifference === 0) {
+        return { 
+          success: true, 
+          notifiedCount: 0, 
+          product: JSON.parse(JSON.stringify(currentProduct)) 
+        };
+      }
 
       updatedProduct = await Product.findByIdAndUpdate(
         productId,
@@ -120,7 +132,13 @@ export async function updateInventoryStock(
     }
 
     revalidatePath("/admin/products");
-    return { success: true, notifiedCount };
+    
+    // 🟢 Return sanitized updated product back to client components
+    return { 
+      success: true, 
+      notifiedCount, 
+      product: JSON.parse(JSON.stringify(updatedProduct)) 
+    };
   } catch (error) {
     console.error("RESTOCK_ERROR:", error);
     return { success: false, message: error.message };
@@ -149,7 +167,7 @@ export async function processOrderStock(order) {
       return { success: true }; 
     }
 
-    // 2. THE DEDUCTION LOGIC: (Your original logic stays here)
+    // 2. THE DEDUCTION LOGIC
     for (const item of order.items) {
       const qtyToDeduct = Number(item.quantity);
       const isVariant = item.variant && item.variant.name !== "Default";
@@ -206,7 +224,6 @@ export async function processOrderStock(order) {
       }
     }
 
-    // No need for the final 'findByIdAndUpdate' anymore because we did it at the top!
     revalidatePath("/admin/products");
     return { success: true };
 

@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useEffect, useMemo } from "react";
 import { useCart } from "@/Context/CartContext";
 import { useSession } from "next-auth/react";
@@ -18,6 +19,10 @@ import {
   ChevronRight,
   BadgePercent,
   QrCode,
+  ShoppingBag,
+  CheckCircle2,
+  ArrowRight,
+  Clock,
 } from "lucide-react";
 
 const DHAKA_ZONES = [
@@ -28,7 +33,7 @@ const DHAKA_ZONES = [
 ];
 
 export default function CheckoutPage() {
-  const { cart = [] } = useCart();
+  const { cart = [], deleteSelectedItems, clearCart } = useCart();
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -37,30 +42,43 @@ export default function CheckoutPage() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [userAddress, setUserAddress] = useState(null);
   const [phone, setPhone] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("COD"); // "COD" or "Online"
+  const [paymentMethod, setPaymentMethod] = useState("COD");
   const [shippingCharge, setShippingCharge] = useState(130);
 
   // Bangla QR Fields
   const [qrSenderPhone, setQrSenderPhone] = useState("");
   const [qrTxnId, setQrTxnId] = useState("");
 
+  // Modal State
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [placedOrderDetails, setPlacedOrderDetails] = useState(null);
+
   useEffect(() => {
     async function initCheckout() {
       const saved = localStorage.getItem("checkoutItems");
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.length > 0) setCheckoutItems(parsed);
-        else router.push("/cart");
+        if (parsed.length > 0) {
+          setCheckoutItems(parsed);
+        } else if (!showSuccessModal) {
+          router.push("/cart");
+        }
       } else {
-        if (cart.length > 0) setCheckoutItems(cart);
-        else if (status !== "loading") router.push("/cart");
+        if (cart.length > 0) {
+          setCheckoutItems(cart);
+        } else if (status !== "loading" && !showSuccessModal) {
+          router.push("/cart");
+        }
       }
 
       if (session?.user?.email) {
         const response = await getUserAddress();
         if (response?.success && response.address) {
           setUserAddress(response.address);
-          setPhone(response.address.phone || "");
+          const initialPhone = response.address.phone || "";
+          setPhone(initialPhone);
+          setQrSenderPhone(initialPhone);
+
           const city = response.address.city || "";
           const isInsideDhaka = DHAKA_ZONES.some(
             (zone) =>
@@ -73,18 +91,18 @@ export default function CheckoutPage() {
       setIsInitializing(false);
     }
     initCheckout();
-  }, [cart, router, status, session]);
+  }, [cart, router, status, session, showSuccessModal]);
 
   // Dynamic Calculations
   const { subtotal, totalSavings } = useMemo(() => {
     return checkoutItems.reduce(
       (acc, item) => {
-        const itemPrice = Number(item.price) || 0;
-        const basePrice = Number(item.basePrice) || itemPrice;
-        const qty = Number(item.quantity) || 1;
-        
+        const itemPrice = Math.max(0, Number(item.price) || 0);
+        const basePrice = Math.max(0, Number(item.basePrice) || itemPrice);
+        const qty = Math.max(1, Number(item.quantity) || 1);
+
         acc.subtotal += itemPrice * qty;
-        acc.totalSavings += (basePrice - itemPrice) * qty;
+        acc.totalSavings += Math.max(0, basePrice - itemPrice) * qty;
         return acc;
       },
       { subtotal: 0, totalSavings: 0 }
@@ -107,7 +125,7 @@ export default function CheckoutPage() {
       toast.error("Please add a shipping address");
       return;
     }
-    
+
     const bdPhoneRegex = /^(?:\+88|88)?(01[3-9]\d{8})$/;
     if (!phone || !bdPhoneRegex.test(phone)) {
       toast.error("Valid BD phone number is required for shipping updates");
@@ -129,20 +147,17 @@ export default function CheckoutPage() {
       const orderData = {
         userId: session?.user?.id,
         items: checkoutItems.map((item) => {
-          // 🟢 1. Resolve Variant Name
-          const variantName = typeof item.variant === "string" 
-            ? item.variant 
+          const variantName = typeof item.variant === "string"
+            ? item.variant
             : (item.variant?.name || item.color || "Default");
 
-          // 🟢 2. Precise Variant Image Resolution Logic
-          let variantImg = 
-            item.variant?.image || 
-            item.variant?.img || 
-            item.variant?.thumbnail || 
-            item.variantImage || 
+          let variantImg =
+            item.variant?.image ||
+            item.variant?.img ||
+            item.variant?.thumbnail ||
+            item.variantImage ||
             item.selectedVariant?.image;
 
-          // If image not directly on variant, try matching by index from product images array
           if (!variantImg) {
             const imagesArr = item.images || item.product?.images || item.productImages;
             if (Array.isArray(imagesArr) && imagesArr.length > 0) {
@@ -151,18 +166,17 @@ export default function CheckoutPage() {
               else if (typeof item.variant === "number") idx = item.variant;
               else if (typeof variantName === "string") {
                 const parsed = parseInt(variantName, 10);
-                if (!isNaN(parsed)) idx = parsed - 1; // Converts 1-based "1" or "2" to 0-based array index
+                if (!isNaN(parsed)) idx = parsed - 1;
               }
 
               if (idx >= 0 && idx < imagesArr.length) {
                 variantImg = imagesArr[idx];
               } else {
-                variantImg = imagesArr[0]; // Fallback to first image in product array
+                variantImg = imagesArr[0];
               }
             }
           }
 
-          // Final fallback if no array or variant match exists
           if (!variantImg) {
             variantImg = item.image || item.thumbnail || item.product?.imageUrl || null;
           }
@@ -174,10 +188,10 @@ export default function CheckoutPage() {
               name: variantName,
               size: item.size || "N/A",
               variantId: item.variantId || item.variant?._id || null,
-              image: variantImg, 
+              image: variantImg,
             },
             quantity: Number(item.quantity),
-            price: Number(item.price), 
+            price: Number(item.price),
             sku: item.sku || "C&B-GEN",
           };
         }),
@@ -185,13 +199,13 @@ export default function CheckoutPage() {
         paidAmount: Number(payableNow.toFixed(2)),
         dueAmount: Number(dueOnDelivery.toFixed(2)),
         deliveryCharge: Number(shippingCharge),
-        paymentMethod: paymentMethod === "COD" ? "Partial_COD_BanglaQR" : "Full_PrePay_BanglaQR", 
+        paymentMethod: paymentMethod === "COD" ? "Partial_COD_BanglaQR" : "Full_PrePay_BanglaQR",
         mobileBankingFee: Number(mobileBankingFee.toFixed(2)),
         phone: phone,
         paymentDetails: {
           sourcePhone: qrSenderPhone,
           transactionId: qrTxnId.trim(),
-          gatewayStatus: "MANUAL_VERIFICATION" 
+          gatewayStatus: "MANUAL_VERIFICATION",
         },
         paymentStatus: "Verifying",
         shippingAddress: userAddress,
@@ -200,9 +214,30 @@ export default function CheckoutPage() {
       const result = await createOrder(orderData);
 
       if (result.success) {
-        toast.success("Order submitted successfully! Verifying your payment tokens.");
+        try {
+          const keysToRemove = checkoutItems
+            .map((item) => item.uniqueKey || item.productId || item._id)
+            .filter(Boolean);
+
+          if (keysToRemove.length > 0 && typeof deleteSelectedItems === "function") {
+            deleteSelectedItems(keysToRemove);
+          } else if (typeof clearCart === "function") {
+            clearCart();
+          }
+        } catch (err) {
+          console.error("CART_CLEANUP_ERROR:", err);
+        }
+
         localStorage.removeItem("checkoutItems");
-        router.push(`/dashboard/orders/success?orderId=${result.orderId}`);
+        localStorage.removeItem("purchasedKeys");
+
+        setPlacedOrderDetails({
+          id: result.orderId || result.data?._id || "NEW",
+          amountPaid: payableNow,
+          due: dueOnDelivery,
+          txnId: qrTxnId.trim(),
+        });
+        setShowSuccessModal(true);
       } else {
         toast.error(result.message || "Order creation failed.");
       }
@@ -257,10 +292,37 @@ export default function CheckoutPage() {
           </div>
         </section>
 
-        {/* SECTION 02: PAYMENT PLAN */}
+        {/* SECTION 02: ITEMS REVIEW */}
         <section className="space-y-6">
           <h2 className="flex items-center gap-3 text-2xl font-bold font-serif text-[#3E442B] uppercase italic">
-            <CreditCard className="text-[#EA638C]" size={28} /> 02. Payment Plan
+            <ShoppingBag className="text-[#EA638C]" size={28} /> 02. Purchased Items ({checkoutItems.length})
+          </h2>
+          <div className="space-y-3">
+            {checkoutItems.map((item, idx) => {
+              const itemImg = item.image || item.thumbnail || item.variant?.image || "/placeholder.png";
+              const variantTitle = typeof item.variant === "string" ? item.variant : item.variant?.name;
+              return (
+                <div key={idx} className="flex items-center justify-between p-4 bg-white border border-gray-100 shadow-sm rounded-2xl">
+                  <div className="flex items-center gap-4">
+                    <img src={itemImg} alt={item.name || "Product"} className="object-cover border border-gray-100 w-14 h-14 rounded-xl" />
+                    <div>
+                      <h4 className="text-sm font-bold text-[#3E442B] truncate max-w-[200px] md:max-w-xs">{item.name || item.productName}</h4>
+                      <p className="text-[11px] text-gray-400 font-medium">
+                        Qty: {item.quantity} {variantTitle && `• Variant: ${variantTitle}`} {item.size && item.size !== "N/A" && `• Size: ${item.size}`}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="font-serif font-bold text-sm text-[#3E442B]">৳{(Number(item.price) * Number(item.quantity)).toLocaleString()}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* SECTION 03: PAYMENT PLAN */}
+        <section className="space-y-6">
+          <h2 className="flex items-center gap-3 text-2xl font-bold font-serif text-[#3E442B] uppercase italic">
+            <CreditCard className="text-[#EA638C]" size={28} /> 03. Payment Plan
           </h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {[
@@ -271,7 +333,7 @@ export default function CheckoutPage() {
                 key={method.id}
                 type="button"
                 onClick={() => setPaymentMethod(method.id)}
-                className={`p-6 rounded-[2.5rem] border-2 flex flex-col gap-1 items-start text-left transition-all ${paymentMethod === method.id ? "border-[#EA638C] bg-[#3E442B] text-white shadow-xl scale-[1.02]" : "border-gray-100 text-gray-400 bg-white"}`}
+                className={`p-6 rounded-[2.5rem] border-2 flex flex-col gap-1 items-start text-left transition-all cursor-pointer ${paymentMethod === method.id ? "border-[#EA638C] bg-[#3E442B] text-white shadow-xl scale-[1.02]" : "border-gray-100 text-gray-400 bg-white hover:border-[#EA638C]/50"}`}
               >
                 <span className={`text-sm italic font-bold font-serif tracking-widest uppercase ${paymentMethod === method.id ? "text-[#FBB6E6]" : "text-[#3E442B]"}`}>
                   {method.label}
@@ -284,7 +346,7 @@ export default function CheckoutPage() {
           </div>
         </section>
 
-        {/* SECTION 03: LIVE BANGLA QR VERIFICATION */}
+        {/* SECTION 04: BANGLA QR VERIFICATION */}
         <section className="space-y-6 border-2 border-[#3E442B] p-8 rounded-[2.5rem] bg-white transition-all">
           <h2 className="flex items-center gap-3 text-xl font-bold font-serif text-[#3E442B] uppercase italic">
             <QrCode className="text-[#EA638C]" size={24} /> Islami Bank Bangla QR Payment
@@ -292,11 +354,11 @@ export default function CheckoutPage() {
           
           <div className="flex flex-col items-center gap-6 md:flex-row md:items-start">
             <div className="bg-[#FBB6E6] p-4 rounded-[2rem] text-center w-full md:w-auto shrink-0">
-              <div className="inline-block p-2 bg-white rounded-2xl shadow-sm">
+              <div className="inline-block p-2 bg-white shadow-sm rounded-2xl">
                 <img 
                   src="/ibbl-bangla-qr.jpg" 
                   alt="Islami Bank Bangla QR" 
-                  className="w-52 h-52 object-contain mx-auto"
+                  className="object-contain mx-auto w-52 h-52"
                 />
               </div>
               <p className="text-[10px] font-black uppercase text-[#3E442B] tracking-wider mt-2">
@@ -305,11 +367,11 @@ export default function CheckoutPage() {
             </div>
 
             <div className="w-full space-y-4">
-              <p className="text-xs italic text-gray-500 font-medium">
+              <p className="text-xs italic font-medium text-gray-500">
                 Please scan the QR code above with your app to complete your payment of{" "}
                 <strong className="text-[#EA638C] text-sm font-bold">৳{payableNow.toFixed(2)}</strong> (Includes +1.5% gateway processing fees).
                 {paymentMethod === "COD" && (
-                  <span className="block mt-1 text-gray-400 font-bold">
+                  <span className="block mt-1 font-bold text-gray-400">
                     * The remaining merchandise balance of ৳{dueOnDelivery.toLocaleString()} will be handled as Cash on Delivery.
                   </span>
                 )}
@@ -398,7 +460,7 @@ export default function CheckoutPage() {
           <button
             onClick={handlePlaceOrder}
             disabled={loading || checkoutItems.length === 0}
-            className="w-full bg-[#EA638C] text-white p-2 pr-6 md:pr-8 rounded-full font-black uppercase tracking-[0.1em] text-[9px] md:text-[10px] transition-all flex items-center justify-between group disabled:bg-white/10 shadow-xl active:scale-95"
+            className="w-full bg-[#EA638C] hover:bg-[#ea638c]/90 text-white p-2 pr-6 md:pr-8 rounded-full font-black uppercase tracking-[0.1em] text-[9px] md:text-[10px] transition-all flex items-center justify-between group disabled:bg-white/10 shadow-xl active:scale-95 cursor-pointer"
           >
             <div className="bg-white p-3 rounded-full text-[#EA638C] shadow-lg">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
@@ -409,6 +471,58 @@ export default function CheckoutPage() {
           </button>
         </div>
       </div>
+
+      {/* SUCCESS CONFIRMATION POP-UP MODAL */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 text-center shadow-2xl border-4 border-[#FBB6E6] relative space-y-6">
+            <div className="w-20 h-20 bg-[#FBB6E6] text-[#EA638C] rounded-full flex items-center justify-center mx-auto shadow-inner">
+              <CheckCircle2 size={48} />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-2xl font-serif font-bold text-[#3E442B] italic uppercase">
+                Order Placed Successfully!
+              </h3>
+              <p className="max-w-sm mx-auto text-xs font-medium leading-relaxed text-gray-600">
+                Thank you for your order! We have received your payment details. An admin will verify your payment and confirm your order shortly.
+              </p>
+            </div>
+
+            <div className="bg-[#FAFAFA] rounded-2xl p-4 border border-gray-100 text-left space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold tracking-wider text-gray-400 uppercase">Txn ID</span>
+                <span className="font-bold text-[#3E442B] font-mono">{placedOrderDetails?.txnId}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold tracking-wider text-gray-400 uppercase">Amount Advance Paid</span>
+                <span className="font-bold text-[#EA638C] font-serif">৳{placedOrderDetails?.amountPaid?.toFixed(2)}</span>
+              </div>
+              {placedOrderDetails?.due > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold tracking-wider text-gray-400 uppercase">Due on Delivery</span>
+                  <span className="font-bold text-[#3E442B] font-serif">৳{placedOrderDetails?.due?.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-2 text-xs border-t border-gray-100">
+                <span className="flex items-center gap-1 font-bold tracking-wider text-gray-400 uppercase">
+                  <Clock size={12} className="text-[#EA638C]" /> Status
+                </span>
+                <span className="px-3 py-1 bg-[#FBB6E6]/40 text-[#EA638C] rounded-full font-black text-[10px] uppercase">
+                  Awaiting Admin Verification
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => router.push("/dashboard/orders")}
+              className="w-full bg-[#3E442B] hover:bg-[#EA638C] text-white py-4 px-6 rounded-full font-black uppercase text-xs tracking-widest transition-colors flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+            >
+              View Order Status <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
