@@ -18,12 +18,24 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
   // State for image zoom modal
   const [selectedImage, setSelectedImage] = useState(null);
 
-  // 🟢 Fixed Data Path for tiers
+  // 🟢 Enhanced Dynamic Data Path for tiers (with automatic range display)
   const tiers = useMemo(() => {
     const rawTiers =
       product?.pricingTiers || product?._doc?.pricingTiers || [];
-    return [...rawTiers].sort((a, b) => a.minQuantity - b.minQuantity);
-  }, [product]);
+    
+    if (rawTiers.length === 0) return [];
+
+    const sorted = [...rawTiers].sort((a, b) => a.minQuantity - b.minQuantity);
+    
+    const basePrice = Number(product?.price) || Number(variants[0]?.price) || 0;
+
+    // If the lowest defined tier starts above 1, prepends base Tier (1 to minQuantity-1)
+    if (sorted[0].minQuantity > 1) {
+      return [{ minQuantity: 1, unitPrice: basePrice }, ...sorted];
+    }
+
+    return sorted;
+  }, [product, variants]);
 
   const lastProductId = useRef(product?._id);
   const [quantities, setQuantities] = useState({});
@@ -208,7 +220,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
 
   return (
     <div className="flex flex-col w-full max-w-full gap-6 mt-10">
-      {/* SINGLE BULK SAVINGS CONTAINER WITH UPDATED RANGES & FULL WIDTH GRID */}
+      {/* BULK SAVINGS CONTAINER WITH DISPLAY RANGES */}
       {tiers.length > 0 && (
         <div className="bg-white border border-gray-100 rounded-[2.5rem] p-5 shadow-sm duration-700 animate-in fade-in slide-in-from-top-4 w-full">
           <div className="flex items-center gap-3 px-2 mb-4">
@@ -344,25 +356,27 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
       )}
 
       {/* STICKY FOOTER */}
-      <div className="sticky bottom-4 z-20 flex flex-row items-center justify-between p-3.5 sm:p-5 bg-[#3E442B] rounded-[2rem] sm:rounded-[3rem] shadow-2xl mx-1 border border-white/10 gap-3 backdrop-blur-md">
-        <div className="flex items-center gap-3 bg-white/10 border border-white/15 px-4 py-2 sm:py-2.5 rounded-2xl sm:rounded-[1.5rem] backdrop-blur-sm">
-          <span className="text-[#FBB6E6] text-lg sm:text-[22px] font-black italic tracking-tighter">
+      <div className="sticky bottom-4 z-20 flex items-center justify-between p-2.5 sm:p-4 bg-[#3E442B] rounded-[2rem] sm:rounded-[3rem] shadow-2xl mx-1 border border-white/10 gap-2 backdrop-blur-md w-full max-w-full box-border">
+        {/* Price & Quantity Badge */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 bg-white/10 border border-white/15 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl sm:rounded-[1.5rem] backdrop-blur-sm shrink min-w-0">
+          <span className="text-[#FBB6E6] text-base sm:text-[22px] font-black italic tracking-tighter truncate">
             ৳{totalPrice.toLocaleString()}
           </span>
 
-          <div className="w-[1px] h-4 sm:h-5 bg-white/20" />
+          <div className="w-[1px] h-3.5 sm:h-5 bg-white/20 shrink-0" />
 
-          <span className="bg-[#EA638C] text-white text-[8px] sm:text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0">
+          <span className="bg-[#EA638C] text-white text-[8px] sm:text-[10px] font-black px-1.5 sm:px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 whitespace-nowrap">
             {totalSelected} {totalSelected === 1 ? "Item" : "Items"}
           </span>
         </div>
 
+        {/* Action Button */}
         <button
           onClick={handleBulkAdd}
           disabled={totalSelected === 0}
-          className="flex items-center justify-center gap-2 bg-[#EA638C] text-white px-5 sm:px-10 py-3.5 sm:py-4 rounded-full font-black text-[10px] sm:text-[11px] uppercase tracking-[0.15em] sm:tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:grayscale shadow-lg shadow-[#EA638C]/20 shrink-0"
+          className="flex items-center justify-center gap-1.5 sm:gap-2 bg-[#EA638C] text-white px-3 sm:px-8 py-2.5 sm:py-4 rounded-full font-black text-[9px] sm:text-[11px] uppercase tracking-[0.1em] sm:tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:grayscale shadow-lg shadow-[#EA638C]/20 shrink-0 whitespace-nowrap"
         >
-          <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+          <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5] shrink-0" />
           <span>Confirm & Add</span>
         </button>
       </div>

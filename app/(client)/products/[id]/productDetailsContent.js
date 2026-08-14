@@ -13,7 +13,6 @@ import {
   X,
   MousePointer2,
   Images,
-  TrendingDown,
 } from "lucide-react";
 import ProductPurchaseSection from "@/components/ProductPurchaseSection";
 import { useRouter } from "next/navigation";
@@ -27,9 +26,6 @@ export default function ProductDetailsContent({ product }) {
   const [isMounted, setIsMounted] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [zoomStyle, setZoomStyle] = useState({ display: "none" });
-  
-  // 🟢 BRIDGE STATE: Tracks what's being clicked in the Purchase Section
-  const [selectedQty, setSelectedQty] = useState(0);
 
   // --- 📸 MASTER IMAGE LOGIC ---
   const allImages = useMemo(() => {
@@ -57,7 +53,6 @@ export default function ProductDetailsContent({ product }) {
   const [activeSku, setActiveSku] = useState(product?.sku || null);
 
   useEffect(() => {
-    
     if (allImages.length > 0) setMainImage(allImages[0]);
     if (product?.gallery?.length > 0) setDetailGalleryImage(product.gallery[0]);
   }, [allImages, product?.gallery]);
@@ -134,27 +129,6 @@ export default function ProductDetailsContent({ product }) {
 
   const isOutOfStock = currentStock <= 0;
   const isLowStock = !isOutOfStock && currentStock <= displayMoq * 3;
-
-  // --- ✨ ACTIVE PRICE TIER LOGIC (With Live Highlight) ---
-  const pricingTiers = useMemo(() => {
-    const rawTiers = product?.pricingTiers || product?._doc?.pricingTiers || [];
-    return [...rawTiers].sort((a, b) => a.minQuantity - b.minQuantity);
-  }, [product]);
-
-  const activeTierIndex = useMemo(() => {
-    if (!pricingTiers.length) return -1;
-
-    const effectiveTotal = inCartQtyTotal + selectedQty;
-    if (effectiveTotal === 0) return -1;
-
-    let index = -1;
-    pricingTiers.forEach((tier, i) => {
-      if (effectiveTotal >= tier.minQuantity) {
-        index = i;
-      }
-    });
-    return index;
-  }, [pricingTiers, inCartQtyTotal, selectedQty]);
 
   const ModalPortal = () => {
     if (!isMounted || !isModalOpen) return null;
@@ -397,72 +371,12 @@ export default function ProductDetailsContent({ product }) {
           </div>
         </div>
 
-        {/* 🟢 WHOLESALE PRICING TIERS (RE-DESIGNED) */}
-{pricingTiers.length > 0 ? (
-  <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-[2.5rem] my-6">
-    <div className="flex items-center gap-3 px-8 py-5 bg-gray-50/50">
-      <div className="p-2 bg-[#3E442B] rounded-xl text-white">
-        <TrendingDown size={18} />
-      </div>
-      <div>
-        <h4 className="text-[11px] font-black text-[#3E442B] uppercase tracking-[0.2em]">
-          Bulk Savings
-        </h4>
-        <p className="text-[10px] text-gray-400 font-bold uppercase">
-          {activeTierIndex >= 0 
-            ? `Current Rate: ৳${pricingTiers[activeTierIndex].unitPrice} / Unit` 
-            : "Select more units to unlock wholesale rates"}
-        </p>
-      </div>
-    </div>
-
-    <div className="grid grid-cols-2 gap-px bg-gray-100 sm:grid-cols-4">
-      {pricingTiers.map((tier, index) => {
-        const isActive = index === activeTierIndex;
-        return (
-          <div
-            key={index}
-            className={`relative p-6 flex flex-col items-center justify-center transition-all duration-500 ${
-              isActive 
-                ? "bg-[#EA638C] text-white z-10 scale-[1.05] shadow-xl" 
-                : "bg-white text-gray-900 hover:bg-gray-50/50"
-            }`}
-          >
-            <span className={`text-[9px] font-black uppercase mb-1 ${isActive ? "text-white/80" : "text-gray-400"}`}>
-              {tier.minQuantity}+ Pcs
-            </span>
-            <span className={`text-xl font-black ${isActive ? "text-white" : "text-[#EA638C]"}`}>
-              ৳{tier.unitPrice}
-            </span>
-            {isActive && (
-              <div className="absolute p-1 bg-white rounded-full -top-2 -right-2 shadow-md">
-                <Check size={10} className="text-[#EA638C] stroke-[4]" />
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  </div>
-) : (
-  <div className="p-4 my-6 text-center border-2 border-dashed border-gray-100 rounded-[2rem]">
-    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">
-      Standard Retail Pricing
-    </p>
-  </div>
-)}
-
         <ProductPurchaseSection
           product={product}
           isOutOfStock={isOutOfStock}
-          onVariantChange={(variantData, currentTotalQty) => {
+          onVariantChange={(variantData) => {
             if (variantData?.imageUrl) setMainImage(variantData.imageUrl);
             if (variantData?.sku) setActiveSku(variantData.sku);
-
-            // 🟢 Update selectedQty bridge to reflect in Pricing Tiers Table
-            if (typeof currentTotalQty === "number") {
-              setSelectedQty(currentTotalQty);
-            }
           }}
         />
 
