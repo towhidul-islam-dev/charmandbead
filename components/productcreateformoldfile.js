@@ -17,9 +17,9 @@ import {
 
 /**
  * MOBILE-SAFE CLIENT-SIDE IMAGE COMPRESSOR
- * Configured with dynamic dimensions & memory cleanup for large variant sets
+ * Updated to prevent memory leaks and payload limit errors on mobile devices
  */
-const compressImageMobileSafe = (file, maxWidth = 800, quality = 0.65) => {
+const compressImageMobileSafe = (file, maxWidth = 1000, quality = 0.7) => {
   return new Promise((resolve) => {
     if (!file || !file.type.startsWith("image/")) {
       return resolve(file);
@@ -57,7 +57,6 @@ const compressImageMobileSafe = (file, maxWidth = 800, quality = 0.65) => {
         const ctx = canvas.getContext("2d", { alpha: false });
         if (!ctx) return resolve(file);
 
-        // Fill white background to handle PNG to JPEG conversions cleanly
         ctx.fillStyle = "#FFFFFF";
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
@@ -71,7 +70,6 @@ const compressImageMobileSafe = (file, maxWidth = 800, quality = 0.65) => {
               { type: "image/jpeg", lastModified: Date.now() }
             );
             
-            // Clean up memory immediately to prevent tab crashing
             canvas.width = 0;
             canvas.height = 0;
             
@@ -211,21 +209,19 @@ export default function ProductForm({ initialData }) {
   // --- CLIENT SUBMISSION HANDLER ---
   const clientAction = async (formData) => {
     try {
-      toast.loading("Optimizing variant images for mobile...", { id: "saving" });
+      toast.loading("Optimizing mobile images...", { id: "saving" });
 
       formData.set("id", initialData?._id || "");
       formData.set("hasVariants", useVariants.toString());
       formData.set("isNewArrival", isNewArrival.toString());
       
-      // 1. Process Main Image
       if (mainFile) {
-        const compressedMain = await compressImageMobileSafe(mainFile, 1000, 0.75);
+        const compressedMain = await compressImageMobileSafe(mainFile);
         formData.append("mainImage", compressedMain);
       } else {
         formData.set("imageUrl", initialData?.imageUrl || "");
       }
       
-      // Wholesale Tiers
       const validTiers = pricingTiers
         .map(t => ({ minQuantity: Number(t.minQuantity) || 0, unitPrice: Number(t.unitPrice) || 0 }))
         .filter(t => t.minQuantity > 0 && t.unitPrice > 0);
@@ -242,19 +238,17 @@ export default function ProductForm({ initialData }) {
       
       formData.set("price", Number(previewPrice) || 0);
       
-      // 2. Process Gallery Images
       const existingGallery = galleryPreviews.filter(p => !p.isNew);
       formData.set("existingGallery", JSON.stringify(existingGallery));
       
       for (let i = 0; i < galleryPreviews.length; i++) {
         const p = galleryPreviews[i];
         if (p.isNew && p.file) {
-          const compressedGalleryImg = await compressImageMobileSafe(p.file, 900, 0.7);
+          const compressedGalleryImg = await compressImageMobileSafe(p.file);
           formData.append(`galleryFile_${i}`, compressedGalleryImg);
         }
       }
 
-      // 3. Process Variants safely with memory pauses
       if (useVariants) {
         const variantsData = variants.map(({ preview, file, ...rest }) => ({
           ...rest,
@@ -267,13 +261,8 @@ export default function ProductForm({ initialData }) {
         for (let i = 0; i < variants.length; i++) {
           const v = variants[i];
           if (v.file) {
-            const compressedVariantImg = await compressImageMobileSafe(v.file, 800, 0.65);
+            const compressedVariantImg = await compressImageMobileSafe(v.file);
             formData.append(`variantFile_${i}`, compressedVariantImg);
-            
-            // Micro pause every 3 variants to allow garbage collection
-            if (i > 0 && i % 3 === 0) {
-              await new Promise(r => setTimeout(r, 50));
-            }
           }
         }
       }
@@ -286,7 +275,7 @@ export default function ProductForm({ initialData }) {
       });
     } catch (err) {
       toast.dismiss("saving");
-      toast.error("Upload failed. Try reducing photo sizes or count.");
+      toast.error("Mobile upload failed. Please try again.");
       console.error("Mobile upload process error:", err);
     }
   };
@@ -514,7 +503,7 @@ export default function ProductForm({ initialData }) {
 
               <section className={sectionClass}>
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-[#3E442B] mb-4">Main Image</h3>
-                <div className="w-full h-64 bg-[#3E442B]/5 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative" onClick={() => mainPreview ? setPreviewModalImg(mainPreview) : document.getElementById('main-img').click()}>
+                <div className="w-full h-64 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative" onClick={() => mainPreview ? setPreviewModalImg(mainPreview) : document.getElementById('main-img').click()}>
                   {mainPreview ? <><img src={mainPreview} className="object-cover w-full h-full" /><div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/20"><MagnifyingGlassPlusIcon className="w-10 h-10 text-white" /></div></> : <PhotoIcon className="w-12 h-12 text-[#EA638C]/30" />}
                 </div>
                 <input id="main-img" type="file" className="hidden" accept="image/*" onChange={(e) => { 
