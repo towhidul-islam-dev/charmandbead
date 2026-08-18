@@ -3,7 +3,6 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useSearchParams, useRouter } from "next/navigation";
 import {
   Search,
   EyeOff,
@@ -30,11 +29,9 @@ export default function AdminProductsClient({ initialProducts }) {
   const [loadingId, setLoadingId] = useState(null);
   const [activeRestockProduct, setActiveRestockProduct] = useState(null);
 
-  // --- Pagination Logic ---
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const currentPage = Number(searchParams.get("page")) || 1;
-  const itemsPerPage = 10;
+  // --- Pagination State ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10; // 👈 Set how many products you want per page
 
   useEffect(() => {
     setProducts(initialProducts);
@@ -67,8 +64,6 @@ export default function AdminProductsClient({ initialProducts }) {
       setProducts((prev) =>
         prev.map((p) => (String(p._id) === String(updatedProduct._id) ? updatedProduct : p))
       );
-    } else {
-      router.refresh();
     }
   };
 
@@ -117,19 +112,21 @@ export default function AdminProductsClient({ initialProducts }) {
 
   const totalProducts = filteredProducts.length;
   const totalPages = Math.ceil(totalProducts / itemsPerPage);
-  
+
   const paginatedProducts = useMemo(() => {
-    return filteredProducts.slice(
-      (currentPage - 1) * itemsPerPage,
-      currentPage * itemsPerPage
-    );
-  }, [filteredProducts, currentPage]);
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredProducts.slice(start, start + itemsPerPage);
+  }, [filteredProducts, currentPage, itemsPerPage]);
 
   const getPageNumbers = () => {
     const pages = [];
     const range = 1;
     for (let i = 1; i <= totalPages; i++) {
-      if (i === 1 || i === totalPages || (i >= currentPage - range && i <= currentPage + range)) {
+      if (
+        i === 1 ||
+        i === totalPages ||
+        (i >= currentPage - range && i <= currentPage + range)
+      ) {
         pages.push(i);
       } else if (pages[pages.length - 1] !== "...") {
         pages.push("...");
@@ -143,12 +140,6 @@ export default function AdminProductsClient({ initialProducts }) {
     const uniqueNames = Array.from(new Set(names)).filter((n) => n !== "Uncategorized");
     return ["All", ...uniqueNames.sort(), "Uncategorized"];
   }, [products]);
-
-  const handleFilterResetPage = () => {
-    const params = new URLSearchParams(searchParams);
-    params.set("page", "1");
-    router.push(`?${params.toString()}`);
-  };
 
   return (
     <div className="p-4 mx-auto overflow-x-hidden duration-500 md:p-8 max-w-7xl animate-in fade-in">
@@ -225,7 +216,7 @@ export default function AdminProductsClient({ initialProducts }) {
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              handleFilterResetPage();
+              setCurrentPage(1);
             }}
           />
         </div>
@@ -233,7 +224,7 @@ export default function AdminProductsClient({ initialProducts }) {
           className="w-full md:w-48 px-4 py-4 text-[10px] font-black uppercase tracking-widest text-[#3E442B] bg-white border border-gray-100 rounded-2xl shadow-sm cursor-pointer outline-none focus:ring-2 focus:ring-[#EA638C]/20"
           onChange={(e) => {
             setActiveCategory(e.target.value);
-            handleFilterResetPage();
+            setCurrentPage(1);
           }}
           value={activeCategory}
         >
@@ -394,42 +385,47 @@ export default function AdminProductsClient({ initialProducts }) {
             </div>
           </div>
 
-          {/* Branded Pagination */}
+          {/* Interactive Pagination Controls */}
           {totalPages > 1 && (
             <div className="flex flex-col items-center justify-center gap-6 mt-16">
               <div className="flex items-center gap-2 p-1.5 bg-white shadow-xl rounded-full border border-gray-50">
-                <Link
-                  href={`?page=${Math.max(1, currentPage - 1)}`}
-                  className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${currentPage === 1 ? 'opacity-20 pointer-events-none' : 'bg-gray-50 text-[#3E442B] hover:text-[#EA638C]'}`}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${currentPage === 1 ? 'opacity-20 cursor-not-allowed' : 'bg-gray-50 text-[#3E442B] hover:text-[#EA638C]'}`}
                 >
                   <ChevronLeft size={18} />
-                </Link>
+                </button>
 
                 <div className="flex items-center gap-1 px-1">
                   {getPageNumbers().map((p, i) => (
                     p === "..." ? (
                       <span key={`dots-${i}`} className="px-2 text-xs font-bold text-gray-300">...</span>
                     ) : (
-                      <Link
+                      <button
                         key={p}
-                        href={`?page=${p}`}
+                        type="button"
+                        onClick={() => setCurrentPage(p)}
                         className={`w-11 h-11 flex flex-col items-center justify-center rounded-full text-[10px] font-black transition-all ${
                           currentPage === p ? 'bg-[#3E442B] text-white shadow-lg' : 'text-gray-400 hover:text-[#EA638C]'
                         }`}
                       >
                         {currentPage === p && <span className="text-[5px] uppercase tracking-tighter opacity-60 leading-none">Pg</span>}
                         {p}
-                      </Link>
+                      </button>
                     )
                   ))}
                 </div>
 
-                <Link
-                  href={`?page=${Math.min(totalPages, currentPage + 1)}`}
-                  className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${currentPage === totalPages ? 'opacity-20 pointer-events-none' : 'bg-[#3E442B] text-white hover:bg-[#EA638C] shadow-lg'}`}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${currentPage === totalPages ? 'opacity-20 cursor-not-allowed' : 'bg-[#3E442B] text-white hover:bg-[#EA638C] shadow-lg'}`}
                 >
                   <ChevronRight size={18} />
-                </Link>
+                </button>
               </div>
               <p className="text-[8px] font-black text-gray-300 uppercase tracking-[0.4em]">
                 Inventory Registry <span className="mx-2 opacity-30">•</span> {totalProducts} Records
