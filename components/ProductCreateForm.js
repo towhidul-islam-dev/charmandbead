@@ -12,66 +12,78 @@ import {
   PhotoIcon, SparklesIcon, XMarkIcon, 
   PlusIcon, TagIcon, CubeIcon, CameraIcon,
   CommandLineIcon, EyeIcon, ChevronDownIcon,
-  MagnifyingGlassPlusIcon, BanknotesIcon
+  MagnifyingGlassPlusIcon, BanknotesIcon, ArrowsRightLeftIcon
 } from "@heroicons/react/24/outline";
 
 /**
  * MOBILE-SAFE CLIENT-SIDE IMAGE COMPRESSOR
  */
-const compressImageMobileSafe = (file, maxWidth = 1200, quality = 0.75) => {
+const compressImageMobileSafe = (file, maxWidth = 800, quality = 0.65) => {
   return new Promise((resolve) => {
     if (!file || !file.type.startsWith("image/")) {
       return resolve(file);
     }
-    if (file.size < 400 * 1024) {
-      return resolve(file);
-    }
 
-    const reader = new FileReader();
-    reader.onerror = () => resolve(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onerror = () => resolve(file);
-      img.onload = () => {
-        try {
-          let width = img.width;
-          let height = img.height;
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
 
-          if (width > maxWidth) {
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    };
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      try {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
             height = Math.round((height * maxWidth) / width);
             width = maxWidth;
+          } else {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
           }
-
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext("2d", { alpha: false });
-          if (!ctx) return resolve(file);
-
-          ctx.drawImage(img, 0, 0, width, height);
-
-          canvas.toBlob(
-            (blob) => {
-              if (!blob) return resolve(file);
-              const compressedFile = new File(
-                [blob], 
-                file.name.replace(/\.[^/.]+$/, "") + ".jpg", 
-                { type: "image/jpeg", lastModified: Date.now() }
-              );
-              resolve(compressedFile);
-            },
-            "image/jpeg",
-            quality
-          );
-        } catch (err) {
-          console.warn("Mobile canvas compression fallback triggered:", err);
-          resolve(file);
         }
-      };
-      img.src = event.target.result;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d", { alpha: false });
+        if (!ctx) return resolve(file);
+
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return resolve(file);
+            const compressedFile = new File(
+              [blob], 
+              file.name.replace(/\.[^/.]+$/, "") + ".jpg", 
+              { type: "image/jpeg", lastModified: Date.now() }
+            );
+            
+            canvas.width = 0;
+            canvas.height = 0;
+            
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          quality
+        );
+      } catch (err) {
+        console.warn("Mobile canvas compression fallback triggered:", err);
+        resolve(file);
+      }
     };
-    reader.readAsDataURL(file);
+
+    img.src = objectUrl;
   });
 };
 
@@ -106,7 +118,6 @@ export default function ProductForm({ initialData }) {
   const [previewName, setPreviewName] = useState(initialData?.name || "");
   const [previewPrice, setPreviewPrice] = useState(initialData?.price || 0);
 
-  // --- SINGLE GLOBAL WHOLESALE TIERS STATE ---
   const [pricingTiers, setPricingTiers] = useState(initialData?.pricingTiers || []);
   
   const [previewModalImg, setPreviewModalImg] = useState(null);
@@ -142,7 +153,6 @@ export default function ProductForm({ initialData }) {
     setPricingTiers(newTiers);
   };
 
-  // --- BEST PRICE PREVIEW LOGIC ---
   const getBestPrice = () => {
     let basePrices = useVariants && variants.length > 0 
       ? variants.map(v => Number(v.price)).filter(p => p > 0)
@@ -193,22 +203,56 @@ export default function ProductForm({ initialData }) {
     setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
+  // --- MAIN IMAGE CHANGE HANDLER ---
+  const handleMainImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setMainFile(file);
+      setMainPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const removeMainImage = () => {
+    setMainFile(null);
+    setMainPreview(null);
+  };
+
+  // --- VARIANT IMAGE CHANGE HANDLER ---
+  const handleVariantImageChange = (index, file) => {
+    if (file) {
+      const newV = [...variants];
+      newV[index].preview = URL.createObjectURL(file);
+      newV[index].file = file;
+      setVariants(newV);
+    }
+  };
+
+  const removeVariantImage = (index) => {
+    const newV = [...variants];
+    newV[index].preview = null;
+    newV[index].file = null;
+    newV[index].imageUrl = null;
+    setVariants(newV);
+  };
+
   // --- CLIENT SUBMISSION HANDLER ---
   const clientAction = async (formData) => {
     try {
-      toast.loading("Optimizing mobile images...", { id: "saving" });
+      toast.loading("Optimizing variant images for mobile...", { id: "saving" });
 
       formData.set("id", initialData?._id || "");
       formData.set("hasVariants", useVariants.toString());
       formData.set("isNewArrival", isNewArrival.toString());
       
+      // Process Main Image
       if (mainFile) {
-        const compressedMain = await compressImageMobileSafe(mainFile);
+        const compressedMain = await compressImageMobileSafe(mainFile, 1000, 0.75);
         formData.append("mainImage", compressedMain);
       } else {
-        formData.set("imageUrl", initialData?.imageUrl || "");
+        formData.set("imageUrl", mainPreview || "");
       }
       
+      // Wholesale Tiers
       const validTiers = pricingTiers
         .map(t => ({ minQuantity: Number(t.minQuantity) || 0, unitPrice: Number(t.unitPrice) || 0 }))
         .filter(t => t.minQuantity > 0 && t.unitPrice > 0);
@@ -225,17 +269,19 @@ export default function ProductForm({ initialData }) {
       
       formData.set("price", Number(previewPrice) || 0);
       
+      // Process Gallery Images
       const existingGallery = galleryPreviews.filter(p => !p.isNew);
       formData.set("existingGallery", JSON.stringify(existingGallery));
       
       for (let i = 0; i < galleryPreviews.length; i++) {
         const p = galleryPreviews[i];
         if (p.isNew && p.file) {
-          const compressedGalleryImg = await compressImageMobileSafe(p.file);
+          const compressedGalleryImg = await compressImageMobileSafe(p.file, 900, 0.7);
           formData.append(`galleryFile_${i}`, compressedGalleryImg);
         }
       }
 
+      // Process Variants
       if (useVariants) {
         const variantsData = variants.map(({ preview, file, ...rest }) => ({
           ...rest,
@@ -248,8 +294,12 @@ export default function ProductForm({ initialData }) {
         for (let i = 0; i < variants.length; i++) {
           const v = variants[i];
           if (v.file) {
-            const compressedVariantImg = await compressImageMobileSafe(v.file);
+            const compressedVariantImg = await compressImageMobileSafe(v.file, 800, 0.65);
             formData.append(`variantFile_${i}`, compressedVariantImg);
+            
+            if (i > 0 && i % 3 === 0) {
+              await new Promise(r => setTimeout(r, 50));
+            }
           }
         }
       }
@@ -262,21 +312,18 @@ export default function ProductForm({ initialData }) {
       });
     } catch (err) {
       toast.dismiss("saving");
-      toast.error("Mobile upload failed. Please try again.");
+      toast.error("Upload failed. Try reducing photo sizes or count.");
       console.error("Mobile upload process error:", err);
     }
   };
 
-  // --- SUCCESS & RESET HANDLER ---
   useEffect(() => {
     if (state?.success) {
       toast.dismiss("saving");
       toast.success(state.message || "Product Saved Successfully! ✨");
 
-      // Reset Native Form Inputs
       formRef.current?.reset();
 
-      // Complete State Reset
       setUseVariants(false);
       setVariants([]);
       setIsNewArrival(false);
@@ -393,53 +440,78 @@ export default function ProductForm({ initialData }) {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {variants.map((v, i) => (
-                    <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100 space-y-4">
-                      <div className="flex items-center gap-4">
-                          <div onClick={() => (v.preview || v.imageUrl) ? setPreviewModalImg(v.preview || v.imageUrl) : document.getElementById(`v-img-${i}`).click()} className="relative flex items-center justify-center w-16 h-16 overflow-hidden bg-white border-2 border-dashed cursor-pointer rounded-2xl group/v shrink-0 border-[#FBB6E6]">
-                            {(v.preview || v.imageUrl) ? <><img src={v.preview || v.imageUrl} className="object-cover w-full h-full" /><div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/v:opacity-100 bg-black/20"><MagnifyingGlassPlusIcon className="w-5 h-5 text-white" /></div></> : <CameraIcon className="w-6 h-6 text-[#EA638C]/50" />}
+                  {variants.map((v, i) => {
+                    const currentImg = v.preview || v.imageUrl;
+                    return (
+                      <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100 space-y-4">
+                        <div className="flex items-center gap-4">
+                          <div className="flex flex-col items-center gap-1 shrink-0">
+                            <div className="relative flex items-center justify-center w-16 h-16 overflow-hidden bg-white border-2 border-dashed rounded-2xl group/v shrink-0 border-[#FBB6E6]">
+                              {currentImg ? (
+                                <>
+                                  <img src={currentImg} className="object-cover w-full h-full" />
+                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/v:opacity-100 bg-black/40 gap-1 transition-opacity">
+                                    <button type="button" onClick={() => setPreviewModalImg(currentImg)} title="View" className="p-1 bg-white/80 rounded-full text-gray-800 hover:bg-white">
+                                      <MagnifyingGlassPlusIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button type="button" onClick={() => document.getElementById(`v-img-${i}`).click()} title="Change" className="p-1 bg-white/80 rounded-full text-gray-800 hover:bg-white">
+                                      <ArrowsRightLeftIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
+                                <button type="button" onClick={() => document.getElementById(`v-img-${i}`).click()} className="flex items-center justify-center w-full h-full">
+                                  <CameraIcon className="w-6 h-6 text-[#EA638C]/50" />
+                                </button>
+                              )}
+                            </div>
+                            {currentImg && (
+                              <button type="button" onClick={() => removeVariantImage(i)} className="text-[9px] font-bold text-red-400 hover:text-red-600">
+                                Remove
+                              </button>
+                            )}
                           </div>
+
                           <div className="flex-1">
                             <span className="text-[9px] font-black uppercase text-gray-400 ml-1">SKU</span>
                             <input placeholder="SKU" value={v.sku} onChange={e => { const n = [...variants]; n[i].sku = e.target.value; setVariants(n); }} className={variantInputClass} />
                           </div>
                           <button type="button" onClick={() => setVariants(variants.filter((_, idx) => idx !== i))} className="p-2 mt-4 text-red-400 transition-all bg-white rounded-full shadow-sm hover:bg-red-50"><XMarkIcon className="w-5 h-5" /></button>
-                      </div>
+                        </div>
 
-                      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-                          <div>
-                            <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Size</span>
-                            <input placeholder="Size" value={v.size} onChange={e => { const n = [...variants]; n[i].size = e.target.value; setVariants(n); }} className={variantInputClass} />
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Color</span>
-                            <input placeholder="Color" value={v.color} onChange={e => { const n = [...variants]; n[i].color = e.target.value; setVariants(n); }} className={variantInputClass} />
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Price</span>
-                            <input placeholder="Price" type="number" value={v.price} onChange={e => { const n = [...variants]; n[i].price = e.target.value; setVariants(n); }} className={variantInputClass} />
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Stock</span>
-                            <input placeholder="Stock" type="number" value={v.stock} onChange={e => { const n = [...variants]; n[i].stock = e.target.value; setVariants(n); }} className={variantInputClass} />
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-black uppercase text-[#EA638C] ml-1">MOQ</span>
-                            <input placeholder="MOQ" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className={`${variantInputClass} bg-[#FBB6E6]/20 text-[#EA638C] ring-1 ring-[#EA638C]/20`} />
-                          </div>
-                      </div>
+                        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+                            <div>
+                              <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Size</span>
+                              <input placeholder="Size" value={v.size} onChange={e => { const n = [...variants]; n[i].size = e.target.value; setVariants(n); }} className={variantInputClass} />
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Color</span>
+                              <input placeholder="Color" value={v.color} onChange={e => { const n = [...variants]; n[i].color = e.target.value; setVariants(n); }} className={variantInputClass} />
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Price</span>
+                              <input placeholder="Price" type="number" value={v.price} onChange={e => { const n = [...variants]; n[i].price = e.target.value; setVariants(n); }} className={variantInputClass} />
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Stock</span>
+                              <input placeholder="Stock" type="number" value={v.stock} onChange={e => { const n = [...variants]; n[i].stock = e.target.value; setVariants(n); }} className={variantInputClass} />
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-black uppercase text-[#EA638C] ml-1">MOQ</span>
+                              <input placeholder="MOQ" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className={`${variantInputClass} bg-[#FBB6E6]/20 text-[#EA638C] ring-1 ring-[#EA638C]/20`} />
+                            </div>
+                        </div>
 
-                      <input type="file" id={`v-img-${i}`} className="hidden" accept="image/*" onChange={(e) => {
-                        const file = e.target.files[0];
-                        if (file) {
-                          const newV = [...variants];
-                          newV[i].preview = URL.createObjectURL(file);
-                          newV[i].file = file;
-                          setVariants(newV);
-                        }
-                      }} />
-                    </div>
-                  ))}
+                        <input 
+                          type="file" 
+                          id={`v-img-${i}`} 
+                          className="hidden" 
+                          accept="image/*" 
+                          onChange={(e) => handleVariantImageChange(i, e.target.files?.[0])} 
+                        />
+                      </div>
+                    );
+                  })}
                   <button type="button" onClick={() => setVariants([...variants, { size: "", color: "", price: "", stock: "", sku: "", minOrderQuantity: 1, preview: null, file: null }])} className="w-full py-5 border-2 border-dashed border-gray-200 rounded-[2.5rem] text-[10px] font-black uppercase text-[#3E442B] hover:bg-[#FBB6E6]/10 transition-all flex items-center justify-center gap-2">
                     <PlusIcon className="w-4 h-4 text-[#EA638C]" /> Add Row
                   </button>
@@ -489,16 +561,54 @@ export default function ProductForm({ initialData }) {
               </div>
 
               <section className={sectionClass}>
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-[#3E442B] mb-4">Main Image</h3>
-                <div className="w-full h-64 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative" onClick={() => mainPreview ? setPreviewModalImg(mainPreview) : document.getElementById('main-img').click()}>
-                  {mainPreview ? <><img src={mainPreview} className="object-cover w-full h-full" /><div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/20"><MagnifyingGlassPlusIcon className="w-10 h-10 text-white" /></div></> : <PhotoIcon className="w-12 h-12 text-[#EA638C]/30" />}
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-[#3E442B]">Main Image</h3>
+                  {mainPreview && (
+                    <div className="flex items-center gap-3">
+                      <button type="button" onClick={() => document.getElementById('main-img').click()} className="text-[10px] font-black text-[#EA638C] uppercase flex items-center gap-1">
+                        <ArrowsRightLeftIcon className="w-3 h-3" /> Change
+                      </button>
+                      <button type="button" onClick={removeMainImage} className="text-[10px] font-black text-red-400 uppercase">
+                        Remove
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <input id="main-img" type="file" className="hidden" accept="image/*" onChange={(e) => { 
-                  if(e.target.files[0]) {
-                    setMainFile(e.target.files[0]); 
-                    setMainPreview(URL.createObjectURL(e.target.files[0])); 
-                  }
-                }} />
+
+                <div 
+                  className="w-full h-64 bg-[#3E442B]/5 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative"
+                  onClick={() => {
+                    if (!mainPreview) {
+                      document.getElementById('main-img').click();
+                    } else {
+                      setPreviewModalImg(mainPreview);
+                    }
+                  }}
+                >
+                  {mainPreview ? (
+                    <>
+                      <img src={mainPreview} className="object-cover w-full h-full" />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/30 gap-2 transition-opacity">
+                        <span className="p-2 bg-white/90 rounded-full text-gray-800 shadow-md">
+                          <MagnifyingGlassPlusIcon className="w-6 h-6" />
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center">
+                      <PhotoIcon className="w-12 h-12 text-[#EA638C]/40 mx-auto mb-2" />
+                      <span className="text-[10px] font-black uppercase text-gray-400">Click to upload photo</span>
+                    </div>
+                  )}
+                </div>
+
+                <input 
+                  id="main-img" 
+                  type="file" 
+                  className="hidden" 
+                  accept="image/*" 
+                  onChange={handleMainImageChange} 
+                />
               </section>
 
               <section className={sectionClass}>
