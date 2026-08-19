@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import QuickPinchZoom from "react-quick-pinch-zoom";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import {
   Minus,
   Plus,
@@ -29,21 +29,9 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
   const [selectedImage, setSelectedImage] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  // Refs for mobile touch zoom functionality
-  const zoomRef = useRef(null);
-  const imageContainerRef = useRef(null);
-
-  const onUpdate = useCallback(({ x, y, scale }) => {
-    const image = imageContainerRef.current;
-    if (image) {
-      image.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
-    }
-  }, []);
-
   // Dynamic Data Path for tiers
   const tiers = useMemo(() => {
-    const rawTiers =
-      product?.pricingTiers || product?._doc?.pricingTiers || [];
+    const rawTiers = product?.pricingTiers || product?._doc?.pricingTiers || [];
 
     if (rawTiers.length === 0) return [];
 
@@ -74,11 +62,17 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
 
       return (
         itemVariantId === targetId ||
-        (itemProductId === product?._id?.toString() && itemVariantId === targetId)
+        (itemProductId === product?._id?.toString() &&
+          itemVariantId === targetId)
       );
     });
 
-    return matchingItems?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+    return (
+      matchingItems?.reduce(
+        (sum, item) => sum + Number(item.quantity || 0),
+        0,
+      ) || 0
+    );
   };
 
   // Reset local input selections on Product Change
@@ -153,7 +147,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
             color: "#3E442B",
             fontWeight: "bold",
           },
-        }
+        },
       );
       return;
     }
@@ -161,7 +155,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
     const updatedQuantities = { ...quantities, [vKey]: newQty };
     const newTotalSelected = Object.values(updatedQuantities).reduce(
       (a, b) => a + b,
-      0
+      0,
     );
 
     setQuantities(updatedQuantities);
@@ -216,7 +210,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
           minOrderQuantity: Number(v.minOrderQuantity) || 1,
         },
         v,
-        qtyToAdd
+        qtyToAdd,
       );
     });
 
@@ -253,7 +247,10 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
                 Bulk Savings
               </h3>
               <p className="text-[9px] font-bold text-gray-400 uppercase">
-                Current Rate: <span className="text-[#EA638C] font-black">৳{currentActiveUnitPrice} / Unit</span>
+                Current Rate:{" "}
+                <span className="text-[#EA638C] font-black">
+                  ৳{currentActiveUnitPrice} / Unit
+                </span>
               </p>
             </div>
           </div>
@@ -358,7 +355,8 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
               </span>
             </div>
             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest shrink-0">
-              {Math.round((totalSelected / nextTier.minQuantity) * 100)}% to Goal
+              {Math.round((totalSelected / nextTier.minQuantity) * 100)}% to
+              Goal
             </span>
           </div>
           <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -367,7 +365,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
               style={{
                 width: `${Math.min(
                   100,
-                  (totalSelected / nextTier.minQuantity) * 100
+                  (totalSelected / nextTier.minQuantity) * 100,
                 )}%`,
               }}
             />
@@ -402,7 +400,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
       {/* AUTHENTICATION REQUIRED POPUP MODAL */}
       {showAuthModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 duration-200 bg-black/70 backdrop-blur-sm animate-in fade-in"
           onClick={() => setShowAuthModal(false)}
         >
           <div
@@ -426,8 +424,9 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
             <h3 className="text-base font-black uppercase text-[#3E442B] tracking-tight mb-1.5">
               Wholesale Access Only
             </h3>
-            <p className="text-xs font-bold text-gray-500 mb-5 leading-relaxed">
-              Log in to apply bulk discounts and reserve these items in your bag.
+            <p className="mb-5 text-xs font-bold leading-relaxed text-gray-500">
+              Log in to apply bulk discounts and reserve these items in your
+              bag.
             </p>
 
             {/* Action Buttons */}
@@ -454,7 +453,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
       {/* TOUCH-ENABLED IMAGE POPUP MODAL */}
       {selectedImage && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
           onClick={() => setSelectedImage(null)}
         >
           <div
@@ -464,35 +463,49 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
             {/* Close Button */}
             <button
               onClick={() => setSelectedImage(null)}
-              className="absolute top-3 right-3 z-20 bg-[#EA638C] text-white p-2 rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all border-2 border-white"
+              className="absolute top-3 right-3 z-30 bg-[#EA638C] text-white p-2 rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all border-2 border-white"
             >
               <X size={18} strokeWidth={3} />
             </button>
 
-            {/* Touch-enabled Pinch/Zoom Container */}
-            <div className="relative w-full h-[65vh] sm:h-[70vh] rounded-2xl bg-gray-50 overflow-hidden touch-none">
-              <QuickPinchZoom
-                ref={zoomRef}
-                onUpdate={onUpdate}
-                wheelScaleFactor={0.15}
-                draggableUnZoomed={false}
-                inertia={true}
+            {/* Touch & Mouse Pan/Zoom Container */}
+            <div className="relative w-full h-[60vh] sm:h-[65vh] rounded-2xl bg-gray-50 overflow-hidden flex items-center justify-center">
+              <TransformWrapper
+                initialScale={1}
+                minScale={1}
+                maxScale={4}
+                centerOnInit={true}
+                wheel={{ step: 0.1 }}
               >
-                <div ref={imageContainerRef} className="w-full h-full relative">
-                  <Image
-                    src={selectedImage}
-                    alt="Variant Preview"
-                    fill
-                    priority
-                    className="object-contain pointer-events-none select-none"
-                  />
-                </div>
-              </QuickPinchZoom>
+                {() => (
+                  <TransformComponent
+                    wrapperStyle={{ width: "100%", height: "100%" }}
+                    contentStyle={{
+                      width: "100%",
+                      height: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <div className="relative w-full h-full flex items-center justify-center">
+                      <Image
+                        src={selectedImage}
+                        alt="Variant Preview"
+                        fill
+                        className="object-contain select-none"
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                        unoptimized
+                      />
+                    </div>
+                  </TransformComponent>
+                )}
+              </TransformWrapper>
             </div>
 
             {/* Mobile Hint */}
-            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mt-2 mb-1">
-              Pinch or double-tap to zoom
+            <p className="text-[9px] font-black uppercase tracking-widest text-[#3E442B] opacity-60 mt-2 mb-1">
+              Pinch, scroll, or double-tap to zoom
             </p>
           </div>
         </div>
