@@ -533,8 +533,8 @@ export default function ProductForm({ initialData }) {
                   <div className="mt-4 space-y-2">
                     {pricingTiers.map((tier, idx) => (
                       <div key={idx} className="flex items-center gap-2 group">
-                        <input type="number" placeholder="Min Qty" value={tier.minQuantity} onChange={(e) => updateTier(idx, 'minQuantity', e.target.value)} className="w-1/2 p-3 text-[11px] font-bold border-none rounded-xl bg-white shadow-sm outline-none focus:ring-1 focus:ring-[#EA638C]/30" />
-                        <input type="number" placeholder="Unit Price" value={tier.unitPrice} onChange={(e) => updateTier(idx, 'unitPrice', e.target.value)} className="w-1/2 p-3 text-[11px] font-bold border-none rounded-xl bg-white shadow-sm text-[#EA638C] outline-none focus:ring-1 focus:ring-[#EA638C]/30" />
+                        <input type="number" placeholder="Min Qty" value={tier.minQuantity} onChange={(e) => updateTier(idx, 'minQuantity', e.target.value)} className="w-1/2 p-3 text-[11px] font-bold border-none rounded-xl bg-white text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:ring-1 focus:ring-[#EA638C]/30" />
+                        <input type="number" placeholder="Unit Price" value={tier.unitPrice} onChange={(e) => updateTier(idx, 'unitPrice', e.target.value)} className="w-1/2 p-3 text-[11px] font-bold border-none rounded-xl bg-white text-[#EA638C] placeholder:text-gray-400 shadow-sm outline-none focus:ring-1 focus:ring-[#EA638C]/30" />
                         <button type="button" onClick={() => removeTier(idx)} className="p-2 text-gray-400 transition-opacity opacity-80 group-hover:opacity-100 hover:text-red-500">
                           <XMarkIcon className="w-4 h-4" />
                         </button>
