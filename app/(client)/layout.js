@@ -41,17 +41,14 @@ export const metadata = {
 };
 
 export default async function ClientLayout({ children }) {
-  // 1. Fetch Global Data
   const globalData = await getAdminGlobalData();
 
-  // 2. Fetch the "Live" User Image directly from MongoDB
   const session = await getServerSession(authOptions);
   let dbUserImage = null;
 
   if (session?.user?.email) {
     try {
       await dbConnect();
-      // We only fetch the image field to keep it fast
       const user = await User.findOne({ email: session.user.email })
         .select("image")
         .lean();
@@ -65,10 +62,10 @@ export default async function ClientLayout({ children }) {
     <ClientProviders 
       globalData={globalData} 
       fontVariable={playfair.variable}
-      // 🟢 PASS THE DB IMAGE DOWN AS A PROP
       dbImage={dbUserImage}
     >
-      <div className={`${playfair.variable} font-serif min-h-screen bg-white text-[#3E442B]`}>
+      {/* 🔴 Updated: Added flex flex-col */}
+      <div className={`${playfair.variable} font-serif min-h-screen flex flex-col bg-white text-[#3E442B]`}>
         {children}
       </div>
     </ClientProviders>
