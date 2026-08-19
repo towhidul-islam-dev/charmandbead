@@ -516,7 +516,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
 
             {/* Mobile Hint */}
             <p className="text-[10px] font-black uppercase tracking-widest text-[#3E442B] opacity-60 mt-3 mb-1">
-              Pinch, scroll, or double-tap to zoom the image
+              Pinch, scroll, or double-tap to zoom.
             </p>
           </div>
         </div>
