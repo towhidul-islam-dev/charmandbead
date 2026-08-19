@@ -1,12 +1,17 @@
 "use client";
+
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import {
   Minus,
   Plus,
-  Package,
   TrendingDown,
   ShoppingBag,
   X,
+  UserCheck,
+  LogIn,
 } from "lucide-react";
 import { useCart } from "@/Context/CartContext";
 import toast from "react-hot-toast";
@@ -14,22 +19,36 @@ import Image from "next/image";
 
 export default function ProductPurchaseSection({ product, onVariantChange }) {
   const { addToCart, cart } = useCart();
+  const { data: session } = useSession();
+  const user = session?.user;
+  const router = useRouter();
+
   const variants = product?.variants || [];
 
-  // State for image zoom modal
+  // State for image zoom modal & Auth prompt modal
   const [selectedImage, setSelectedImage] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
-  // 🟢 Fixed Data Path for tiers
+  // Dynamic Data Path for tiers
   const tiers = useMemo(() => {
-    const rawTiers =
-      product?.pricingTiers || product?._doc?.pricingTiers || [];
-    return [...rawTiers].sort((a, b) => a.minQuantity - b.minQuantity);
-  }, [product]);
+    const rawTiers = product?.pricingTiers || product?._doc?.pricingTiers || [];
+
+    if (rawTiers.length === 0) return [];
+
+    const sorted = [...rawTiers].sort((a, b) => a.minQuantity - b.minQuantity);
+    const basePrice = Number(product?.price) || Number(variants[0]?.price) || 0;
+
+    if (sorted[0].minQuantity > 1) {
+      return [{ minQuantity: 1, unitPrice: basePrice }, ...sorted];
+    }
+
+    return sorted;
+  }, [product, variants]);
 
   const lastProductId = useRef(product?._id);
   const [quantities, setQuantities] = useState({});
 
-  // 🟢 Helper to reliably extract Variant ID across different cart structures
+  // Helper to reliably extract Variant ID across cart structures
   const getQtyInBag = (vId) => {
     if (!vId) return 0;
     const targetId = vId.toString();
@@ -43,14 +62,20 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
 
       return (
         itemVariantId === targetId ||
-        (itemProductId === product?._id?.toString() && itemVariantId === targetId)
+        (itemProductId === product?._id?.toString() &&
+          itemVariantId === targetId)
       );
     });
 
-    return matchingItems?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+    return (
+      matchingItems?.reduce(
+        (sum, item) => sum + Number(item.quantity || 0),
+        0,
+      ) || 0
+    );
   };
 
-  // 🟢 Reset local input selections on Product Change
+  // Reset local input selections on Product Change
   useEffect(() => {
     if (lastProductId.current !== product?._id) {
       const initialQtys = {};
@@ -63,15 +88,13 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
     }
   }, [product?._id, variants]);
 
-  // --- 🟢 CALCULATE TOTALS ---
+  // CALCULATE TOTALS
   const totalSelected = Object.values(quantities).reduce((a, b) => a + b, 0);
-
   const nextTier = tiers.find((tier) => totalSelected < tier.minQuantity);
 
-  // --- 🟢 DYNAMIC PRICE RESOLUTION ---
+  // DYNAMIC PRICE RESOLUTION
   const getEffectiveUnitPrice = (variant) => {
     const basePrice = Number(variant?.price) || Number(product?.price) || 0;
-
     const activeTier = [...tiers]
       .reverse()
       .find((tier) => totalSelected >= tier.minQuantity);
@@ -79,7 +102,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
     return activeTier ? Number(activeTier.unitPrice) : basePrice;
   };
 
-  // --- 🟢 TOTAL PRICE CALCULATION ---
+  // TOTAL PRICE CALCULATION
   const totalPrice = useMemo(() => {
     return variants.reduce((sum, v) => {
       const vKey = v._id?.toString();
@@ -89,14 +112,23 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
     }, 0);
   }, [quantities, variants, tiers, totalSelected]);
 
-  // --- 🟢 FIXED QUANTITY UPDATE HANDLER ---
+  // CURRENT ACTIVE UNIT PRICE FOR HEADER
+  const currentActiveUnitPrice = useMemo(() => {
+    const activeTier = [...tiers]
+      .reverse()
+      .find((tier) => totalSelected >= tier.minQuantity);
+    return activeTier
+      ? activeTier.unitPrice
+      : tiers[0]?.unitPrice || product?.price || variants[0]?.price || 0;
+  }, [tiers, totalSelected, product, variants]);
+
+  // FIXED QUANTITY UPDATE HANDLER
   const handleUpdateQty = (vKey, direction, moqVal, stockVal, variant) => {
     const moq = Number(moqVal) || 1;
     const stock = Number(stockVal) || 0;
     const currentSelection = quantities[vKey] || 0;
     const inBagQty = getQtyInBag(variant._id);
-    
-    // Remaining available stock taking current bag items into account
+
     const actuallyAvailable = Math.max(0, stock - inBagQty);
 
     let newQty;
@@ -115,7 +147,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
             color: "#3E442B",
             fontWeight: "bold",
           },
-        }
+        },
       );
       return;
     }
@@ -123,7 +155,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
     const updatedQuantities = { ...quantities, [vKey]: newQty };
     const newTotalSelected = Object.values(updatedQuantities).reduce(
       (a, b) => a + b,
-      0
+      0,
     );
 
     setQuantities(updatedQuantities);
@@ -133,8 +165,13 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
     }
   };
 
-  // --- 🟢 BULK ADD HANDLER ---
+  // BULK ADD HANDLER (WITH AUTH INTERCEPTION)
   const handleBulkAdd = () => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+
     const itemsToProcess = variants.filter((v) => {
       const vKey = v._id?.toString();
       return quantities[vKey] > 0;
@@ -173,7 +210,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
           minOrderQuantity: Number(v.minOrderQuantity) || 1,
         },
         v,
-        qtyToAdd
+        qtyToAdd,
       );
     });
 
@@ -186,7 +223,6 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
       },
     });
 
-    // Clear local quantities after adding to bag
     const resetQtys = {};
     variants.forEach((v, index) => {
       const vKey = v._id?.toString() || `v-${index}`;
@@ -199,63 +235,65 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
 
   return (
     <div className="flex flex-col w-full max-w-full gap-6 mt-10">
-      {/* WHOLESALE TIER TABLE */}
+      {/* BULK SAVINGS CONTAINER */}
       {tiers.length > 0 && (
-        <div className="mb-4 duration-700 animate-in fade-in slide-in-from-top-4">
-          <div className="flex items-center gap-2 px-2 mb-4">
-            <div className="p-2 bg-[#3E442B] rounded-xl shrink-0">
-              <Package className="w-4 h-4 text-[#FBB6E6]" />
+        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-5 shadow-sm duration-700 animate-in fade-in slide-in-from-top-4 w-full">
+          <div className="flex items-center gap-3 px-2 mb-4">
+            <div className="p-2.5 bg-[#3E442B] rounded-2xl shrink-0">
+              <TrendingDown className="w-4 h-4 text-[#FBB6E6]" />
             </div>
             <div>
               <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#3E442B]">
-                Bulk Savings Tiers
+                Bulk Savings
               </h3>
-              <p className="text-[8px] font-bold text-gray-400 uppercase">
-                Combined variant quantities apply
+              <p className="text-[9px] font-bold text-gray-400 uppercase">
+                Current Rate:{" "}
+                <span className="text-[#EA638C] font-black">
+                  ৳{currentActiveUnitPrice} / Unit
+                </span>
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div
+            className="grid w-full overflow-hidden border border-gray-100 bg-gray-50/50 rounded-[2rem]"
+            style={{
+              gridTemplateColumns: `repeat(${tiers.length}, minmax(0, 1fr))`,
+            }}
+          >
             {tiers.map((tier, i) => {
               const isAchieved = totalSelected >= tier.minQuantity;
+              const nextTierItem = tiers[i + 1];
+
+              const rangeText = nextTierItem
+                ? `${tier.minQuantity} - ${nextTierItem.minQuantity - 1}`
+                : `${tier.minQuantity}+`;
+
               return (
                 <div
                   key={i}
-                  className={`border rounded-[1.5rem] p-4 shadow-sm flex flex-col items-center justify-center text-center transition-all duration-500 ${
+                  className={`p-5 flex flex-col items-center justify-center text-center transition-all duration-500 w-full ${
+                    i !== 0 ? "border-l border-gray-100" : ""
+                  } ${
                     isAchieved
-                      ? "bg-[#EA638C] border-[#EA638C] scale-105 shadow-md"
-                      : "bg-white border-gray-100"
+                      ? "bg-[#EA638C] text-white shadow-sm"
+                      : "bg-white text-gray-800"
                   }`}
                 >
                   <span
                     className={`text-[9px] font-black uppercase mb-1 ${
-                      isAchieved ? "text-white/70" : "text-gray-400"
+                      isAchieved ? "text-white/80" : "text-gray-400"
                     }`}
                   >
-                    {tier.minQuantity}+ Pcs
+                    {rangeText} PCS
                   </span>
                   <span
-                    className={`text-lg font-black ${
+                    className={`text-xl font-black ${
                       isAchieved ? "text-white" : "text-[#EA638C]"
                     }`}
                   >
                     ৳{tier.unitPrice}
                   </span>
-                  <div
-                    className={`mt-1 px-2 py-0.5 text-[7px] font-black rounded-full uppercase ${
-                      isAchieved
-                        ? "bg-white text-[#EA638C]"
-                        : "bg-green-50 text-green-600"
-                    }`}
-                  >
-                    {isAchieved
-                      ? "Tier Active"
-                      : `Save ৳${
-                          (product.price || variants[0]?.price || 0) -
-                          tier.unitPrice
-                        }`}
-                  </div>
                 </div>
               );
             })}
@@ -317,7 +355,8 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
               </span>
             </div>
             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest shrink-0">
-              {Math.round((totalSelected / nextTier.minQuantity) * 100)}% to Goal
+              {Math.round((totalSelected / nextTier.minQuantity) * 100)}% to
+              Goal
             </span>
           </div>
           <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -326,7 +365,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
               style={{
                 width: `${Math.min(
                   100,
-                  (totalSelected / nextTier.minQuantity) * 100
+                  (totalSelected / nextTier.minQuantity) * 100,
                 )}%`,
               }}
             />
@@ -335,15 +374,15 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
       )}
 
       {/* STICKY FOOTER */}
-      <div className="sticky bottom-4 z-20 flex flex-row items-center justify-between p-3.5 sm:p-5 bg-[#3E442B] rounded-[2rem] sm:rounded-[3rem] shadow-2xl mx-1 border border-white/10 gap-3 backdrop-blur-md">
-        <div className="flex items-center gap-3 bg-white/10 border border-white/15 px-4 py-2 sm:py-2.5 rounded-2xl sm:rounded-[1.5rem] backdrop-blur-sm">
-          <span className="text-[#FBB6E6] text-lg sm:text-[22px] font-black italic tracking-tighter">
+      <div className="sticky bottom-4 z-20 flex items-center justify-between p-2.5 sm:p-4 bg-[#3E442B] rounded-[2rem] sm:rounded-[3rem] shadow-2xl mx-1 border border-white/10 gap-2 backdrop-blur-md w-full max-w-full box-border">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 bg-white/10 border border-white/15 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl sm:rounded-[1.5rem] backdrop-blur-sm shrink min-w-0">
+          <span className="text-[#FBB6E6] text-base sm:text-[22px] font-black italic tracking-tighter truncate">
             ৳{totalPrice.toLocaleString()}
           </span>
 
-          <div className="w-[1px] h-4 sm:h-5 bg-white/20" />
+          <div className="w-[1px] h-3.5 sm:h-5 bg-white/20 shrink-0" />
 
-          <span className="bg-[#EA638C] text-white text-[8px] sm:text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0">
+          <span className="bg-[#EA638C] text-white text-[8px] sm:text-[10px] font-black px-1.5 sm:px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 whitespace-nowrap">
             {totalSelected} {totalSelected === 1 ? "Item" : "Items"}
           </span>
         </div>
@@ -351,38 +390,123 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
         <button
           onClick={handleBulkAdd}
           disabled={totalSelected === 0}
-          className="flex items-center justify-center gap-2 bg-[#EA638C] text-white px-5 sm:px-10 py-3.5 sm:py-4 rounded-full font-black text-[10px] sm:text-[11px] uppercase tracking-[0.15em] sm:tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:grayscale shadow-lg shadow-[#EA638C]/20 shrink-0"
+          className="flex items-center justify-center gap-1.5 sm:gap-2 bg-[#EA638C] text-white px-3 sm:px-8 py-2.5 sm:py-4 rounded-full font-black text-[9px] sm:text-[11px] uppercase tracking-[0.1em] sm:tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:grayscale shadow-lg shadow-[#EA638C]/20 shrink-0 whitespace-nowrap"
         >
-          <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+          <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5] shrink-0" />
           <span>Confirm & Add</span>
         </button>
       </div>
 
-      {/* IMAGE POPUP MODAL */}
-      {selectedImage && (
+      {/* AUTHENTICATION REQUIRED POPUP MODAL */}
+      {showAuthModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 duration-200 bg-black/70 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setShowAuthModal(false)}
+        >
+          <div
+            className="relative bg-white p-6 sm:p-7 rounded-[2.5rem] shadow-2xl max-w-sm w-full flex flex-col items-center text-center border border-gray-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setShowAuthModal(false)}
+              className="absolute top-4 right-4 bg-gray-100 hover:bg-[#EA638C] hover:text-white text-[#3E442B] p-2 rounded-full transition-all"
+            >
+              <X size={16} strokeWidth={3} />
+            </button>
+
+            {/* Icon Header */}
+            <div className="w-14 h-14 bg-[#FBB6E6]/40 text-[#EA638C] rounded-full flex items-center justify-center mb-3 border-2 border-[#FBB6E6]">
+              <UserCheck size={28} strokeWidth={2.5} />
+            </div>
+
+            {/* Content */}
+            <h3 className="text-base font-black uppercase text-[#3E442B] tracking-tight mb-1.5">
+              Wholesale Access Only
+            </h3>
+            <p className="mb-5 text-xs font-bold leading-relaxed text-gray-500">
+              Log in to apply bulk discounts and reserve these items in your
+              bag.
+            </p>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-2.5 w-full">
+              <button
+                onClick={() => router.push("/login")}
+                className="w-full flex items-center justify-center gap-2 bg-[#EA638C] hover:bg-[#d8527a] text-white py-3 rounded-full font-black text-xs uppercase tracking-widest shadow-md transition-all active:scale-95"
+              >
+                <LogIn size={15} strokeWidth={2.5} />
+                <span>Login / Register</span>
+              </button>
+
+              <button
+                onClick={() => setShowAuthModal(false)}
+                className="w-full py-2 text-[10px] font-black uppercase text-gray-400 hover:text-[#3E442B] transition-colors tracking-widest"
+              >
+                Keep Browsing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOUCH-ENABLED IMAGE POPUP MODAL */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
           onClick={() => setSelectedImage(null)}
         >
           <div
-            className="relative bg-white p-2 sm:p-3 rounded-3xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col items-center border border-gray-100"
+            className="relative bg-white p-2 rounded-[2rem] shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col items-center border border-gray-100 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Close Button */}
             <button
               onClick={() => setSelectedImage(null)}
-              className="absolute -top-3 -right-3 z-10 bg-[#EA638C] text-white p-2 rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all border-2 border-white"
+              className="absolute top-3 right-3 z-30 bg-[#EA638C] text-white p-2 rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all border-2 border-white"
             >
               <X size={18} strokeWidth={3} />
             </button>
 
-            <div className="relative w-full overflow-hidden aspect-square rounded-2xl bg-gray-50">
-              <Image
-                src={selectedImage}
-                alt="Variant Preview"
-                fill
-                className="object-contain"
-              />
+            {/* Touch & Mouse Pan/Zoom Container */}
+            <div className="relative w-full h-[60vh] sm:h-[65vh] rounded-2xl bg-gray-50 overflow-hidden flex items-center justify-center">
+              <TransformWrapper
+                initialScale={1}
+                minScale={1}
+                maxScale={4}
+                centerOnInit={true}
+                wheel={{ step: 0.1 }}
+              >
+                {() => (
+                  <TransformComponent
+                    wrapperStyle={{ width: "100%", height: "100%" }}
+                    contentStyle={{
+                      width: "100%",
+                      height: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <div className="relative w-full h-full flex items-center justify-center">
+                      <Image
+                        src={selectedImage}
+                        alt="Variant Preview"
+                        fill
+                        className="object-contain select-none"
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                        unoptimized
+                      />
+                    </div>
+                  </TransformComponent>
+                )}
+              </TransformWrapper>
             </div>
+
+            {/* Mobile Hint */}
+            <p className="text-[9px] font-black uppercase tracking-widest text-[#3E442B] opacity-60 mt-2 mb-1">
+              Pinch, scroll, or double-tap to zoom
+            </p>
           </div>
         </div>
       )}
