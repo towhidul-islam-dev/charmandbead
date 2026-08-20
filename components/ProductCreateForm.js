@@ -16,9 +16,10 @@ import {
 } from "@heroicons/react/24/outline";
 
 /**
- * MOBILE-SAFE CLIENT-SIDE IMAGE COMPRESSOR
+ * HIGH-LEVEL MOBILE & DESKTOP IMAGE COMPRESSOR
+ * Handles high-res camera photos from iPhone, Android, & PC automatically.
  */
-const compressImageMobileSafe = (file, maxWidth = 800, quality = 0.65) => {
+const compressImageMobileSafe = (file, maxWidth = 1200, quality = 0.75) => {
   return new Promise((resolve) => {
     if (!file || !file.type.startsWith("image/")) {
       return resolve(file);
@@ -60,13 +61,33 @@ const compressImageMobileSafe = (file, maxWidth = 800, quality = 0.65) => {
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 
+        // Try WebP first for optimal compression, fallback to JPEG
+        const mimeType = "image/webp";
+        
         canvas.toBlob(
           (blob) => {
-            if (!blob) return resolve(file);
+            if (!blob) {
+              // Fallback to JPEG if WebP generation yields empty result
+              canvas.toBlob(
+                (jpegBlob) => {
+                  if (!jpegBlob) return resolve(file);
+                  const compressedFile = new File(
+                    [jpegBlob],
+                    file.name.replace(/\.[^/.]+$/, "") + ".jpg",
+                    { type: "image/jpeg", lastModified: Date.now() }
+                  );
+                  resolve(compressedFile);
+                },
+                "image/jpeg",
+                quality
+              );
+              return;
+            }
+
             const compressedFile = new File(
               [blob], 
-              file.name.replace(/\.[^/.]+$/, "") + ".jpg", 
-              { type: "image/jpeg", lastModified: Date.now() }
+              file.name.replace(/\.[^/.]+$/, "") + ".webp", 
+              { type: "image/webp", lastModified: Date.now() }
             );
             
             canvas.width = 0;
@@ -74,7 +95,7 @@ const compressImageMobileSafe = (file, maxWidth = 800, quality = 0.65) => {
             
             resolve(compressedFile);
           },
-          "image/jpeg",
+          mimeType,
           quality
         );
       } catch (err) {
@@ -238,7 +259,7 @@ export default function ProductForm({ initialData }) {
   // --- CLIENT SUBMISSION HANDLER ---
   const clientAction = async (formData) => {
     try {
-      toast.loading("Optimizing variant images for mobile...", { id: "saving" });
+      toast.loading("Compressing & optimizing images...", { id: "saving" });
 
       formData.set("id", initialData?._id || "");
       formData.set("hasVariants", useVariants.toString());
@@ -246,7 +267,7 @@ export default function ProductForm({ initialData }) {
       
       // Process Main Image
       if (mainFile) {
-        const compressedMain = await compressImageMobileSafe(mainFile, 1000, 0.75);
+        const compressedMain = await compressImageMobileSafe(mainFile, 1200, 0.75);
         formData.append("mainImage", compressedMain);
       } else {
         formData.set("imageUrl", mainPreview || "");
@@ -276,7 +297,7 @@ export default function ProductForm({ initialData }) {
       for (let i = 0; i < galleryPreviews.length; i++) {
         const p = galleryPreviews[i];
         if (p.isNew && p.file) {
-          const compressedGalleryImg = await compressImageMobileSafe(p.file, 900, 0.7);
+          const compressedGalleryImg = await compressImageMobileSafe(p.file, 1000, 0.7);
           formData.append(`galleryFile_${i}`, compressedGalleryImg);
         }
       }
@@ -348,17 +369,17 @@ export default function ProductForm({ initialData }) {
     }
   }, [state, router]);
 
-  const inputClass = "w-full bg-gray-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/30 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-[16px] md:text-sm block";
-  const sectionClass = "bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-6";
-  const variantInputClass = "w-full bg-white px-3 py-3 rounded-xl text-[13px] md:text-[11px] font-bold outline-none border border-transparent focus:border-[#EA638C]/30 text-gray-900 shadow-sm";
+  const inputClass = "w-full bg-gray-50 border-none p-3.5 sm:p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#EA638C]/30 font-bold text-gray-900 placeholder:text-gray-300 transition-all text-sm block";
+  const sectionClass = "bg-white p-4 sm:p-6 md:p-8 rounded-[2rem] sm:rounded-[2.5rem] border border-gray-100 shadow-sm mb-4 sm:mb-6";
+  const variantInputClass = "w-full bg-white px-3 py-2.5 sm:py-3 rounded-xl text-xs sm:text-[11px] font-bold outline-none border border-transparent focus:border-[#EA638C]/30 text-gray-900 shadow-sm";
 
   const PreviewModal = () => {
     if (!isMounted || !previewModalImg) return null;
     return createPortal(
       <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setPreviewModalImg(null)}>
-        <div className="relative max-w-4xl max-h-[90vh] w-full bg-white rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
-          <button onClick={() => setPreviewModalImg(null)} className="absolute top-5 right-5 p-2.5 bg-[#EA638C] text-white rounded-full hover:rotate-90 transition-all z-10 shadow-lg">
-            <XMarkIcon className="w-6 h-6 stroke-[3]" />
+        <div className="relative max-w-4xl max-h-[90vh] w-full bg-white rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => setPreviewModalImg(null)} className="absolute top-4 right-4 sm:top-5 sm:right-5 p-2 sm:p-2.5 bg-[#EA638C] text-white rounded-full hover:rotate-90 transition-all z-10 shadow-lg">
+            <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
           </button>
           <div className="flex items-center justify-center p-4 bg-gray-50">
             <img src={previewModalImg} alt="Preview" className="max-h-[75vh] w-auto object-contain rounded-xl" />
@@ -376,20 +397,20 @@ export default function ProductForm({ initialData }) {
     <>
       <Toaster position="top-right" />
       <PreviewModal />
-      <form ref={formRef} action={clientAction} className="px-4 py-6 mx-auto max-w-7xl">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
+      <form ref={formRef} action={clientAction} className="px-2 sm:px-4 py-4 sm:py-6 mx-auto max-w-7xl">
+        <div className="grid grid-cols-1 gap-4 sm:gap-8 lg:grid-cols-3">
+          <div className="space-y-4 sm:space-y-6 lg:col-span-2">
             
             <section className={sectionClass}>
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-3 mb-4 sm:mb-6">
                 <div className="p-2 bg-[#FBB6E6]/30 rounded-xl text-[#EA638C]">
                   <TagIcon className="w-5 h-5" />
                 </div>
                 <h3 className="text-[11px] font-black tracking-widest text-[#3E442B] uppercase">Product Essence</h3>
               </div>
-              <div className="space-y-5">
+              <div className="space-y-4 sm:space-y-5">
                 <input type="text" value={previewName} onChange={(e) => setPreviewName(e.target.value)} name="name" required className={inputClass} placeholder="Product Name" />
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2">
                   <select value={mainCategory} onChange={handleCategoryChange} className={inputClass} required>
                     <option value="">Select Category</option>
                     {CATEGORY_DNA.filter(c => !c.parentId).map(cat => <option key={cat._id} value={cat._id}>{cat.name}</option>)}
@@ -404,26 +425,26 @@ export default function ProductForm({ initialData }) {
             </section>
 
             <section className={sectionClass}>
-              <div className="flex flex-col justify-between gap-4 mb-8 sm:flex-row sm:items-center">
+              <div className="flex flex-col justify-between gap-3 sm:gap-4 mb-6 sm:mb-8 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-3">
                     <CubeIcon className="w-5 h-5 text-[#3E442B]" />
                     <h3 className="text-[11px] font-black tracking-widest text-[#3E442B] uppercase">Inventory & Stock</h3>
                 </div>
                 <div className="flex items-center gap-2">
                   {useVariants && (
-                    <button type="button" onClick={generateAutoSKUs} className="px-4 py-2 bg-[#3E442B] text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-[#3E442B]/90 transition-all shadow-sm">
+                    <button type="button" onClick={generateAutoSKUs} className="px-3 py-1.5 sm:px-4 sm:py-2 bg-[#3E442B] text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 hover:bg-[#3E442B]/90 transition-all shadow-sm">
                         <CommandLineIcon className="w-3.5 h-3.5" /> Auto SKU
                     </button>
                   )}
-                  <button type="button" onClick={() => setUseVariants(!useVariants)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${useVariants ? 'bg-[#EA638C] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                  <button type="button" onClick={() => setUseVariants(!useVariants)} className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[10px] font-black uppercase transition-all ${useVariants ? 'bg-[#EA638C] text-white' : 'bg-gray-100 text-gray-400'}`}>
                       {useVariants ? "Disable Variants" : "Enable Variants"}
                   </button>
                 </div>
               </div>
 
               {!useVariants ? (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="space-y-4 sm:space-y-6">
+                  <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-3">
                     <div className="space-y-1">
                       <span className="text-[9px] font-black uppercase text-gray-400 ml-2">Unit Price</span>
                       <input type="number" value={previewPrice} onChange={(e) => setPreviewPrice(e.target.value)} className={inputClass} placeholder="0.00" />
@@ -439,14 +460,14 @@ export default function ProductForm({ initialData }) {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-4 sm:space-y-6">
                   {variants.map((v, i) => {
                     const currentImg = v.preview || v.imageUrl;
                     return (
-                      <div key={i} className="relative p-5 bg-gray-50 rounded-[2.5rem] border border-gray-100 space-y-4">
-                        <div className="flex items-center gap-4">
+                      <div key={i} className="relative p-3.5 sm:p-5 bg-gray-50 rounded-[1.5rem] sm:rounded-[2.5rem] border border-gray-100 space-y-3 sm:space-y-4">
+                        <div className="flex items-center gap-3 sm:gap-4">
                           <div className="flex flex-col items-center gap-1 shrink-0">
-                            <div className="relative flex items-center justify-center w-16 h-16 overflow-hidden bg-white border-2 border-dashed rounded-2xl group/v shrink-0 border-[#FBB6E6]">
+                            <div className="relative flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 overflow-hidden bg-white border-2 border-dashed rounded-2xl group/v shrink-0 border-[#FBB6E6]">
                               {currentImg ? (
                                 <>
                                   <img src={currentImg} className="object-cover w-full h-full" />
@@ -476,10 +497,10 @@ export default function ProductForm({ initialData }) {
                             <span className="text-[9px] font-black uppercase text-gray-400 ml-1">SKU</span>
                             <input placeholder="SKU" value={v.sku} onChange={e => { const n = [...variants]; n[i].sku = e.target.value; setVariants(n); }} className={variantInputClass} />
                           </div>
-                          <button type="button" onClick={() => setVariants(variants.filter((_, idx) => idx !== i))} className="p-2 mt-4 text-red-400 transition-all bg-white rounded-full shadow-sm hover:bg-red-50"><XMarkIcon className="w-5 h-5" /></button>
+                          <button type="button" onClick={() => setVariants(variants.filter((_, idx) => idx !== i))} className="p-2 text-red-400 transition-all bg-white rounded-full shadow-sm hover:bg-red-50"><XMarkIcon className="w-5 h-5" /></button>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+                        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5">
                             <div>
                               <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Size</span>
                               <input placeholder="Size" value={v.size} onChange={e => { const n = [...variants]; n[i].size = e.target.value; setVariants(n); }} className={variantInputClass} />
@@ -496,7 +517,7 @@ export default function ProductForm({ initialData }) {
                               <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Stock</span>
                               <input placeholder="Stock" type="number" value={v.stock} onChange={e => { const n = [...variants]; n[i].stock = e.target.value; setVariants(n); }} className={variantInputClass} />
                             </div>
-                            <div>
+                            <div className="col-span-2 sm:col-span-1">
                               <span className="text-[9px] font-black uppercase text-[#EA638C] ml-1">MOQ</span>
                               <input placeholder="MOQ" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className={`${variantInputClass} bg-[#FBB6E6]/20 text-[#EA638C] ring-1 ring-[#EA638C]/20`} />
                             </div>
@@ -512,15 +533,15 @@ export default function ProductForm({ initialData }) {
                       </div>
                     );
                   })}
-                  <button type="button" onClick={() => setVariants([...variants, { size: "", color: "", price: "", stock: "", sku: "", minOrderQuantity: 1, preview: null, file: null }])} className="w-full py-5 border-2 border-dashed border-gray-200 rounded-[2.5rem] text-[10px] font-black uppercase text-[#3E442B] hover:bg-[#FBB6E6]/10 transition-all flex items-center justify-center gap-2">
+                  <button type="button" onClick={() => setVariants([...variants, { size: "", color: "", price: "", stock: "", sku: "", minOrderQuantity: 1, preview: null, file: null }])} className="w-full py-4 sm:py-5 border-2 border-dashed border-gray-200 rounded-[1.5rem] sm:rounded-[2.5rem] text-[10px] font-black uppercase text-[#3E442B] hover:bg-[#FBB6E6]/10 transition-all flex items-center justify-center gap-2">
                     <PlusIcon className="w-4 h-4 text-[#EA638C]" /> Add Row
                   </button>
                 </div>
               )}
 
               {/* Wholesale Tiers Block */}
-              <div className="pt-6 mt-6 border-t border-gray-100">
-                <div className="p-5 border border-gray-100 bg-gray-50/50 rounded-3xl">
+              <div className="pt-4 sm:pt-6 mt-4 sm:mt-6 border-t border-gray-100">
+                <div className="p-3.5 sm:p-5 border border-gray-100 bg-gray-50/50 rounded-2xl sm:rounded-3xl">
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <span className="text-[10px] font-black uppercase text-[#3E442B] block">Global Wholesale Tiers</span>
@@ -530,11 +551,11 @@ export default function ProductForm({ initialData }) {
                       <PlusIcon className="w-3 h-3 stroke-[3]" /> Add Tier
                     </button>
                   </div>
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-3 sm:mt-4 space-y-2">
                     {pricingTiers.map((tier, idx) => (
                       <div key={idx} className="flex items-center gap-2 group">
-                        <input type="number" placeholder="Min Qty" value={tier.minQuantity} onChange={(e) => updateTier(idx, 'minQuantity', e.target.value)} className="w-1/2 p-3 text-[11px] font-bold border-none rounded-xl bg-white text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:ring-1 focus:ring-[#EA638C]/30" />
-                        <input type="number" placeholder="Unit Price" value={tier.unitPrice} onChange={(e) => updateTier(idx, 'unitPrice', e.target.value)} className="w-1/2 p-3 text-[11px] font-bold border-none rounded-xl bg-white text-[#EA638C] placeholder:text-gray-400 shadow-sm outline-none focus:ring-1 focus:ring-[#EA638C]/30" />
+                        <input type="number" placeholder="Min Qty" value={tier.minQuantity} onChange={(e) => updateTier(idx, 'minQuantity', e.target.value)} className="w-1/2 p-2.5 sm:p-3 text-[11px] font-bold border-none rounded-xl bg-white shadow-sm outline-none focus:ring-1 focus:ring-[#EA638C]/30" />
+                        <input type="number" placeholder="Unit Price" value={tier.unitPrice} onChange={(e) => updateTier(idx, 'unitPrice', e.target.value)} className="w-1/2 p-2.5 sm:p-3 text-[11px] font-bold border-none rounded-xl bg-white shadow-sm text-[#EA638C] outline-none focus:ring-1 focus:ring-[#EA638C]/30" />
                         <button type="button" onClick={() => removeTier(idx)} className="p-2 text-gray-400 transition-opacity opacity-80 group-hover:opacity-100 hover:text-red-500">
                           <XMarkIcon className="w-4 h-4" />
                         </button>
@@ -549,7 +570,7 @@ export default function ProductForm({ initialData }) {
             </section>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <div className="lg:sticky lg:top-6">
               <div className="hidden sm:block">
                 <div className="flex items-center gap-2 mb-4 ml-4">
@@ -576,7 +597,7 @@ export default function ProductForm({ initialData }) {
                 </div>
 
                 <div 
-                  className="w-full h-64 bg-[#3E442B]/5 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative"
+                  className="w-full h-48 sm:h-64 bg-[#3E442B]/5 rounded-[2rem] sm:rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden group relative"
                   onClick={() => {
                     if (!mainPreview) {
                       document.getElementById('main-img').click();
@@ -596,7 +617,7 @@ export default function ProductForm({ initialData }) {
                     </>
                   ) : (
                     <div className="text-center">
-                      <PhotoIcon className="w-12 h-12 text-[#EA638C]/40 mx-auto mb-2" />
+                      <PhotoIcon className="w-10 h-10 sm:w-12 sm:h-12 text-[#EA638C]/40 mx-auto mb-2" />
                       <span className="text-[10px] font-black uppercase text-gray-400">Click to upload photo</span>
                     </div>
                   )}
@@ -616,7 +637,7 @@ export default function ProductForm({ initialData }) {
                   <h3 className="text-[10px] font-black uppercase text-[#3E442B]">Gallery</h3>
                   <button type="button" onClick={() => document.getElementById('gallery-input').click()} className="text-[10px] font-black text-[#EA638C] uppercase">+ Add</button>
                 </div>
-                <div className="grid grid-cols-3 gap-3 min-h-[100px] p-2 rounded-2xl bg-gray-50/50 border-2 border-dashed border-transparent hover:border-[#EA638C]/30 transition-all">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 min-h-[90px] sm:min-h-[100px] p-2 rounded-2xl bg-gray-50/50 border-2 border-dashed border-transparent hover:border-[#EA638C]/30 transition-all">
                   {galleryPreviews.map((p, idx) => (
                     <div key={idx} className="relative overflow-hidden bg-white border border-gray-100 shadow-sm aspect-square rounded-2xl group/gal">
                       <img src={p.url} className="object-cover w-full h-full cursor-zoom-in" onClick={() => setPreviewModalImg(p.url)} />
@@ -627,8 +648,8 @@ export default function ProductForm({ initialData }) {
                 <input id="gallery-input" type="file" multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} />
               </section>
 
-              <section className="bg-[#3E442B] p-8 rounded-[3rem] shadow-xl text-white">
-                <div className="flex items-center justify-between mb-8">
+              <section className="bg-[#3E442B] p-6 sm:p-8 rounded-[2rem] sm:rounded-[3rem] shadow-xl text-white">
+                <div className="flex items-center justify-between mb-6 sm:mb-8">
                   <div className="flex items-center gap-3">
                     <SparklesIcon className={`w-6 h-6 ${isNewArrival ? 'text-[#FBB6E6]' : 'text-gray-400'}`} />
                     <span className="text-[10px] font-black uppercase tracking-widest">New Arrival</span>
@@ -637,8 +658,8 @@ export default function ProductForm({ initialData }) {
                     <div className={`w-4 h-4 bg-white rounded-full transition-transform ${isNewArrival ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
                 </div>
-                <button type="submit" disabled={isPending} className="w-full py-5 bg-[#EA638C] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl hover:scale-[1.02] transition-all disabled:opacity-50">
-                  {isPending ? "Syncing DNA...." : (initialData ? "Update Product" : "Save Product")}
+                <button type="submit" disabled={isPending} className="w-full py-4 sm:py-5 bg-[#EA638C] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl hover:scale-[1.02] transition-all disabled:opacity-50">
+                  {isPending ? "Syncing DNA...." : (initialData?._id ? "Update Product" : "Save Product")}
                 </button>
               </section>
             </div>
