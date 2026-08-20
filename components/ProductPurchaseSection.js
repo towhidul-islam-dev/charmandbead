@@ -422,11 +422,10 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
 
             {/* Content */}
             <h3 className="text-base font-black uppercase text-[#3E442B] tracking-tight mb-1.5">
-              Wholesale Access Only
+Sign In First
             </h3>
             <p className="mb-5 text-xs font-bold leading-relaxed text-gray-500">
-              Log in to apply bulk discounts and reserve these items in your
-              bag.
+              Please login or Create an account first to add product in the cart.
             </p>
 
             {/* Action Buttons */}
