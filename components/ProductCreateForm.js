@@ -17,7 +17,7 @@ import {
 
 /**
  * HIGH-LEVEL MOBILE & DESKTOP IMAGE COMPRESSOR
- * Handles high-res camera photos from iPhone, Android, & PC automatically.
+ * Safari/iOS & Android Safe Image Compression
  */
 const compressImageMobileSafe = (file, maxWidth = 1200, quality = 0.75) => {
   return new Promise((resolve) => {
@@ -61,41 +61,25 @@ const compressImageMobileSafe = (file, maxWidth = 1200, quality = 0.75) => {
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Try WebP first for optimal compression, fallback to JPEG
-        const mimeType = "image/webp";
-        
+        // JPEG is universally supported across iOS Safari & Android mobile canvas
         canvas.toBlob(
           (blob) => {
-            if (!blob) {
-              // Fallback to JPEG if WebP generation yields empty result
-              canvas.toBlob(
-                (jpegBlob) => {
-                  if (!jpegBlob) return resolve(file);
-                  const compressedFile = new File(
-                    [jpegBlob],
-                    file.name.replace(/\.[^/.]+$/, "") + ".jpg",
-                    { type: "image/jpeg", lastModified: Date.now() }
-                  );
-                  resolve(compressedFile);
-                },
-                "image/jpeg",
-                quality
-              );
-              return;
-            }
-
-            const compressedFile = new File(
-              [blob], 
-              file.name.replace(/\.[^/.]+$/, "") + ".webp", 
-              { type: "image/webp", lastModified: Date.now() }
-            );
-            
             canvas.width = 0;
             canvas.height = 0;
-            
+
+            if (!blob) {
+              return resolve(file);
+            }
+
+            const fileName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+            const compressedFile = new File([blob], fileName, {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+
             resolve(compressedFile);
           },
-          mimeType,
+          "image/jpeg",
           quality
         );
       } catch (err) {
@@ -290,7 +274,7 @@ export default function ProductForm({ initialData }) {
       
       formData.set("price", Number(previewPrice) || 0);
       
-      // Process Gallery Images
+      // Process Gallery Images sequentially
       const existingGallery = galleryPreviews.filter(p => !p.isNew);
       formData.set("existingGallery", JSON.stringify(existingGallery));
       
@@ -299,6 +283,7 @@ export default function ProductForm({ initialData }) {
         if (p.isNew && p.file) {
           const compressedGalleryImg = await compressImageMobileSafe(p.file, 1000, 0.7);
           formData.append(`galleryFile_${i}`, compressedGalleryImg);
+          await new Promise(r => setTimeout(r, 30));
         }
       }
 
@@ -318,9 +303,7 @@ export default function ProductForm({ initialData }) {
             const compressedVariantImg = await compressImageMobileSafe(v.file, 800, 0.65);
             formData.append(`variantFile_${i}`, compressedVariantImg);
             
-            if (i > 0 && i % 3 === 0) {
-              await new Promise(r => setTimeout(r, 50));
-            }
+            await new Promise(r => setTimeout(r, 50));
           }
         }
       }
@@ -639,29 +622,37 @@ export default function ProductForm({ initialData }) {
                 </div>
                 <div className="grid grid-cols-3 gap-2 sm:gap-3 min-h-[90px] sm:min-h-[100px] p-2 rounded-2xl bg-gray-50/50 border-2 border-dashed border-transparent hover:border-[#EA638C]/30 transition-all">
                   {galleryPreviews.map((p, idx) => (
-                    <div key={idx} className="relative overflow-hidden bg-white border border-gray-100 shadow-sm aspect-square rounded-2xl group/gal">
-                      <img src={p.url} className="object-cover w-full h-full cursor-zoom-in" onClick={() => setPreviewModalImg(p.url)} />
-                      <button onClick={() => removeGalleryImage(idx)} type="button" className="absolute p-1 transition-opacity rounded-full opacity-0 top-1 right-1 bg-white/90 group-hover/gal:opacity-100"><XMarkIcon className="w-3 h-3 stroke-[3]" /></button>
+                    <div key={idx} className="relative group/g rounded-xl overflow-hidden aspect-square bg-white border border-gray-100 shadow-sm">
+                      <img src={p.url} className="object-cover w-full h-full" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/g:opacity-100 flex items-center justify-center gap-1 transition-opacity">
+                        <button type="button" onClick={() => setPreviewModalImg(p.url)} className="p-1 bg-white rounded-full text-gray-800"><MagnifyingGlassPlusIcon className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={() => removeGalleryImage(idx)} className="p-1 bg-white rounded-full text-red-500"><XMarkIcon className="w-3.5 h-3.5" /></button>
+                      </div>
                     </div>
                   ))}
+                  {galleryPreviews.length === 0 && (
+                    <div className="col-span-3 flex flex-col items-center justify-center py-4 text-center cursor-pointer" onClick={() => document.getElementById('gallery-input').click()}>
+                      <PhotoIcon className="w-6 h-6 text-gray-300 mb-1" />
+                      <span className="text-[9px] font-bold text-gray-300 uppercase">No extra photos</span>
+                    </div>
+                  )}
                 </div>
                 <input id="gallery-input" type="file" multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} />
               </section>
 
-              <section className="bg-[#3E442B] p-6 sm:p-8 rounded-[2rem] sm:rounded-[3rem] shadow-xl text-white">
-                <div className="flex items-center justify-between mb-6 sm:mb-8">
-                  <div className="flex items-center gap-3">
-                    <SparklesIcon className={`w-6 h-6 ${isNewArrival ? 'text-[#FBB6E6]' : 'text-gray-400'}`} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">New Arrival</span>
-                  </div>
-                  <button type="button" onClick={() => setIsNewArrival(!isNewArrival)} className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${isNewArrival ? 'bg-[#EA638C]' : 'bg-gray-600'}`}>
-                    <div className={`w-4 h-4 bg-white rounded-full transition-transform ${isNewArrival ? 'translate-x-6' : 'translate-x-0'}`} />
-                  </button>
+              <section className={sectionClass}>
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={isNewArrival} onChange={(e) => setIsNewArrival(e.target.checked)} className="w-4 h-4 rounded text-[#EA638C] focus:ring-[#EA638C]" />
+                    <span className="text-[11px] font-black uppercase text-[#3E442B]">Mark as New Arrival</span>
+                  </label>
+                  <SparklesIcon className="w-5 h-5 text-[#EA638C]" />
                 </div>
-                <button type="submit" disabled={isPending} className="w-full py-4 sm:py-5 bg-[#EA638C] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl hover:scale-[1.02] transition-all disabled:opacity-50">
-                  {isPending ? "Syncing DNA...." : (initialData?._id ? "Update Product" : "Save Product")}
-                </button>
               </section>
+
+              <button type="submit" disabled={isPending} className="w-full py-4 sm:py-5 bg-[#EA638C] text-white rounded-[1.5rem] sm:rounded-[2rem] text-xs font-black uppercase tracking-widest hover:bg-[#EA638C]/90 transition-all shadow-lg shadow-[#EA638C]/20 disabled:opacity-50">
+                {isPending ? "Saving Product..." : (initialData?._id ? "Update Product" : "Publish Product")}
+              </button>
             </div>
           </div>
         </div>
