@@ -1,33 +1,36 @@
 "use client";
 import { createContext, useContext, useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { getNotificationsAction, markAsReadAction } from "@/actions/inAppNotifications";
+import { 
+  getNotificationsAction, 
+  markAsReadAction, 
+  markAllAsReadAction 
+} from "@/actions/inAppNotifications";
 
 const NotificationContext = createContext();
 
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
-  
-  // 🟢 Destructure 'status' to prevent premature execution
   const { data: session, status } = useSession();
+
+  // Safely extract user and derived ID
+  const user = session?.user || null;
+  const userId = user?.id || user?._id || "GUEST";
 
   // 1. Initial Load: Fetch from DB when session status is finalized
   useEffect(() => {
-    // 🟢 Don't attempt to load while NextAuth is still checking the session
     if (status === "loading") return;
 
     const load = async () => {
-      // Pass the user ID if authenticated, or "GUEST"
-      const userId = status === "authenticated" ? session?.user?.id : "GUEST";
-      
       const res = await getNotificationsAction(userId);
-      if (res.success) {
+      if (res?.success && Array.isArray(res.data)) {
         setNotifications(res.data);
       }
     };
 
     load();
-  }, [session, status]); // 🟢 Added status to dependency array
+    // 🟢 Fixed: Keep dependencies stable with fixed array size
+  }, [session, status]); 
 
   const addNotification = (notifObject) => {
     setNotifications((prev) => [notifObject, ...prev]);
@@ -37,21 +40,32 @@ export const NotificationProvider = ({ children }) => {
     setNotifications((prev) =>
       prev.map((n) => (n._id === id ? { ...n, isRead: true } : n))
     );
-    await markAsReadAction(id);
+    try {
+      await markAsReadAction(id);
+    } catch (err) {
+      console.error("Failed to mark notification as read:", err);
+    }
   };
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    try {
+      await markAllAsReadAction(userId);
+    } catch (err) {
+      console.error("Failed to mark all as read:", err);
+    }
   };
 
   return (
-    <NotificationContext.Provider 
-      value={{ 
-        notifications, 
-        addNotification, 
-        markAsRead, 
+    <NotificationContext.Provider
+      value={{
+        notifications,
+        setNotifications,
+        user,
+        addNotification,
+        markAsRead,
         markAllAsRead,
-        unreadCount: notifications.filter(n => !n.isRead).length 
+        unreadCount: notifications.filter((n) => !n.isRead).length,
       }}
     >
       {children}
@@ -59,4 +73,10 @@ export const NotificationProvider = ({ children }) => {
   );
 };
 
-export const useNotifications = () => useContext(NotificationContext);
+export const useNotifications = () => {
+  const context = useContext(NotificationContext);
+  if (!context) {
+    throw new Error("useNotifications must be used within a NotificationProvider");
+  }
+  return context;
+};

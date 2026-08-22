@@ -5,7 +5,7 @@ import mongodb from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { v2 as cloudinary } from "cloudinary";
 import { CATEGORY_DNA } from "@/lib/categoryDNA"; // 🧬 Updated to your new DNA file
-
+import { createInAppNotification } from "@/actions/inAppNotifications";
 cloudinary.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -47,7 +47,7 @@ export async function uploadToCloudinary(file) {
             console.log("✅ Cloudinary Success:", result.secure_url);
             resolve(result.secure_url);
           }
-        }
+        },
       );
       uploadStream.end(buffer);
     });
@@ -62,7 +62,10 @@ export async function silentInventoryHeal() {
     await mongodb();
     const products = await Product.find({ hasVariants: true });
     for (const product of products) {
-      const actualSum = product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0);
+      const actualSum = product.variants.reduce(
+        (acc, v) => acc + (Number(v.stock) || 0),
+        0,
+      );
       if (product.stock !== actualSum) {
         product.stock = actualSum;
         await product.save();
@@ -81,22 +84,32 @@ export async function saveProduct(prevState, formData) {
 
     // --- 1. HANDLE MAIN IMAGE (Synchronized with Frontend) ---
     let imageUrl = formData.get("imageUrl") || ""; // Default to existing URL string
-    const mainImageFile = formData.get("mainImage"); // 🟢 Matches frontend .append("mainImage")
-    
-    if (mainImageFile && mainImageFile instanceof File && mainImageFile.size > 0) {
+    const mainImageFile = formData.get("mainImage");
+
+    if (
+      mainImageFile &&
+      mainImageFile instanceof File &&
+      mainImageFile.size > 0
+    ) {
       const uploadedUrl = await uploadToCloudinary(mainImageFile);
       if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
     // --- 2. HANDLE DETAIL GALLERY ---
-    const rawExistingGallery = JSON.parse(formData.get("existingGallery") || "[]");
-    const existingGalleryUrls = rawExistingGallery.map(item => 
-      typeof item === 'string' ? item : (item.url || "")
-    ).filter(url => url !== "");
+    const rawExistingGallery = JSON.parse(
+      formData.get("existingGallery") || "[]",
+    );
+    const existingGalleryUrls = rawExistingGallery
+      .map((item) => (typeof item === "string" ? item : item.url || ""))
+      .filter((url) => url !== "");
 
     const newGalleryUploads = [];
     for (const [key, value] of formData.entries()) {
-      if (key.startsWith("galleryFile_") && value instanceof File && value.size > 0) {
+      if (
+        key.startsWith("galleryFile_") &&
+        value instanceof File &&
+        value.size > 0
+      ) {
         const uploadedUrl = await uploadToCloudinary(value);
         if (uploadedUrl) newGalleryUploads.push(uploadedUrl);
       }
@@ -106,8 +119,12 @@ export async function saveProduct(prevState, formData) {
     // --- 3. DNA & LOGIC ---
     const categoryId = formData.get("categoryId");
     const subCategoryId = formData.get("subCategoryId");
-    const mainCat = CATEGORY_DNA.find(c => String(c._id) === String(categoryId));
-    const subCat = CATEGORY_DNA.find(c => String(c._id) === String(subCategoryId));
+    const mainCat = CATEGORY_DNA.find(
+      (c) => String(c._id) === String(categoryId),
+    );
+    const subCat = CATEGORY_DNA.find(
+      (c) => String(c._id) === String(subCategoryId),
+    );
 
     const isOnSale = formData.get("isOnSale") === "true";
     const discountPrice = Number(formData.get("discountPrice")) || 0;
@@ -138,7 +155,7 @@ export async function saveProduct(prevState, formData) {
       productData.variants = await Promise.all(
         rawVariants.map(async (v, i) => {
           let vImg = v.imageUrl || "";
-          const vFile = formData.get(`variantFile_${i}`); 
+          const vFile = formData.get(`variantFile_${i}`);
           if (vFile && vFile instanceof File && vFile.size > 0) {
             const uploadedVImg = await uploadToCloudinary(vFile);
             if (uploadedVImg) vImg = uploadedVImg;
@@ -154,9 +171,14 @@ export async function saveProduct(prevState, formData) {
           };
         }),
       );
-      
-      productData.stock = productData.variants.reduce((acc, v) => acc + (v.stock || 0), 0);
-      const variantPrices = productData.variants.map(v => v.price).filter(p => p > 0);
+
+      productData.stock = productData.variants.reduce(
+        (acc, v) => acc + (v.stock || 0),
+        0,
+      );
+      const variantPrices = productData.variants
+        .map((v) => v.price)
+        .filter((p) => p > 0);
       if (variantPrices.length > 0) {
         productData.price = Math.min(...variantPrices);
       }
@@ -170,26 +192,41 @@ export async function saveProduct(prevState, formData) {
       finalProduct = await Product.findByIdAndUpdate(
         id,
         { $set: productData },
-        { new: true, runValidators: true, strict: false }
+        { new: true, runValidators: true, strict: false },
       );
     } else {
       finalProduct = await Product.create(productData);
+
+      // --- 🟢 TRIGGER IN-APP NOTIFICATION FOR NEW ARRIVAL ---
+      try {
+        await createInAppNotification({
+          title: "New Arrival Added! 🔥",
+          message: `Check out our new item: ${finalProduct.name}`,
+          type: "arrival", // 🟢 Matches your NotificationSchema enum
+          recipientId: "GLOBAL",
+          link: `/product/${finalProduct._id}`,
+        });
+      } catch (notifErr) {
+        console.error("Failed to send new product notification:", notifErr);
+      }
     }
 
     // --- 6. REVALIDATION ---
     const paths = ["/admin/products", "/products", "/", "/new-arrivals"];
-    paths.forEach(p => revalidatePath(p));
+    paths.forEach((p) => revalidatePath(p));
     if (finalProduct?._id) revalidatePath(`/product/${finalProduct._id}`);
 
-    return { 
-      success: true, 
-      message: "Treasure Saved! ✨", 
-      data: JSON.parse(JSON.stringify(finalProduct)) 
+    return {
+      success: true,
+      message: "Treasure Saved! ✨",
+      data: JSON.parse(JSON.stringify(finalProduct)),
     };
-
   } catch (error) {
     console.error("Save Error:", error);
-    return { success: false, message: error.message || "An unexpected error occurred." };
+    return {
+      success: false,
+      message: error.message || "An unexpected error occurred.",
+    };
   }
 }
 
@@ -231,42 +268,64 @@ export async function deleteProduct(productId) {
 
     // 2. Delete Gallery Images
     if (product.gallery && product.gallery.length > 0) {
-      await Promise.all(product.gallery.map(url => {
-        const gPid = extractPublicId(url);
-        return gPid ? cloudinary.uploader.destroy(gPid) : null;
-      }));
+      await Promise.all(
+        product.gallery.map((url) => {
+          const gPid = extractPublicId(url);
+          return gPid ? cloudinary.uploader.destroy(gPid) : null;
+        }),
+      );
     }
 
     // 3. Delete Variant Images
     if (product.hasVariants && product.variants?.length > 0) {
-      await Promise.all(product.variants.map(v => {
-        const vPid = extractPublicId(v.imageUrl);
-        return vPid ? cloudinary.uploader.destroy(vPid) : null;
-      }));
+      await Promise.all(
+        product.variants.map((v) => {
+          const vPid = extractPublicId(v.imageUrl);
+          return vPid ? cloudinary.uploader.destroy(vPid) : null;
+        }),
+      );
     }
 
     await Product.findByIdAndDelete(productId);
     revalidatePath("/admin/products");
-    
+
     return { success: true, message: "Deleted successfully" };
   } catch (error) {
     return { success: false, message: error.message };
   }
 }
 
-export async function reduceProductStock(productId, variantId = null, quantity = 1) {
+export async function reduceProductStock(
+  productId,
+  variantId = null,
+  quantity = 1,
+) {
   try {
     await mongodb();
     if (variantId) {
       await Product.updateOne(
         { _id: productId, "variants._id": variantId },
-        { $inc: { "variants.$.stock": -quantity, stock: -quantity } }
+        { $inc: { "variants.$.stock": -quantity, stock: -quantity } },
       );
     } else {
-      await Product.findByIdAndUpdate(productId, { $inc: { stock: -quantity } });
+      await Product.findByIdAndUpdate(productId, {
+        $inc: { stock: -quantity },
+      });
     }
     revalidatePath("/admin/products");
   } catch (error) {
     throw new Error("Stock update failed");
+  }
+}
+
+export async function getProducts() {
+  try {
+    await mongodb();
+    // Fetch all products without .limit() and convert Mongoose document to plain JS object
+    const products = await Product.find({}).sort({ createdAt: -1 }).lean();
+    return JSON.parse(JSON.stringify(products));
+  } catch (error) {
+    console.error("Failed to fetch products:", error);
+    return [];
   }
 }
