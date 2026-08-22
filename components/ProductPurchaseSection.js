@@ -320,6 +320,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
                 selectionQty={quantities[v._id?.toString()] || 0}
                 handleUpdateQty={handleUpdateQty}
                 onImageClick={(img) => setSelectedImage(img)}
+                getEffectiveUnitPrice={getEffectiveUnitPrice}
               />
             ))}
           </tbody>
@@ -336,6 +337,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
             selectionQty={quantities[v._id?.toString()] || 0}
             handleUpdateQty={handleUpdateQty}
             onImageClick={(img) => setSelectedImage(img)}
+            getEffectiveUnitPrice={getEffectiveUnitPrice}
           />
         ))}
       </div>
@@ -522,9 +524,13 @@ function VariantRow({
   selectionQty,
   handleUpdateQty,
   onImageClick,
+  getEffectiveUnitPrice,
 }) {
   const liveDisplayStock = Math.max(0, v.stock - inBagQty - selectionQty);
   const imgUrl = v.image || v.imageUrl || "/placeholder.png";
+  const unitPrice = getEffectiveUnitPrice
+    ? getEffectiveUnitPrice(v)
+    : Number(v.price) || 0;
 
   return (
     <tr className="transition-colors hover:bg-gray-50/30">
@@ -546,9 +552,14 @@ function VariantRow({
             <span className="font-black text-[#3E442B] uppercase text-[12px] block leading-none mb-1">
               {v.color}
             </span>
-            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">
-              {v.size} (MOQ: {v.minOrderQuantity || 1})
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">
+                {v.size} (MOQ: {v.minOrderQuantity || 1})
+              </span>
+              <span className="text-[10px] font-black text-[#EA638C]">
+                ৳{unitPrice}
+              </span>
+            </div>
           </div>
         </div>
       </td>
@@ -588,9 +599,13 @@ function VariantCard({
   selectionQty,
   handleUpdateQty,
   onImageClick,
+  getEffectiveUnitPrice,
 }) {
   const liveDisplayStock = Math.max(0, v.stock - inBagQty - selectionQty);
   const imgUrl = v.image || v.imageUrl || "/placeholder.png";
+  const unitPrice = getEffectiveUnitPrice
+    ? getEffectiveUnitPrice(v)
+    : Number(v.price) || 0;
 
   return (
     <div className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm flex items-center justify-between gap-3 active:border-[#FBB6E6] transition-all">
@@ -608,9 +623,14 @@ function VariantCard({
           />
         </button>
         <div className="flex-1 min-w-0">
-          <span className="font-black text-[#3E442B] uppercase text-[14px] block truncate leading-none mb-1">
-            {v.color}
-          </span>
+          <div className="flex items-center justify-between gap-2 mb-1 pr-1">
+            <span className="font-black text-[#3E442B] uppercase text-[14px] truncate leading-none">
+              {v.color}
+            </span>
+            <span className="text-[12px] font-black text-[#EA638C] italic shrink-0">
+              ৳{unitPrice}
+            </span>
+          </div>
           <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block">
             {v.size} • MOQ: {v.minOrderQuantity || 1}
           </span>
