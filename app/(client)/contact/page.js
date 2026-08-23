@@ -154,7 +154,7 @@ export default function ContactPage() {
                                 <input 
                                     name="email" type="email" required onChange={handleChange} value={formData.email}
                                     className="w-full p-4 sm:p-5 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-brand-pink/50 focus:ring-4 focus:ring-brand-pink/5 outline-none transition-all font-bold text-sm sm:text-base text-brand-green" 
-                                    placeholder="jane@example.com"
+                                    placeholder="email@example.com"
                                 />
                             </div>
                         </div>
