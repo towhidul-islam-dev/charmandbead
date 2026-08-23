@@ -23,16 +23,19 @@ export async function submitContactForm(formData) {
       message: formData.message,
     });
 
-    // 4. Configure Nodemailer with explicit SMTP settings for serverless environments
+    // 4. Configure Nodemailer with SSL & TLS overrides for Vercel/serverless
     const transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
       port: 465,
       secure: true, // Use SSL
       auth: {
         user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS, // Must be a 16-character App Password
+        pass: process.env.GMAIL_PASS, // Must be 16-character App Password without spaces
       },
-      connectionTimeout: 10000, // Prevent serverless function hangs
+      tls: {
+        rejectUnauthorized: false, // Prevents SSL handshakes from failing in serverless environments
+      },
+      connectionTimeout: 10000,
     });
 
     // 5. Format Email Body
@@ -59,9 +62,10 @@ export async function submitContactForm(formData) {
     return { success: true };
   } catch (error) {
     console.error("CONTACT_SUBMIT_ERROR:", error);
+    // Returns the exact error message to the client toast alert so you can see what failed
     return { 
       success: false, 
-      message: error?.message || "Error sending message." 
+      message: error?.message || error?.toString() || "Error sending message." 
     };
   }
 }
