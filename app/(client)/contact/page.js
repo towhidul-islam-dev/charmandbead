@@ -133,7 +133,7 @@ export default function ContactPage() {
 
                     <div className="relative z-10 p-5 sm:p-6 bg-white/5 rounded-2xl sm:rounded-3xl border border-white/10 backdrop-blur-sm">
                         <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-brand-pink mb-1 sm:mb-2 text-center">Available Hours</p>
-                        <p className="text-center font-bold text-xs sm:text-sm tracking-tight text-brand-lightPink">Mon — Fri: 9:00 AM - 5:00 PM EST</p>
+                        <p className="text-center font-bold text-xs sm:text-sm tracking-tight text-brand-lightPink">Mon — Sat: 9:00 AM - 11:00 PM EST</p>
                     </div>
                 </div>
 
