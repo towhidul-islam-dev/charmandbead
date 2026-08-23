@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { Mail, Phone, MapPin, Loader, Send, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Mail, Phone, MapPin, Loader, Send, ArrowRight, CheckCircle2, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { submitContactForm } from '@/actions/contact';
 
@@ -29,7 +29,7 @@ export default function ContactPage() {
             }
         } catch (error) {
             toast.error("An unexpected error occurred.");
-        } finally {
+        } font-bold {
             setLoading(false);
         }
     };
@@ -91,30 +91,48 @@ export default function ContactPage() {
                             </div>
                         </div>
 
-                        <div className="flex items-center space-x-5 group cursor-pointer">
+                        <a 
+                            href="https://wa.link/y3ampa" 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="flex items-center space-x-5 group cursor-pointer"
+                        >
+                            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-brand-pink group-hover:bg-brand-pink group-hover:text-white transition-all duration-300">
+                                <MessageSquare size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-lightPink mb-1 opacity-70">WhatsApp Us</h3>
+                                <p className="text-lg font-bold group-hover:text-brand-lightPink transition-colors">Chat on WhatsApp</p>
+                            </div>
+                        </a>
+
+                        <a 
+                            href="mailto:charmandbeads.official@gmail.com" 
+                            className="flex items-center space-x-5 group cursor-pointer"
+                        >
                             <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-brand-pink group-hover:bg-brand-pink group-hover:text-white transition-all duration-300">
                                 <Mail size={24} />
                             </div>
                             <div>
                                 <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-lightPink mb-1 opacity-70">Email Us</h3>
-                                <p className="text-lg font-bold group-hover:text-brand-lightPink transition-colors">support@brand.com</p>
+                                <p className="text-lg font-bold group-hover:text-brand-lightPink transition-colors break-all">charmandbeads.official@gmail.com</p>
                             </div>
-                        </div>
+                        </a>
 
-                        <div className="flex items-center space-x-5 group cursor-pointer">
+                        {/* <div className="flex items-center space-x-5 group cursor-pointer">
                             <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-brand-pink group-hover:bg-brand-pink group-hover:text-white transition-all duration-300">
                                 <Phone size={24} />
                             </div>
                             <div>
                                 <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-lightPink mb-1 opacity-70">Call Us</h3>
-                                <p className="text-lg font-bold group-hover:text-brand-lightPink transition-colors">(555) 123-4567</p>
+                                <p className="text-lg font-bold group-hover:text-brand-lightPink transition-colors"></p>
                             </div>
-                        </div>
+                        </div> */}
                     </div>
 
                     <div className="relative z-10 p-6 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-sm">
                         <p className="text-[10px] font-black uppercase tracking-widest text-brand-pink mb-2 text-center">Available Hours</p>
-                        <p className="text-center font-bold text-sm tracking-tight text-brand-lightPink">Mon — Fri: 9:00 AM - 5:00 PM EST</p>
+                        <p className="text-center font-bold text-sm tracking-tight text-brand-lightPink"> Mon - Sat 9:00 AM - 11:00 PM EST</p>
                     </div>
                 </div>
 
@@ -127,7 +145,7 @@ export default function ContactPage() {
                                 <input 
                                     name="name" type="text" required onChange={handleChange} value={formData.name}
                                     className="w-full p-5 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-brand-pink/50 focus:ring-4 focus:ring-brand-pink/5 outline-none transition-all font-bold text-brand-green" 
-                                    placeholder="Jane Doe"
+                                    placeholder="Charmsandbeads"
                                 />
                             </div>
                             <div className="space-y-3">
@@ -135,7 +153,7 @@ export default function ContactPage() {
                                 <input 
                                     name="email" type="email" required onChange={handleChange} value={formData.email}
                                     className="w-full p-5 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-brand-pink/50 focus:ring-4 focus:ring-brand-pink/5 outline-none transition-all font-bold text-brand-green" 
-                                    placeholder="jane@example.com"
+                                    placeholder="charmandbeads.official@example.com"
                                 />
                             </div>
                         </div>
