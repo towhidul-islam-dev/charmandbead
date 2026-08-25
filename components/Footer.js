@@ -1,8 +1,9 @@
 "use client";
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useSession } from "next-auth/react";
-import { Facebook, Instagram, Twitter, Mail, MapPin, Phone, ArrowUpRight, HelpCircle } from 'lucide-react';
+import { Mail, MapPin } from 'lucide-react';
 
 export default function Footer() {
     const { data: session } = useSession();
@@ -15,12 +16,26 @@ export default function Footer() {
             <div className="px-6 py-16 mx-auto max-w-7xl lg:px-8">
                 <div className="grid grid-cols-1 gap-12 xl:grid-cols-3 xl:gap-24">
                     
-                    {/* --- 1. BRAND STORY --- */}
+                    {/* --- 1. BRAND STORY & INTERACTIVE POP-UP LOGO --- */}
                     <div className="space-y-8">
                         <div>
-                            <h3 className="text-3xl font-black tracking-tighter uppercase italic text-[#EA638C]">
-                                Charm & Bead
-                            </h3>
+                            <Link 
+                                href="/" 
+                                className="group relative inline-block outline-none focus:outline-none"
+                            >
+                                <div className="relative flex items-center justify-center w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-white/10 border-2 border-[#EA638C]/40 p-3 shadow-md backdrop-blur-sm transition-all duration-300 ease-out group-hover:scale-110 group-hover:-translate-y-2 group-hover:border-[#EA638C] group-hover:shadow-[0_10px_25px_-5px_rgba(234,99,140,0.5)] group-active:scale-105 group-active:-translate-y-1 group-focus-visible:scale-110 group-focus-visible:-translate-y-2 group-focus-visible:border-[#EA638C]">
+                                    <div className="relative w-full h-full rounded-full overflow-hidden transition-transform duration-300 ease-out group-hover:scale-105">
+                                        <Image 
+                                            src="/logocb.svg" 
+                                            alt="Charm & Bead Logo" 
+                                            fill
+                                            priority
+                                            className="object-cover object-center"
+                                        />
+                                    </div>
+                                </div>
+                            </Link>
+
                             <p className="max-w-xs mt-4 text-sm leading-relaxed text-gray-100">
                                 Elevating the craft of jewelry making since 2018. Source certified gems and rare components for your next masterpiece.
                             </p>

@@ -105,7 +105,7 @@ const ClientHeader = ({ pathname, dbImage }) => {
           
           <Link href="/" className="flex items-center gap-2 md:gap-3 group shrink-0">
             <div className="relative flex items-center justify-center w-10 h-10 md:w-11 md:h-11 overflow-hidden rounded-full bg-[#FBB6E6] shadow-sm">
-              <Image src="/logo_new.svg" alt="Logo" width={48} height={48} priority className="object-cover w-full h-full" />
+              <Image src="/logocb.svg" alt="Logo" width={48} height={48} priority className="object-cover w-full h-full" />
             </div>
             <div className="flex-col hidden xl:flex">
               <span className="text-lg md:text-xl font-medium italic text-[#3E442B] leading-none font-serif text-nowrap">CHARM&BEAD</span>
