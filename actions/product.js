@@ -4,55 +4,59 @@ import { revalidatePath } from "next/cache";
 import mongodb from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { v2 as cloudinary } from "cloudinary";
-import { CATEGORY_DNA } from "@/lib/categoryDNA"; // 🧬 Updated to your new DNA file
+import { CATEGORY_DNA } from "@/lib/categoryDNA";
 import { createInAppNotification } from "@/actions/inAppNotifications";
+
 cloudinary.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// async function uploadToCloudinary(file) {
-//   if (!file || file.size === 0 || typeof file === "string") return null;
-//   const arrayBuffer = await file.arrayBuffer();
-//   const buffer = Buffer.from(arrayBuffer);
-//   return new Promise((resolve, reject) => {
-//     cloudinary.uploader
-//       .upload_stream({ folder: "ecom-products" }, (error, result) => {
-//         if (error) reject(error);
-//         else resolve(result.secure_url);
-//       })
-//       .end(buffer);
-//   });
-// }
+/**
+ * Uploads a base64 string or file buffer to Cloudinary
+ */
+export async function uploadToCloudinary(fileOrBase64) {
+  if (!fileOrBase64) return null;
 
-export async function uploadToCloudinary(file) {
-  if (!file || file.size === 0 || typeof file === "string") {
-    console.log("☁️ Cloudinary: Skip upload (Invalid file or already a URL)");
-    return typeof file === "string" ? file : null;
+  // If it's already a hosted Cloudinary/HTTP URL, don't re-upload
+  if (typeof fileOrBase64 === "string" && fileOrBase64.startsWith("http")) {
+    return fileOrBase64;
   }
 
   try {
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Handle Base64 strings sent from client compressor
+    if (typeof fileOrBase64 === "string" && fileOrBase64.startsWith("data:image")) {
+      const result = await cloudinary.uploader.upload(fileOrBase64, {
+        folder: "ecom-products",
+      });
+      return result.secure_url;
+    }
 
-    return new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        { folder: "ecom-products" },
-        (error, result) => {
-          if (error) {
-            console.error("❌ Cloudinary Upload Error:", error);
-            reject(error);
-          } else {
-            console.log("✅ Cloudinary Success:", result.secure_url);
-            resolve(result.secure_url);
+    // Handle standard File objects
+    if (fileOrBase64 instanceof File && fileOrBase64.size > 0) {
+      const arrayBuffer = await fileOrBase64.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      return new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { folder: "ecom-products" },
+          (error, result) => {
+            if (error) {
+              console.error("❌ Cloudinary Upload Error:", error);
+              reject(error);
+            } else {
+              resolve(result.secure_url);
+            }
           }
-        },
-      );
-      uploadStream.end(buffer);
-    });
+        );
+        uploadStream.end(buffer);
+      });
+    }
+
+    return null;
   } catch (err) {
-    console.error("❌ Buffer Conversion Error:", err);
+    console.error("❌ Cloudinary Upload Exception:", err);
     return null;
   }
 }
@@ -64,7 +68,7 @@ export async function silentInventoryHeal() {
     for (const product of products) {
       const actualSum = product.variants.reduce(
         (acc, v) => acc + (Number(v.stock) || 0),
-        0,
+        0
       );
       if (product.stock !== actualSum) {
         product.stock = actualSum;
@@ -79,109 +83,174 @@ export async function silentInventoryHeal() {
 export async function saveProduct(prevState, formData) {
   try {
     await mongodb();
-    const id = formData.get("id");
-    const hasVariants = formData.get("hasVariants") === "true";
 
-    // --- 1. HANDLE MAIN IMAGE (Synchronized with Frontend) ---
-    let imageUrl = formData.get("imageUrl") || ""; // Default to existing URL string
-    const mainImageFile = formData.get("mainImage");
+    const rawPayload = formData.get("payload");
+    let payload = {};
 
-    if (
-      mainImageFile &&
-      mainImageFile instanceof File &&
-      mainImageFile.size > 0
-    ) {
+    if (rawPayload) {
+      payload = typeof rawPayload === "string" ? JSON.parse(rawPayload) : rawPayload;
+    }
+
+    const getVal = (key) => payload[key] ?? formData.get(key);
+
+    const id = getVal("id");
+    const hasVariants = getVal("hasVariants") === true || getVal("hasVariants") === "true";
+
+    // --- 1. HANDLE MAIN IMAGE ---
+    let imageUrl = 
+      payload.imageUrl || 
+      payload.mainImage || 
+      formData.get("existingMainImageUrl") || 
+      formData.get("imageUrl") || 
+      "";
+
+    const mainImageFile = formData.get("mainImageFile") || formData.get("mainImage");
+
+    if (mainImageFile && mainImageFile instanceof File && mainImageFile.size > 0) {
       const uploadedUrl = await uploadToCloudinary(mainImageFile);
+      if (uploadedUrl) imageUrl = uploadedUrl;
+    } else if (imageUrl && typeof imageUrl === "string" && imageUrl.startsWith("data:image")) {
+      const uploadedUrl = await uploadToCloudinary(imageUrl);
       if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
     // --- 2. HANDLE DETAIL GALLERY ---
-    const rawExistingGallery = JSON.parse(
-      formData.get("existingGallery") || "[]",
-    );
-    const existingGalleryUrls = rawExistingGallery
-      .map((item) => (typeof item === "string" ? item : item.url || ""))
-      .filter((url) => url !== "");
+    let finalGallery = [];
 
-    const newGalleryUploads = [];
-    for (const [key, value] of formData.entries()) {
-      if (
-        key.startsWith("galleryFile_") &&
-        value instanceof File &&
-        value.size > 0
-      ) {
-        const uploadedUrl = await uploadToCloudinary(value);
-        if (uploadedUrl) newGalleryUploads.push(uploadedUrl);
+    if (Array.isArray(payload.gallery)) {
+      finalGallery = await Promise.all(
+        payload.gallery.map(async (item) => {
+          const itemUrl = typeof item === "string" ? item : item.url || "";
+          if (itemUrl.startsWith("data:image")) {
+            const uploaded = await uploadToCloudinary(itemUrl);
+            return uploaded || "";
+          }
+          return itemUrl;
+        })
+      );
+      finalGallery = finalGallery.filter(Boolean);
+    } else {
+      // Handle both Form Data approaches (batch arrays or key indexing)
+      const existingGalleryUrls = formData.getAll("existingGalleryUrls");
+      const rawExistingGallery = existingGalleryUrls.length > 0
+        ? existingGalleryUrls
+        : JSON.parse(formData.get("existingGallery") || formData.get("gallery") || "[]");
+
+      const processedExisting = await Promise.all(
+        rawExistingGallery
+          .map((item) => (typeof item === "string" ? item : item.url || ""))
+          .filter(Boolean)
+          .map(async (url) => {
+            if (url.startsWith("data:image")) {
+              const uploaded = await uploadToCloudinary(url);
+              return uploaded || "";
+            }
+            return url;
+          })
+      );
+
+      const newGalleryUploads = [];
+      const galleryFiles = formData.getAll("galleryFiles");
+
+      if (galleryFiles.length > 0) {
+        for (const file of galleryFiles) {
+          if (file instanceof File && file.size > 0) {
+            const uploadedUrl = await uploadToCloudinary(file);
+            if (uploadedUrl) newGalleryUploads.push(uploadedUrl);
+          }
+        }
+      } else {
+        for (const [key, value] of formData.entries()) {
+          if (key.startsWith("galleryFile_") && value instanceof File && value.size > 0) {
+            const uploadedUrl = await uploadToCloudinary(value);
+            if (uploadedUrl) newGalleryUploads.push(uploadedUrl);
+          }
+        }
       }
+
+      finalGallery = [...processedExisting.filter(Boolean), ...newGalleryUploads];
     }
-    const finalGallery = [...existingGalleryUrls, ...newGalleryUploads];
 
     // --- 3. DNA & LOGIC ---
-    const categoryId = formData.get("categoryId");
-    const subCategoryId = formData.get("subCategoryId");
-    const mainCat = CATEGORY_DNA.find(
-      (c) => String(c._id) === String(categoryId),
-    );
-    const subCat = CATEGORY_DNA.find(
-      (c) => String(c._id) === String(subCategoryId),
-    );
+    const categoryId = getVal("categoryId") || getVal("category");
+    const subCategoryId = getVal("subCategoryId") || getVal("subCategory");
 
-    const isOnSale = formData.get("isOnSale") === "true";
-    const discountPrice = Number(formData.get("discountPrice")) || 0;
-    const pricingTiers = JSON.parse(formData.get("pricingTiers") || "[]");
+    const mainCat = CATEGORY_DNA.find((c) => String(c._id) === String(categoryId));
+    const subCat = CATEGORY_DNA.find((c) => String(c._id) === String(subCategoryId));
+
+    const isOnSale = getVal("isOnSale") === true || getVal("isOnSale") === "true";
+    const discountPrice = Number(getVal("discountPrice")) || 0;
+    const rawPricingTiers = payload.pricingTiers || JSON.parse(formData.get("pricingTiers") || "[]");
 
     let productData = {
-      name: formData.get("name")?.trim(),
-      description: formData.get("description"),
+      name: String(getVal("name") || "").trim(),
+      description: getVal("description") || "",
       category: categoryId || null,
       subCategory: subCategoryId || null,
-      categoryName: mainCat ? mainCat.name : "Uncategorized",
-      subCategoryName: subCat ? subCat.name : "",
-      isNewArrival: formData.get("isNewArrival") === "true",
+      categoryName: mainCat ? mainCat.name : (getVal("categoryName") || "Uncategorized"),
+      subCategoryName: subCat ? subCat.name : (getVal("subCategoryName") || ""),
+      isNewArrival: getVal("isNewArrival") === true || getVal("isNewArrival") === "true",
       hasVariants: hasVariants,
-      imageUrl: imageUrl,
+      imageUrl: imageUrl || "",
       gallery: finalGallery,
-      price: Number(formData.get("price")) || 0,
-      stock: Number(formData.get("stock")) || 0,
-      minOrderQuantity: Number(formData.get("minOrderQuantity")) || 1,
+      price: Number(getVal("price")) || 0,
+      stock: Number(getVal("stock")) || 0,
+      minOrderQuantity: Number(getVal("minOrderQuantity")) || 1,
       isOnSale: isOnSale,
       discountPrice: discountPrice,
-      pricingTiers: pricingTiers,
+      pricingTiers: rawPricingTiers,
     };
+
+    // Add root-level SKU only when variants are not used
+    if (!hasVariants) {
+      productData.sku = String(getVal("sku") || "").trim();
+    } else {
+      productData.sku = undefined; // Prevent orphan root SKU when variants are enabled
+    }
 
     // --- 4. HANDLE VARIANTS ---
     if (hasVariants) {
-      const rawVariants = JSON.parse(formData.get("variantsJson") || "[]");
+      const rawVariants = 
+        payload.variants || 
+        JSON.parse(formData.get("variantData") || formData.get("variantsJson") || formData.get("variants") || "[]");
+
       productData.variants = await Promise.all(
         rawVariants.map(async (v, i) => {
           let vImg = v.imageUrl || "";
           const vFile = formData.get(`variantFile_${i}`);
+
           if (vFile && vFile instanceof File && vFile.size > 0) {
             const uploadedVImg = await uploadToCloudinary(vFile);
             if (uploadedVImg) vImg = uploadedVImg;
+          } else if (vImg && typeof vImg === "string" && vImg.startsWith("data:image")) {
+            const uploadedVImg = await uploadToCloudinary(vImg);
+            if (uploadedVImg) vImg = uploadedVImg;
           }
+
           return {
             sku: v.sku || "",
-            size: v.size,
-            color: v.color,
-            imageUrl: vImg,
+            size: v.size || "",
+            color: v.color || "",
+            imageUrl: vImg || "",
             price: Number(v.price) || 0,
             stock: Number(v.stock) || 0,
             minOrderQuantity: Number(v.minOrderQuantity) || 1,
           };
-        }),
+        })
       );
 
-      productData.stock = productData.variants.reduce(
-        (acc, v) => acc + (v.stock || 0),
-        0,
-      );
+      // Recalculate stock and price fallbacks
+      productData.stock = productData.variants.reduce((acc, v) => acc + (v.stock || 0), 0);
+
       const variantPrices = productData.variants
         .map((v) => v.price)
         .filter((p) => p > 0);
+
       if (variantPrices.length > 0) {
         productData.price = Math.min(...variantPrices);
       }
+    } else {
+      productData.variants = [];
     }
 
     // --- 5. DATABASE OPERATION ---
@@ -189,25 +258,31 @@ export async function saveProduct(prevState, formData) {
     const isValidId = id && id !== "null" && id !== "" && id !== "undefined";
 
     if (isValidId) {
+      // Explicitly unset root `sku` if converting product to use variants
+      const updateQuery = hasVariants 
+        ? { $set: productData, $unset: { sku: "" } } 
+        : { $set: productData };
+
       finalProduct = await Product.findByIdAndUpdate(
         id,
-        { $set: productData },
-        { new: true, runValidators: true, strict: false },
+        updateQuery,
+        { new: true, runValidators: true, strict: false }
       );
     } else {
       finalProduct = await Product.create(productData);
 
-      // --- 🟢 TRIGGER IN-APP NOTIFICATION FOR NEW ARRIVAL ---
-      try {
-        await createInAppNotification({
-          title: "New Arrival Added! 🔥",
-          message: `Check out our new item: ${finalProduct.name}`,
-          type: "arrival", // 🟢 Matches your NotificationSchema enum
-          recipientId: "GLOBAL",
-          link: `/product/${finalProduct._id}`,
-        });
-      } catch (notifErr) {
-        console.error("Failed to send new product notification:", notifErr);
+      if (productData.isNewArrival) {
+        try {
+          await createInAppNotification({
+            title: "New Arrival Added! 🔥",
+            message: `Check out our new item: ${finalProduct.name}`,
+            type: "arrival",
+            recipientId: "GLOBAL",
+            link: `/product/${finalProduct._id}`,
+          });
+        } catch (notifErr) {
+          console.error("Failed to send new product notification:", notifErr);
+        }
       }
     }
 
@@ -262,6 +337,14 @@ export async function deleteProduct(productId) {
     const product = await Product.findById(productId);
     if (!product) return { success: false, message: "Product not found" };
 
+    const extractPublicId = (url) => {
+      if (!url || typeof url !== "string") return null;
+      const parts = url.split("/");
+      const filename = parts.pop().split(".")[0];
+      const folder = parts.pop();
+      return `${folder}/${filename}`;
+    };
+
     // 1. Delete Main Image
     const mainPublicId = extractPublicId(product.imageUrl);
     if (mainPublicId) await cloudinary.uploader.destroy(mainPublicId);
@@ -272,7 +355,7 @@ export async function deleteProduct(productId) {
         product.gallery.map((url) => {
           const gPid = extractPublicId(url);
           return gPid ? cloudinary.uploader.destroy(gPid) : null;
-        }),
+        })
       );
     }
 
@@ -282,7 +365,7 @@ export async function deleteProduct(productId) {
         product.variants.map((v) => {
           const vPid = extractPublicId(v.imageUrl);
           return vPid ? cloudinary.uploader.destroy(vPid) : null;
-        }),
+        })
       );
     }
 
@@ -295,17 +378,13 @@ export async function deleteProduct(productId) {
   }
 }
 
-export async function reduceProductStock(
-  productId,
-  variantId = null,
-  quantity = 1,
-) {
+export async function reduceProductStock(productId, variantId = null, quantity = 1) {
   try {
     await mongodb();
     if (variantId) {
       await Product.updateOne(
         { _id: productId, "variants._id": variantId },
-        { $inc: { "variants.$.stock": -quantity, stock: -quantity } },
+        { $inc: { "variants.$.stock": -quantity, stock: -quantity } }
       );
     } else {
       await Product.findByIdAndUpdate(productId, {
@@ -321,7 +400,6 @@ export async function reduceProductStock(
 export async function getProducts() {
   try {
     await mongodb();
-    // Fetch all products without .limit() and convert Mongoose document to plain JS object
     const products = await Product.find({}).sort({ createdAt: -1 }).lean();
     return JSON.parse(JSON.stringify(products));
   } catch (error) {
