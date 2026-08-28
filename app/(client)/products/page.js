@@ -95,8 +95,24 @@ async function ProductDataWrapper({ categorySlug, searchQuery, page, limit }) {
     const products = JSON.parse(JSON.stringify(rawProducts)).map(p => {
         const matchedCat = allCategories.find(c => String(c._id) === String(p.category));
         const matchedSub = matchedCat?.subCategories?.find(s => String(s._id) === String(p.subCategory));
+        
+        const mainImage = ensureHttps(p.imageUrl || p.image || '');
+        const sanitizedGallery = Array.isArray(p.gallery) 
+            ? p.gallery.map(img => ensureHttps(img)).filter(Boolean)
+            : [];
+            
+        const sanitizedVariants = Array.isArray(p.variants)
+            ? p.variants.map(v => ({
+                ...v,
+                imageUrl: ensureHttps(v.imageUrl || v.image || '')
+            }))
+            : [];
+
         return {
             ...p,
+            imageUrl: mainImage,
+            gallery: sanitizedGallery,
+            variants: sanitizedVariants,
             categoryName: p.categoryName || matchedCat?.name || "Collection",
             subCategoryName: p.subCategoryName || matchedSub?.name || ""
         };

@@ -19,6 +19,16 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/Context/CartContext";
 import toast from "react-hot-toast";
 
+const FALLBACK_IMAGE = "/placeholder.png";
+
+// Helper function to filter out invalid or nullish image paths
+const cleanImageUrl = (url) => {
+  if (!url || typeof url !== "string") return null;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed === "undefined" || trimmed.includes("null")) return null;
+  return trimmed;
+};
+
 export default function ProductDetailsContent({ product }) {
   const router = useRouter();
   const { cart } = useCart();
@@ -31,30 +41,40 @@ export default function ProductDetailsContent({ product }) {
   const allImages = useMemo(() => {
     if (!product) return [];
     const images = new Set();
-    if (product.imageUrl) images.add(product.imageUrl);
-    if (product.image) images.add(product.image);
+    
+    const mainImg = cleanImageUrl(product.imageUrl) || cleanImageUrl(product.image);
+    if (mainImg) images.add(mainImg);
 
-    if (product.variants && Array.isArray(product.variants)) {
-      product.variants.forEach((v) => {
-        const vImg = v.imageUrl || v.image;
-        if (vImg && typeof vImg === "string") images.add(vImg);
+    if (Array.isArray(product.gallery)) {
+      product.gallery.forEach((g) => {
+        const cleaned = cleanImageUrl(g);
+        if (cleaned) images.add(cleaned);
       });
     }
 
-    return Array.from(images).filter(
-      (img) => img && img !== "/placeholder.png" && !img.includes("undefined"),
-    );
+    if (Array.isArray(product.variants)) {
+      product.variants.forEach((v) => {
+        const vImg = cleanImageUrl(v.imageUrl) || cleanImageUrl(v.image);
+        if (vImg) images.add(vImg);
+      });
+    }
+
+    const result = Array.from(images);
+    return result.length > 0 ? result : [FALLBACK_IMAGE];
   }, [product]);
 
   const [mainImage, setMainImage] = useState(
-    allImages[0] || "/placeholder.png",
+    allImages[0] || FALLBACK_IMAGE,
   );
   const [detailGalleryImage, setDetailGalleryImage] = useState(null);
   const [activeSku, setActiveSku] = useState(product?.sku || null);
 
   useEffect(() => {
     if (allImages.length > 0) setMainImage(allImages[0]);
-    if (product?.gallery?.length > 0) setDetailGalleryImage(product.gallery[0]);
+    if (product?.gallery?.length > 0) {
+      const validGalleryFirst = product.gallery.map(cleanImageUrl).find(Boolean);
+      setDetailGalleryImage(validGalleryFirst || null);
+    }
   }, [allImages, product?.gallery]);
 
   useEffect(() => {
@@ -113,7 +133,7 @@ export default function ProductDetailsContent({ product }) {
 
   // --- STOCK & MOQ LOGIC ---
   const baseStockTotal = product?.hasVariants
-    ? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
+    ? (product.variants || []).reduce((acc, v) => acc + (Number(v.stock) || 0), 0)
     : Number(product?.stock) || 0;
 
   const inCartQtyTotal = useMemo(() => {
@@ -123,7 +143,7 @@ export default function ProductDetailsContent({ product }) {
   }, [cart, product?._id]);
 
   const currentStock = Math.max(0, baseStockTotal - inCartQtyTotal);
-  const displayMoq = product?.hasVariants
+  const displayMoq = product?.hasVariants && product.variants?.length
     ? Math.min(...product.variants.map((v) => v.minOrderQuantity || 1))
     : product?.minOrderQuantity || 1;
 
@@ -148,6 +168,7 @@ export default function ProductDetailsContent({ product }) {
             alt="Enlarged"
             onClick={(e) => e.stopPropagation()}
             unoptimized
+            onError={() => setMainImage(FALLBACK_IMAGE)}
           />
         </div>
       </div>,
@@ -171,11 +192,12 @@ export default function ProductDetailsContent({ product }) {
         >
           <Image
             src={mainImage}
-            alt={product.name}
+            alt={product.name || "Product Image"}
             fill
             priority
             className="object-cover transition-opacity duration-300"
             sizes="(max-width: 1024px) 100vw, 40vw"
+            onError={() => setMainImage(FALLBACK_IMAGE)}
           />
           <div
             className="absolute inset-0 z-30 transition-opacity duration-200 opacity-0 pointer-events-none group-hover:opacity-100"
@@ -190,7 +212,7 @@ export default function ProductDetailsContent({ product }) {
           <div className="flex flex-wrap justify-center gap-2 px-1 md:gap-3 md:justify-start">
             {allImages.map((img, idx) => {
               const matchingVariant = product.variants?.find(
-                (v) => (v.imageUrl || v.image) === img,
+                (v) => (cleanImageUrl(v.imageUrl) || cleanImageUrl(v.image)) === img,
               );
               return (
                 <button
@@ -200,14 +222,21 @@ export default function ProductDetailsContent({ product }) {
                     if (matchingVariant?.sku) setActiveSku(matchingVariant.sku);
                     else setActiveSku(product.sku);
                   }}
-                  className={`relative w-14 h-14 md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 transition-all active:scale-90 ${mainImage === img ? "border-[#EA638C] scale-105 shadow-xl z-10" : "border-gray-50 opacity-60 hover:opacity-100"}`}
+                  className={`relative w-14 h-14 md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 transition-all active:scale-90 ${
+                    mainImage === img
+                      ? "border-[#EA638C] scale-105 shadow-xl z-10"
+                      : "border-gray-50 opacity-60 hover:opacity-100"
+                  }`}
                 >
                   <Image
                     src={img}
                     fill
                     className="object-cover"
-                    alt="thumbnail"
+                    alt={`thumbnail-${idx}`}
                     sizes="80px"
+                    onError={(e) => {
+                      e.currentTarget.src = FALLBACK_IMAGE;
+                    }}
                   />
                   {matchingVariant && (
                     <div className="absolute top-0 right-0 p-1 bg-[#EA638C] rounded-bl-xl shadow-sm z-10">
@@ -239,10 +268,15 @@ export default function ProductDetailsContent({ product }) {
                   e.currentTarget.getBoundingClientRect();
                 const x = (e.nativeEvent.offsetX / width) * 100;
                 const y = (e.nativeEvent.offsetY / height) * 100;
+                const activeGalleryImg =
+                  detailGalleryImage ||
+                  cleanImageUrl(product.gallery[0]) ||
+                  FALLBACK_IMAGE;
+
                 setZoomStyle({
                   display: "block",
                   backgroundPosition: `${x}% ${y}%`,
-                  backgroundImage: `url(${detailGalleryImage || product.gallery[0]})`,
+                  backgroundImage: `url(${activeGalleryImg})`,
                   backgroundSize: "250%",
                   position: "absolute",
                   top: 0,
@@ -254,11 +288,16 @@ export default function ProductDetailsContent({ product }) {
               onMouseLeave={handleMouseLeave}
             >
               <Image
-                src={detailGalleryImage || product.gallery[0]}
+                src={
+                  detailGalleryImage ||
+                  cleanImageUrl(product.gallery[0]) ||
+                  FALLBACK_IMAGE
+                }
                 fill
                 className="z-10 object-cover"
                 alt="Gallery Active"
                 sizes="(max-width: 1024px) 100vw, 40vw"
+                onError={() => setDetailGalleryImage(FALLBACK_IMAGE)}
               />
               <div
                 className="absolute inset-0 z-20 transition-opacity duration-200 opacity-0 pointer-events-none group-hover/gallery:opacity-100"
@@ -269,21 +308,31 @@ export default function ProductDetailsContent({ product }) {
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              {product.gallery.map((url, idx) => (
-                <div
-                  key={idx}
-                  className={`group relative aspect-square rounded-2xl overflow-hidden border-2 shadow-sm cursor-pointer transition-all ${detailGalleryImage === url ? "border-[#EA638C]" : "border-white"}`}
-                  onClick={() => setDetailGalleryImage(url)}
-                >
-                  <Image
-                    src={url}
-                    fill
-                    alt={`Detail ${idx}`}
-                    className="object-cover"
-                    sizes="150px"
-                  />
-                </div>
-              ))}
+              {product.gallery.map((url, idx) => {
+                const cleanedUrl = cleanImageUrl(url) || FALLBACK_IMAGE;
+                return (
+                  <div
+                    key={idx}
+                    className={`group relative aspect-square rounded-2xl overflow-hidden border-2 shadow-sm cursor-pointer transition-all ${
+                      detailGalleryImage === cleanedUrl
+                        ? "border-[#EA638C]"
+                        : "border-white"
+                    }`}
+                    onClick={() => setDetailGalleryImage(cleanedUrl)}
+                  >
+                    <Image
+                      src={cleanedUrl}
+                      fill
+                      alt={`Detail ${idx}`}
+                      className="object-cover"
+                      sizes="150px"
+                      onError={(e) => {
+                        e.currentTarget.src = FALLBACK_IMAGE;
+                      }}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -308,18 +357,26 @@ export default function ProductDetailsContent({ product }) {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <div
-              className={`flex items-center gap-2 px-5 py-2 rounded-full shadow-sm font-black text-[10px] uppercase tracking-widest ${isOutOfStock ? "bg-red-500 text-white" : isLowStock ? "bg-orange-100 text-orange-600 border border-orange-200" : "bg-gray-900 text-white"}`}
+              className={`flex items-center gap-2 px-5 py-2 rounded-full shadow-sm font-black text-[10px] uppercase tracking-widest ${
+                isOutOfStock
+                  ? "bg-red-500 text-white"
+                  : isLowStock
+                  ? "bg-orange-100 text-orange-600 border border-orange-200"
+                  : "bg-gray-900 text-white"
+              }`}
             >
               {!isOutOfStock && (
                 <div
-                  className={`w-2 h-2 rounded-full ${isLowStock ? "bg-orange-600 animate-pulse" : "bg-green-400"}`}
+                  className={`w-2 h-2 rounded-full ${
+                    isLowStock ? "bg-orange-600 animate-pulse" : "bg-green-400"
+                  }`}
                 />
               )}
               {isOutOfStock
                 ? "Sold Out"
                 : isLowStock
-                  ? `Hurry Up! ${currentStock} Left`
-                  : "In Stock"}
+                ? `Hurry Up! ${currentStock} Left`
+                : "In Stock"}
             </div>
             {displayMoq > 1 && (
               <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-5 py-2 rounded-full border border-pink-100">
@@ -375,7 +432,8 @@ export default function ProductDetailsContent({ product }) {
           product={product}
           isOutOfStock={isOutOfStock}
           onVariantChange={(variantData) => {
-            if (variantData?.imageUrl) setMainImage(variantData.imageUrl);
+            const cleanedVal = cleanImageUrl(variantData?.imageUrl);
+            if (cleanedVal) setMainImage(cleanedVal);
             if (variantData?.sku) setActiveSku(variantData.sku);
           }}
         />
@@ -392,7 +450,11 @@ export default function ProductDetailsContent({ product }) {
           </div>
           <button
             onClick={handleCopyLink}
-            className={`flex-shrink-0 flex items-center gap-2 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${copied ? "bg-[#3E442B] text-white" : "bg-white text-[#EA638C] border border-gray-200 shadow-xl hover:translate-y-[-2px]"}`}
+            className={`flex-shrink-0 flex items-center gap-2 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
+              copied
+                ? "bg-[#3E442B] text-white"
+                : "bg-white text-[#EA638C] border border-gray-200 shadow-xl hover:translate-y-[-2px]"
+            }`}
           >
             {copied ? <Check size={16} /> : <Share2 size={16} />}
             {copied ? "Copied" : "Copy Link"}
