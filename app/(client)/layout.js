@@ -36,7 +36,7 @@ export const metadata = {
     images: [{ url: '/og-image.jpg' }],
   },
   icons: {
-    icon: "/favicon1.svg", // Path to file in your /public folder
+    icon: "/faviconmain.svg", // Path to file in your /public folder
   },
 };
 
