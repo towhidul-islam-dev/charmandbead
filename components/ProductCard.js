@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react"; // 🟢 Added state import
 import Link from "next/link";
 import Image from "next/image"; 
 import { useWishlist } from "@/Context/WishlistContext";
@@ -10,6 +11,9 @@ const ProductCard = ({ product, index = 0 }) => {
   const { wishlist, toggleWishlist } = useWishlist();
   const { data: session } = useSession(); 
   const user = session?.user; 
+
+  // 🟢 State to handle broken/unreachable image URLs gracefully
+  const [imgSrc, setImgSrc] = useState(product?.imageUrl || "/placeholder.png");
   
   const isFavorite = wishlist?.some((item) => item._id === product?._id);
   const isOutOfStock = product?.stock <= 0;
@@ -62,9 +66,11 @@ const ProductCard = ({ product, index = 0 }) => {
       <div className="relative w-full overflow-hidden aspect-square bg-gray-50">
         <Link href={`/products/${product._id}`} className="relative z-0 block w-full h-full">
           <Image
-            src={product.imageUrl || "/placeholder.png"}
-            alt={product.name}
+            src={imgSrc}
+            alt={product.name || "Product Image"}
             fill 
+            unoptimized // 🟢 Prevents Next.js optimization server errors for third-party uploads
+            onError={() => setImgSrc("/placeholder.png")} // 🟢 Replaces broken image icon with placeholder
             sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
             className={`object-cover transition-transform duration-700 group-hover:scale-105 ${isOutOfStock ? "grayscale" : ""}`}
             priority={index < 4} 
@@ -105,7 +111,7 @@ const ProductCard = ({ product, index = 0 }) => {
           )}
         </div>
 
-        {/* FLOATING ACTIONS (Strict Z-Index z-10) */}
+        {/* FLOATING ACTIONS */}
         {user && (
           <div className="absolute z-10 flex flex-col gap-1.5 top-2.5 right-2.5 transition-all duration-300 md:opacity-0 md:translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0">
             <button 

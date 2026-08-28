@@ -50,6 +50,15 @@ export default async function ProductsServerPage({ searchParams }) {
     );
 }
 
+// 🟢 HELPER: Enforces HTTPS & Valid Fallbacks
+const ensureHttps = (url) => {
+    if (!url || typeof url !== 'string') return '';
+    if (url.startsWith('http://')) {
+        return url.replace('http://', 'https://');
+    }
+    return url;
+};
+
 async function ProductDataWrapper({ categorySlug, page, limit }) {
     await mongodb();
 
@@ -61,7 +70,6 @@ async function ProductDataWrapper({ categorySlug, page, limit }) {
         if (foundCategory) filterId = foundCategory._id.toString();
     }
 
-    // 🟢 DATA FETCH: Passing all 4 required arguments now
     const { products: rawProducts, success, totalCount } = await getProducts(false, filterId, page, limit);
     
     if (!success || !rawProducts || rawProducts.length === 0) {
@@ -75,12 +83,28 @@ async function ProductDataWrapper({ categorySlug, page, limit }) {
         );
     }
 
-    // Sanitize and map category names
+    // 🟢 SANITIZATION FIX: Ensure all image fields (main, gallery, variants) have secure, valid URLs
     const products = JSON.parse(JSON.stringify(rawProducts)).map(p => {
         const matchedCat = allCategories.find(c => String(c._id) === String(p.category));
         const matchedSub = matchedCat?.subCategories?.find(s => String(s._id) === String(p.subCategory));
+        
+        const mainImage = ensureHttps(p.imageUrl || p.image || '');
+        const sanitizedGallery = Array.isArray(p.gallery) 
+            ? p.gallery.map(img => ensureHttps(img)).filter(Boolean)
+            : [];
+            
+        const sanitizedVariants = Array.isArray(p.variants)
+            ? p.variants.map(v => ({
+                ...v,
+                imageUrl: ensureHttps(v.imageUrl || v.image || '')
+            }))
+            : [];
+
         return {
             ...p,
+            imageUrl: mainImage,
+            gallery: sanitizedGallery,
+            variants: sanitizedVariants,
             categoryName: p.categoryName || matchedCat?.name || "Collection",
             subCategoryName: p.subCategoryName || matchedSub?.name || ""
         };
@@ -103,7 +127,6 @@ async function ProductDataWrapper({ categorySlug, page, limit }) {
 
     return (
         <>
-            {/* 🟢 RENDER FIX: The 'key' ensures the catalog component refreshes data correctly */}
             <ProductCatalog key={`catalog-page-${page}`} initialProducts={products} />
             
             {totalPages > 1 && (
