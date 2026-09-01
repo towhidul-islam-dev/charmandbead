@@ -1,6 +1,6 @@
 import { getProducts } from '@/lib/data'; 
 import ProductCatalog from '@/components/ProductCatalog'; 
-import { Sparkles, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Suspense } from 'react';
 import Category from '@/models/Category'; 
 import mongodb from '@/lib/mongodb';
@@ -11,11 +11,11 @@ export const dynamic = 'force-dynamic';
 export default async function ProductsServerPage({ searchParams }) {
     const params = await searchParams;
     const categorySlug = params.category || '';
-    const searchQuery = params.search || '';
     const currentPage = Number(params.page) || 1;
     const limit = 16; 
 
-    const suspenseKey = `${categorySlug}-${searchQuery}-${currentPage}`;
+    // KEY STABILITY: Forces a clean swap when the page/category changes
+    const suspenseKey = `${categorySlug}-${currentPage}`;
 
     return (
         <main className="relative min-h-screen pb-24 overflow-hidden bg-white">
@@ -26,7 +26,7 @@ export default async function ProductsServerPage({ searchParams }) {
             <section className="relative px-6 pb-10 text-center pt-28 md:pt-36 md:pb-14">
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white text-[#EA638C] text-[8px] font-black uppercase tracking-[0.4em] mb-6 shadow-sm border border-[#FBB6E6]/40">
                     <Sparkles size={10} fill="currentColor" className="animate-pulse" /> 
-                    {searchQuery ? `Search: "${searchQuery}"` : categorySlug ? categorySlug.replace(/-/g, ' ') : 'Curated Collection'}
+                    {categorySlug ? categorySlug.replace(/-/g, ' ') : 'Curated Collection'}
                 </div>
 
                 <div className="max-w-2xl mx-auto">
@@ -36,11 +36,11 @@ export default async function ProductsServerPage({ searchParams }) {
                 </div>
             </section>
 
+            {/* CLS FIX: min-h prevents footer from jumping up while loading */}
             <div className="mx-auto md:px-8 max-w-7xl min-h-[70vh]">
                 <Suspense key={suspenseKey} fallback={<ProductSkeleton />}>
                     <ProductDataWrapper 
                         categorySlug={categorySlug} 
-                        searchQuery={searchQuery}
                         page={currentPage} 
                         limit={limit} 
                     />
@@ -50,7 +50,7 @@ export default async function ProductsServerPage({ searchParams }) {
     );
 }
 
-async function ProductDataWrapper({ categorySlug, searchQuery, page, limit }) {
+async function ProductDataWrapper({ categorySlug, page, limit }) {
     await mongodb();
 
     const allCategories = await Category.find({}).lean();
@@ -61,38 +61,29 @@ async function ProductDataWrapper({ categorySlug, searchQuery, page, limit }) {
         if (foundCategory) filterId = foundCategory._id.toString();
     }
 
-    const { products: rawProducts, success, totalCount } = await getProducts(
-        false, 
-        filterId, 
-        page, 
-        limit, 
-        searchQuery
-    );
+    const { products: rawProducts, success, totalCount } = await getProducts(false, filterId, page, limit);
     
-    // 🟢 Display clean in-page notification when search yields zero products
     if (!success || !rawProducts || rawProducts.length === 0) {
         return (
-            <div className="py-16 px-6 text-center bg-white border border-dashed border-[#EA638C]/30 rounded-[3rem] my-4 max-w-lg mx-auto shadow-sm">
-                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#FBB6E6]/20 flex items-center justify-center text-[#EA638C]">
-                    <Sparkles size={20} />
-                </div>
-                <h3 className="text-base font-black text-[#3E442B] uppercase tracking-wider mb-2">
-                    No Match Found
-                </h3>
-                <p className="text-xs text-gray-500 leading-relaxed mb-6">
-                    We couldn't find any products matching <span className="font-bold text-[#EA638C]">"{searchQuery}"</span>. Try searching with a different term.
+            <div className="py-24 text-center bg-white border border-dashed border-[#FBB6E6]/40 rounded-[3rem]">
+                <Sparkles size={24} className="mx-auto mb-4 text-[#EA638C]/20" />
+                <p className="text-[9px] font-black tracking-[0.3em] text-gray-400 uppercase leading-relaxed">
+                    No treasures found. <br/> New arrivals imminent.
                 </p>
-                <Link
-                    href={categorySlug ? `/products?category=${categorySlug}` : '/products'}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#3E442B] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#EA638C] transition-colors"
-                >
-                    <RefreshCw size={12} /> Clear Search & Reset
-                </Link>
             </div>
         );
     }
 
     const products = JSON.parse(JSON.stringify(rawProducts)).map(p => {
+        // 🟢 DIRECT INLINE DEFINITION: Solves Turbopack scope issues
+        const ensureHttps = (url) => {
+            if (!url || typeof url !== 'string') return '';
+            if (url.startsWith('http://')) {
+                return url.replace('http://', 'https://');
+            }
+            return url;
+        };
+
         const matchedCat = allCategories.find(c => String(c._id) === String(p.category));
         const matchedSub = matchedCat?.subCategories?.find(s => String(s._id) === String(p.subCategory));
         
@@ -133,38 +124,32 @@ async function ProductDataWrapper({ categorySlug, searchQuery, page, limit }) {
         return pages;
     };
 
-    const buildPaginationUrl = (targetPage) => {
-        const queryParams = new URLSearchParams();
-        if (categorySlug) queryParams.set('category', categorySlug);
-        if (searchQuery) queryParams.set('search', searchQuery);
-        queryParams.set('page', targetPage.toString());
-        return `?${queryParams.toString()}`;
-    };
-
     return (
         <>
-            <ProductCatalog key={`catalog-${categorySlug}-${searchQuery}-${page}`} initialProducts={products} />
+            <ProductCatalog key={`catalog-page-${page}`} initialProducts={products} />
             
             {totalPages > 1 && (
                 <div className="flex flex-col items-center justify-center gap-8 mt-24 mb-10">
                     <div className="flex items-center gap-2 p-2 bg-gray-50/50 backdrop-blur-xl rounded-[2.5rem] border border-gray-100 shadow-sm">
                         
+                        {/* Previous Button */}
                         <Link 
-                            href={buildPaginationUrl(Math.max(1, page - 1))}
+                            href={`?${categorySlug ? `category=${categorySlug}&` : ''}page=${Math.max(1, page - 1)}`}
                             scroll={false}
                             className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${page === 1 ? 'opacity-20 pointer-events-none' : 'bg-white text-[#3E442B] shadow-sm hover:text-[#EA638C] active:scale-95'}`}
                         >
                             <ChevronLeft size={18} />
                         </Link>
 
+                        {/* Numbered Navigation */}
                         <div className="flex items-center gap-1 px-2">
                             {getPageNumbers().map((p, i) => (
                                 p === "..." ? (
-                                    <span key={`dots-${i}`} className="px-2 text-gray-300 font-bold">...</span>
+                                    <span key={`dots-${i}`} className="px-2 font-bold text-gray-300">...</span>
                                 ) : (
                                     <Link
                                         key={p}
-                                        href={buildPaginationUrl(p)}
+                                        href={`?${categorySlug ? `category=${categorySlug}&` : ''}page=${p}`}
                                         scroll={false}
                                         className={`min-w-[44px] h-11 flex flex-col items-center justify-center rounded-full text-[11px] font-black transition-all duration-300 active:scale-90 ${
                                             page === p 
@@ -179,8 +164,9 @@ async function ProductDataWrapper({ categorySlug, searchQuery, page, limit }) {
                             ))}
                         </div>
 
+                        {/* Next Button */}
                         <Link 
-                            href={buildPaginationUrl(Math.min(totalPages, page + 1))}
+                            href={`?${categorySlug ? `category=${categorySlug}&` : ''}page=${Math.min(totalPages, page + 1)}`}
                             scroll={false}
                             className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${page === totalPages ? 'opacity-20 pointer-events-none' : 'bg-[#3E442B] text-white shadow-md hover:bg-[#EA638C] active:scale-95'}`}
                         >
