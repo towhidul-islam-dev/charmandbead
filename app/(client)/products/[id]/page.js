@@ -3,6 +3,8 @@ import ProductCard from "@/components/ProductCard";
 import ProductDetailsContent from "./productDetailsContent";
 import ProductReviews from "@/components/ProductReviews";
 import RecentlyViewed from "@/components/RecentlyViewed";
+import SmartBackButton from "@/components/SmartBackButton";
+
 // 🟢 DYNAMIC SEO
 export async function generateMetadata({ params }) {
   const { id } = await params;
@@ -52,6 +54,9 @@ export default async function ProductDetails({ params }) {
     /* 🎨 UI Update: Using your lightPink (#FBB6E6) for the background */
     <div className="bg-[#F3F4F6]/50 min-h-screen pb-20">
       <div className="px-4 py-10 mx-auto max-w-7xl lg:py-16">
+        {/* Smart Back Button */}
+        <SmartBackButton categorySlug={product.category} />
+
         {/* Main Content */}
         <ProductDetailsContent product={product} />
         {/* <RecentlyViewed /> */}
