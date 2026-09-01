@@ -9,7 +9,7 @@ import EmailCopy from "@/components/admin/EmailCopy";
 import Surprise from "@/models/Surprise";
 import RewardHistory from "@/models/RewardHistory";
 import dbConnect from "@/lib/mongodb";
-import { ShieldCheck, Users, Zap, SearchX, ChevronLeft, ChevronRight } from "lucide-react"; 
+import { ShieldCheck, Users, Zap, SearchX, ChevronLeft, ChevronRight, Calendar, UserCheck } from "lucide-react"; 
 import Link from "next/link";
 import Image from "next/image";
 
@@ -69,6 +69,10 @@ export default async function AdminUsersPage({ searchParams }) {
     };
   });
 
+  // Calculate totals for User Count section
+  const totalMemberCount = users.length;
+  const totalVipCount = users.filter(u => u.isVIP || u.totalSpent >= VIP_THRESHOLD).length;
+
   const filteredUsers = users.filter((user) => {
     const matchesTier = activeFilter === "all" || (activeFilter === "vip" && (user.isVIP || user.totalSpent >= VIP_THRESHOLD)) || (activeFilter === "regular" && !(user.isVIP || user.totalSpent >= VIP_THRESHOLD));
     const matchesSearch = (user.name?.toLowerCase() || "").includes(query) || (user.email?.toLowerCase() || "").includes(query) || (user.phone || "").includes(query);
@@ -99,6 +103,15 @@ export default async function AdminUsersPage({ searchParams }) {
       return `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'diabqgzyo'}/image/upload/${user.image}`;
     }
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=EA638C&color=fff&bold=true`;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   };
 
   return (
@@ -133,6 +146,39 @@ export default async function AdminUsersPage({ searchParams }) {
         </div>
       </div>
 
+      {/* --- USER COUNT SUMMARY CARDS --- */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+        <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-[#3E442B]/10 text-[#3E442B] flex items-center justify-center">
+            <Users size={20} />
+          </div>
+          <div>
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total Members</p>
+            <h3 className="text-xl font-black text-[#3E442B]">{totalMemberCount}</h3>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-yellow-400/20 text-yellow-600 flex items-center justify-center">
+            <Zap size={20} />
+          </div>
+          <div>
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">VIP Members</p>
+            <h3 className="text-xl font-black text-[#3E442B]">{totalVipCount}</h3>
+          </div>
+        </div>
+
+        <div className="col-span-2 md:col-span-1 bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-[#EA638C]/10 text-[#EA638C] flex items-center justify-center">
+            <UserCheck size={20} />
+          </div>
+          <div>
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Filtered Result</p>
+            <h3 className="text-xl font-black text-[#3E442B]">{totalUsers}</h3>
+          </div>
+        </div>
+      </div>
+
       {totalUsers === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center bg-white rounded-[3rem] border border-gray-100 shadow-sm">
           <SearchX className="w-16 h-16 mb-4 text-gray-100" />
@@ -148,9 +194,8 @@ export default async function AdminUsersPage({ searchParams }) {
               const displayImg = getProfileImage(user);
               return (
                 <div key={user._id} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-xl shadow-gray-200/40 relative overflow-visible" style={{ zIndex: paginatedUsers.length - index }}>
-                  {/* ... mobile card content remains identical ... */}
                   <div className="flex items-start justify-between mb-6">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 relative group/mobile-profile">
                       <div className={`relative w-12 h-12 rounded-2xl overflow-hidden border-2 flex items-center justify-center bg-[#EA638C] ${isVIP ? 'border-yellow-400 shadow-md' : 'border-white shadow-sm'}`}>
                          <Image src={displayImg} alt={user.name} fill className="object-cover" unoptimized />
                       </div>
@@ -158,33 +203,39 @@ export default async function AdminUsersPage({ searchParams }) {
                         <h4 className="text-xs font-black text-[#3E442B] uppercase italic truncate max-w-[130px] leading-tight">{user.name}</h4>
                         <EmailCopy email={user.email} />
                       </div>
+
+                      {/* Created At Hover Tooltip for Mobile */}
+                      <div className="absolute left-0 bottom-full mb-2 hidden group-hover/mobile-profile:flex items-center gap-1.5 bg-[#3E442B] text-white text-[9px] font-bold px-3 py-1.5 rounded-xl shadow-xl border border-white/20 whitespace-nowrap z-50 animate-in fade-in">
+                        <Calendar size={11} className="text-[#FBB6E6]" />
+                        <span>Joined: {formatDate(user.createdAt)}</span>
+                      </div>
                     </div>
                     <div className="text-right">
-                       <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Spendings</p>
-                       <span className="text-sm font-black text-[#3E442B]">৳{user.totalSpent?.toLocaleString() || 0}</span>
+                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Spendings</p>
+                        <span className="text-sm font-black text-[#3E442B]">৳{user.totalSpent?.toLocaleString() || 0}</span>
                     </div>
                   </div>
                   <div className="space-y-5 p-5 bg-gray-50/80 rounded-[2.2rem] border border-gray-100/50 overflow-visible">
                     <div className="flex flex-col gap-2.5">
-                       <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Surprise Reward</span>
-                       <div className="w-full pr-4 overflow-visible">
-                         {!isSuperAdmin ? (
-                           <div className="relative scale-95 origin-left overflow-visible">
-                             <UserGiftActions userId={user._id.toString()} userName={user.name} availableGifts={availableGifts} />
-                           </div>
-                         ) : (
-                           <div className="flex items-center gap-2 text-purple-600 bg-purple-100 px-4 py-2 rounded-xl w-fit">
-                             <ShieldCheck size={12} />
-                             <span className="text-[10px] font-black uppercase tracking-tight">Protected Admin</span>
-                           </div>
-                         )}
-                       </div>
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Surprise Reward</span>
+                        <div className="w-full pr-4 overflow-visible">
+                          {!isSuperAdmin ? (
+                            <div className="relative scale-95 origin-left overflow-visible">
+                              <UserGiftActions userId={user._id.toString()} userName={user.name} availableGifts={availableGifts} />
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-purple-600 bg-purple-100 px-4 py-2 rounded-xl w-fit">
+                              <ShieldCheck size={12} />
+                              <span className="text-[10px] font-black uppercase tracking-tight">Protected Admin</span>
+                            </div>
+                          )}
+                        </div>
                     </div>
                     <div className="flex items-center justify-between gap-4 border-t border-gray-200/60 pt-4">
-                       <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Access Level</span>
-                       <div className="scale-90 origin-right">
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Access Level</span>
+                        <div className="scale-90 origin-right">
                           <RoleSelect userId={user._id.toString()} currentRole={user.role || "user"} />
-                       </div>
+                        </div>
                     </div>
                   </div>
                   <div className="flex items-center justify-end gap-3 mt-6 pr-2">
@@ -216,13 +267,19 @@ export default async function AdminUsersPage({ searchParams }) {
                   return (
                     <tr key={user._id} className="transition-all duration-300 group hover:bg-[#EA638C]/5 relative overflow-visible" style={{ zIndex: paginatedUsers.length - index, position: 'relative' }}>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 relative group/profile">
                           <div className={`relative flex-shrink-0 w-10 h-10 rounded-xl overflow-hidden border bg-white flex items-center justify-center ${isVIP ? 'border-yellow-400 shadow-sm' : 'border-gray-100'}`}>
                             <Image src={displayImg} alt={user.name} fill className="object-cover" unoptimized />
                           </div>
                           <div className="min-w-0">
                             <p className="text-[12px] italic font-black text-[#3E442B] uppercase leading-tight truncate max-w-[150px]">{user.name}</p>
                             <EmailCopy email={user.email} />
+                          </div>
+
+                          {/* Created At Hover Tooltip for Desktop */}
+                          <div className="absolute left-0 bottom-full mb-1 hidden group-hover/profile:flex items-center gap-2 bg-[#3E442B] text-white text-[9px] font-bold px-3 py-1.5 rounded-xl shadow-xl border border-white/20 whitespace-nowrap z-50 animate-in fade-in">
+                            <Calendar size={12} className="text-[#FBB6E6]" />
+                            <span>Joined: {formatDate(user.createdAt)}</span>
                           </div>
                         </div>
                       </td>
@@ -245,7 +302,7 @@ export default async function AdminUsersPage({ searchParams }) {
                       </td>
                       <td className="px-4 py-4">
                         <span className="text-[10px] font-black text-[#3E442B] bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
-                            ৳{user.totalSpent?.toLocaleString() || 0}
+                           ৳{user.totalSpent?.toLocaleString() || 0}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
