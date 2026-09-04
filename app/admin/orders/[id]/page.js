@@ -59,7 +59,7 @@ const PathaoLiveIntelligence = ({ trackingId }) => {
         <button 
           onClick={fetchPathaoStatus} 
           disabled={loading}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400"
+          className="p-2 text-gray-400 transition-colors rounded-full hover:bg-gray-100"
         >
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
         </button>
@@ -72,11 +72,11 @@ const PathaoLiveIntelligence = ({ trackingId }) => {
         </div>
       ) : data ? (
         <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+          <div className="p-4 border border-gray-100 bg-gray-50 rounded-2xl">
             <p className="text-[8px] font-black text-gray-400 uppercase mb-1 tracking-widest">Current Status</p>
             <p className="text-[11px] font-black text-[#EA638C] uppercase">{data.order_status || "Unknown"}</p>
           </div>
-          <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+          <div className="p-4 border border-gray-100 bg-gray-50 rounded-2xl">
             <p className="text-[8px] font-black text-gray-400 uppercase mb-1 tracking-widest">Last Update</p>
             <p className="text-[10px] font-bold text-[#3E442B]">{data.updated_at || "Waiting for scan..."}</p>
           </div>
@@ -223,7 +223,7 @@ const finalY = doc.lastAutoTable.finalY + 10;
       <div className="mx-auto max-w-7xl">
         
         {/* --- HEADER --- */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+        <div className="flex flex-col justify-between gap-6 mb-12 md:flex-row md:items-end">
           <div>
             <Link href="/admin/orders" className="inline-flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-[#EA638C] transition-all mb-4">
               <ArrowLeft size={14} /> Back to Ledger
@@ -269,7 +269,7 @@ const finalY = doc.lastAutoTable.finalY + 10;
 
         {/* --- TRACKER --- */}
         <div className="bg-[#3E442B] p-10 rounded-[3rem] shadow-2xl mb-12 relative overflow-hidden">
-          <div className="relative z-10 flex flex-col md:flex-row justify-between gap-8">
+          <div className="relative z-10 flex flex-col justify-between gap-8 md:flex-row">
             {statusSteps.map((step, index) => {
               const isCompleted = index <= currentStepIndex;
               const isCurrent = index === currentStepIndex;
@@ -295,8 +295,8 @@ const finalY = doc.lastAutoTable.finalY + 10;
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+          <div className="space-y-8 lg:col-span-2">
             
             {/* LIVE PATHAO INTELLIGENCE */}
             <PathaoLiveIntelligence trackingId={order.trackingNumber} />
@@ -337,7 +337,7 @@ const finalY = doc.lastAutoTable.finalY + 10;
                       <img 
                         src={getItemImage(item)} 
                         className="w-24 h-24 object-cover rounded-[2rem] border-2 border-gray-100 shadow-sm transition-transform group-hover:scale-105" 
-                        onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.png"; }}
+                        onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
                         alt="Product Item"
                       />
                       <div className="absolute -top-2 -right-2 bg-[#EA638C] text-white text-[10px] font-black w-8 h-8 rounded-full flex items-center justify-center border-4 border-white shadow-sm">
@@ -359,7 +359,7 @@ const finalY = doc.lastAutoTable.finalY + 10;
               </div>
 
               {/* DETAILED FINANCIAL BREAKDOWN */}
-              <div className="px-10 py-6 bg-gray-50/80 border-t border-gray-100 space-y-2">
+              <div className="px-10 py-6 space-y-2 border-t border-gray-100 bg-gray-50/80">
                 <div className="flex justify-between text-[10px] font-bold uppercase text-gray-400">
                   <span>Subtotal</span>
                   <span>৳{subtotal.toLocaleString()}</span>
@@ -391,7 +391,7 @@ const finalY = doc.lastAutoTable.finalY + 10;
                     </span>
                   )}
                 </div>
-                <span className="text-2xl font-black italic">৳{grandTotal.toLocaleString()}</span>
+                <span className="text-2xl italic font-black">৳{grandTotal.toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -407,17 +407,17 @@ const finalY = doc.lastAutoTable.finalY + 10;
                     <User size={20} />
                   </div>
                   <div>
-                    <h3 className="text-xs font-black uppercase text-gray-400 tracking-wider">Customer</h3>
+                    <h3 className="text-xs font-black tracking-wider text-gray-400 uppercase">Customer</h3>
                     <p className="text-base font-black text-[#3E442B] uppercase tracking-tight">{customerName}</p>
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                   <div className="p-4 bg-gray-50 rounded-2xl flex items-center gap-3">
+                   <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl">
                       <Mail size={14} className="text-[#EA638C]"/>
                       <span className="text-[10px] font-black text-[#3E442B] truncate">{order.shippingAddress?.email || order.user?.email || 'Guest User'}</span>
                    </div>
-                   <div className="p-4 bg-gray-50 rounded-2xl flex items-center gap-3">
+                   <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl">
                       <Phone size={14} className="text-[#EA638C]"/>
                       <span className="text-[10px] font-black text-[#3E442B]">{order.shippingAddress?.phone || order.phone || 'N/A'}</span>
                    </div>
@@ -428,7 +428,7 @@ const finalY = doc.lastAutoTable.finalY + 10;
             {/* PAYMENT VERIFICATION & GATEWAY */}
             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center">
+                <div className="flex items-center justify-center w-12 h-12 text-green-600 rounded-2xl bg-green-50">
                   <CreditCard size={20} />
                 </div>
                 <div>
@@ -437,7 +437,7 @@ const finalY = doc.lastAutoTable.finalY + 10;
                 </div>
               </div>
 
-              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-2">
+              <div className="p-4 space-y-2 border border-gray-100 bg-gray-50 rounded-2xl">
                 <div className="flex items-center justify-between">
                   <span className="text-[8px] font-black text-gray-400 uppercase">Gateway Status</span>
                   <span className="text-[8px] font-black text-green-600 uppercase flex items-center gap-1">
