@@ -9,8 +9,9 @@ import { uploadImage, deleteImage } from "@/lib/cloudinary";
 
 // 💡 MUST MATCH YOUR auth.js LIST
 const SUPER_ADMIN_EMAILS = [
-  "towhidulislam12@gmail.com", 
-  "dev@admin.com"
+  "towhidulislam12995@gmail.com", 
+  "jubydaakter994@gmail.com",
+  "charmandbeads.official@gmail.com",
 ];
 
 // --- EXISTING FUNCTIONS ---
@@ -31,38 +32,64 @@ export async function getUserAddress() {
 export async function updateAddress(formData) {
   try {
     const session = await auth();
-    if (!session?.user) return { success: false, error: "Not authenticated" };
+    if (!session?.user?.email) return { success: false, error: "Not authenticated" };
     await dbConnect();
 
     const name = formData.get("name");
+    const email = formData.get("email");
     const phone = formData.get("phone");
     const city = formData.get("city");
     const street = formData.get("street");
     const zipCode = formData.get("zipCode");
+    const deliveryCharge = Number(formData.get("deliveryCharge")) || 0;
 
-    await User.findOneAndUpdate(
+    // Optional validation for basic email layout
+    if (email && !/\S+@\S+\.\S+/.test(email)) {
+      return { success: false, error: "Please provide a valid email address." };
+    }
+
+    // Build address object including email & calculated delivery charge
+    const updatedAddress = {
+      fullName: name,
+      email: email,
+      phone: phone,
+      city: city,
+      street: street,
+      zipCode: zipCode,
+      deliveryCharge: deliveryCharge,
+      isDefault: true,
+      label: "Home",
+    };
+
+    const updatePayload = {
+      addresses: [updatedAddress],
+    };
+
+    // Update user's name and primary email if provided
+    if (name) updatePayload.name = name;
+    if (email) updatePayload.email = email;
+
+    const result = await User.findOneAndUpdate(
       { email: session.user.email },
-      {
-        $set: {
-          name: name,
-          addresses: [{
-            fullName: name, phone, city, street, zipCode,
-            isDefault: true, label: "Home",
-          }],
-        },
-      },
-      { upsert: true, new: true }
+      { $set: updatePayload },
+      { upsert: true, new: true, runValidators: true }
     );
 
+    if (!result) {
+      return { success: false, error: "Failed to update profile details." };
+    }
+
     revalidatePath("/dashboard/address");
+    revalidatePath("/checkout");
     revalidatePath("/admin/users");
+    
     return { success: true };
   } catch (err) {
+    console.error("UPDATE ADDRESS ERROR:", err);
     return { success: false, error: err.message };
   }
 }
 
-// ... (deleteAddress, updateAvatar remain same as your snippet)
 export async function deleteAddress() {
   try {
     const session = await auth();
@@ -103,6 +130,7 @@ export async function syncVIPStatus(userId) {
     return { success: false };
   }
 }
+
 /**
  * Updated updateUserRole with automatic VIP sync check
  */
@@ -224,7 +252,7 @@ export async function deleteAccount() {
   }
 }
 
-//it's delete the user account.
+// it's delete the user account.
 export async function deleteUser(userId) {
   try {
     const session = await auth();

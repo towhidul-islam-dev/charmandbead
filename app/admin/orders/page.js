@@ -7,7 +7,8 @@ import {
   Search, Eye, CheckSquare, Square, 
   ChevronLeft, ChevronRight, Trash2, 
   CreditCard, Banknote, Info, Trash,
-  Wallet, Receipt, Truck, Loader2, PhoneCall, Hash
+  Wallet, Receipt, Truck, Loader2, PhoneCall, Hash,
+  QrCode, X, Image as ImageIcon, ZoomIn
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrderDetailsModal from "@/components/admin/OrderDetailsModal";
@@ -33,25 +34,25 @@ const PathaoStatus = ({ trackingId }) => {
         if (result.success) setStatus(result.data.order_status);
       } catch (err) { 
         console.error("Pathao status fetch error:", err); 
-      } finally { 
-        setLoading(false); 
+      } finally {
+        setLoading(false);
       }
     };
     fetchStatus();
   }, [trackingId]);
 
-  if (!trackingId) return null;
   return (
-    <span className="text-[9px] font-black text-[#EA638C] uppercase inline-flex items-center gap-1 bg-[#EA638C]/10 px-1.5 py-0.5 rounded-md">
+    <span className="font-black text-[#EA638C] uppercase inline-flex items-center gap-1 bg-[#EA638C]/10 px-1.5 py-0.5 rounded-md">
       {loading ? <Loader2 size={8} className="animate-spin" /> : <Truck size={8} />}
       {status || "Syncing..."}
     </span>
   );
 };
 
-// 🟢 Status styling dictionary
+// 🟢 Status styling dictionary (Updated with Payment Received)
 const statusColors = {
   Verifying: "bg-purple-50 text-purple-600 border-purple-100",
+  "Payment Received": "bg-emerald-50 text-emerald-600 border-emerald-100",
   Pending: "bg-amber-50 text-amber-600 border-amber-100",
   Processing: "bg-[#FBB6E6]/30 text-[#EA638C] border-[#FBB6E6]",
   Shipped: "bg-blue-50 text-blue-600 border-blue-100",
@@ -66,6 +67,8 @@ export default function AdminOrdersPage() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [viewingOrder, setViewingOrder] = useState(null);
+  const [paymentInfoModal, setPaymentInfoModal] = useState(null);
+  const [fullscreenImage, setFullscreenImage] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
@@ -88,7 +91,6 @@ export default function AdminOrdersPage() {
         setTotalPages(res.totalPages);
         setTotalOrders(res.totalOrders);
 
-        // Keep viewing modal data in sync if open
         setViewingOrder(prev => prev ? res.orders.find(o => o._id === prev._id) || prev : null);
       }
     } catch (error) { 
@@ -144,7 +146,7 @@ export default function AdminOrdersPage() {
     <div className="min-h-screen bg-[#FAFAFA] pt-8 pb-32 px-4 md:px-12">
       <div className="mx-auto max-w-7xl">
         {/* HEADER SECTION */}
-        <div className="flex flex-col gap-4 mb-6 md:mb-10 md:flex-row md:items-end md:justify-between px-2">
+        <div className="flex flex-col gap-4 px-2 mb-6 md:mb-10 md:flex-row md:items-end md:justify-between">
           <div className="flex flex-col">
             <div className="flex items-center gap-3">
                <Receipt className="text-[#EA638C] w-7 h-7 md:w-9 md:h-9" />
@@ -153,7 +155,7 @@ export default function AdminOrdersPage() {
                </h1>
             </div>
             <p className="text-[10px] font-black text-[#3E442B]/30 uppercase tracking-[0.3em] mt-2 md:mt-3 ml-10 md:ml-12">
-                {totalOrders} Records found
+                 {totalOrders} Records found
             </p>
           </div>
 
@@ -197,18 +199,15 @@ export default function AdminOrdersPage() {
               orders.map((order) => {
                 const isPaid = (order.dueAmount ?? 0) <= 0;
                 
-                // 🟢 Robust extraction of sender phone & txn ID
                 const qrSender = order.paymentDetails?.sourcePhone || order.paymentDetails?.source;
                 const qrTxnId = order.paymentDetails?.transactionId || order.tran_id || order.transactionId;
+                const qrScreenshot = order.paymentDetails?.screenshot;
 
                 return (
                   <div key={order._id} className="border-b border-gray-100/60 transition-all hover:bg-[#FBB6E6]/5">
                     
-                    {/* =========================================================
-                        📱 MOBILE COMPACT CARD VIEW (< md)
-                       ========================================================= */}
+                    {/* MOBILE COMPACT CARD VIEW */}
                     <div className="p-4 space-y-3 md:hidden">
-                      {/* Top Row: Checkbox, ID, Date, Pathao Status, Status Dropdown */}
                       <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
                         <div className="flex items-center gap-2.5">
                           <button onClick={() => setSelectedOrders(prev => prev.includes(order._id) ? prev.filter(id => id !== order._id) : [...prev, order._id])}>
@@ -236,7 +235,6 @@ export default function AdminOrdersPage() {
                         </div>
                       </div>
 
-                      {/* Middle Row: Customer Info & Price / Settlement */}
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-xl bg-[#3E442B] flex items-center justify-center text-white font-black text-[10px] shrink-0">
@@ -256,32 +254,26 @@ export default function AdminOrdersPage() {
                           <p className="text-sm font-black text-[#3E442B]">
                             ৳{order.totalAmount?.toLocaleString()}
                           </p>
-                          <span className={`inline-flex items-center gap-1 text-[8px] font-black uppercase px-2 py-0.5 rounded-md border mt-0.5 ${isPaid ? 'bg-green-50 text-green-600 border-green-100' : 'bg-pink-50 text-[#EA638C] border-[#FBB6E6]'}`}>
-                            {isPaid ? <CreditCard size={8}/> : <Banknote size={8}/>}
-                            {isPaid ? 'Settled' : `Due: ৳${order.dueAmount?.toLocaleString()}`}
-                          </span>
+                          <div className="flex items-center justify-end gap-1 mt-0.5">
+                            <span className={`inline-flex items-center gap-1 text-[8px] font-black uppercase px-2 py-0.5 rounded-md border ${isPaid ? 'bg-green-50 text-green-600 border-green-100' : 'bg-pink-50 text-[#EA638C] border-[#FBB6E6]'}`}>
+                              {isPaid ? <CreditCard size={8}/> : <Banknote size={8}/>}
+                              {isPaid ? 'Settled' : `Due: ৳${order.dueAmount?.toLocaleString()}`}
+                            </span>
+                            {(qrSender || qrTxnId || qrScreenshot) && (
+                              <button
+                                onClick={() => setPaymentInfoModal({ sender: qrSender, txnId: qrTxnId, screenshot: qrScreenshot, orderId: order._id })}
+                                className="p-1 bg-[#FBB6E6]/30 text-[#EA638C] hover:bg-[#EA638C] hover:text-white rounded-md transition-all cursor-pointer"
+                                title="View Payment Details & Proof"
+                              >
+                                <QrCode size={10} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Payment/Trx Badge (Mobile) */}
-                      {(qrSender || qrTxnId) && (
-                        <div className="bg-gray-50 p-2 rounded-xl text-[9px] font-mono flex items-center justify-between border border-gray-100 text-gray-600">
-                          {qrSender && (
-                            <span className="font-bold text-[#3E442B] flex items-center gap-1">
-                              <PhoneCall size={9} className="text-[#EA638C]" /> {qrSender}
-                            </span>
-                          )}
-                          {qrTxnId && (
-                            <span className="font-black text-[#EA638C] flex items-center gap-1 truncate max-w-[140px]">
-                              <Hash size={9} className="text-[#3E442B]" /> {qrTxnId}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Bottom Row: Item Thumbnails & Actions */}
                       <div className="flex items-center justify-between pt-1">
-                        <div className="flex -space-x-2 overflow-hidden py-1">
+                        <div className="flex py-1 -space-x-2 overflow-hidden">
                           {order.items?.slice(0, 4).map((item, i) => (
                             <div key={i} className="relative w-8 h-8 overflow-hidden bg-white border-2 border-white rounded-lg shadow-xs shrink-0">
                               <Image src={getProductImage(item)} fill alt="item" className="object-cover" unoptimized />
@@ -304,7 +296,7 @@ export default function AdminOrdersPage() {
                           </button>
                           <button 
                             onClick={() => handleDelete(order._id)} 
-                            className="p-2 bg-red-50 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all"
+                            className="p-2 text-red-400 transition-all bg-red-50 rounded-xl hover:bg-red-500 hover:text-white"
                             title="Delete Order"
                           >
                             <Trash2 size={16}/>
@@ -313,10 +305,7 @@ export default function AdminOrdersPage() {
                       </div>
                     </div>
 
-
-                    {/* =========================================================
-                        💻 DESKTOP GRID VIEW (>= md)
-                       ========================================================= */}
+                    {/* DESKTOP GRID VIEW */}
                     <div className={`hidden md:grid ${gridLayout} px-10 py-8 items-center`}>
                       <button onClick={() => setSelectedOrders(prev => prev.includes(order._id) ? prev.filter(id => id !== order._id) : [...prev, order._id])}>
                         {selectedOrders.includes(order._id) ? <CheckSquare size={20} className="text-[#EA638C]" /> : <Square size={20} className="text-gray-200" />}
@@ -355,25 +344,22 @@ export default function AdminOrdersPage() {
                           {order.mobileBankingFee > 0 && <Info size={12} className="text-[#EA638C]" />}
                         </div>
 
-                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[8px] font-black uppercase mt-1.5 border ${isPaid ? 'bg-green-50 text-green-600 border-green-100' : 'bg-pink-50 text-[#EA638C] border-[#FBB6E6]'}`}>
-                          {isPaid ? <CreditCard size={10}/> : <Banknote size={10}/>}
-                          {isPaid ? 'Settled' : `Due: ৳${order.dueAmount?.toLocaleString()}`}
-                        </div>
-
-                        {(qrSender || qrTxnId) && (
-                          <div className="mt-2 p-2 bg-[#FBB6E6]/10 border border-[#FBB6E6]/40 rounded-xl space-y-0.5">
-                            {qrSender && (
-                              <p className="text-[9px] font-bold text-[#3E442B] flex items-center gap-1">
-                                <PhoneCall size={9} className="text-[#EA638C]" /> {qrSender}
-                              </p>
-                            )}
-                            {qrTxnId && (
-                              <p className="text-[9px] font-mono font-black text-[#EA638C] flex items-center gap-1">
-                                <Hash size={9} className="text-[#3E442B]" /> {qrTxnId}
-                              </p>
-                            )}
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[8px] font-black uppercase border ${isPaid ? 'bg-green-50 text-green-600 border-green-100' : 'bg-pink-50 text-[#EA638C] border-[#FBB6E6]'}`}>
+                            {isPaid ? <CreditCard size={10}/> : <Banknote size={10}/>}
+                            {isPaid ? 'Settled' : `Due: ৳${order.dueAmount?.toLocaleString()}`}
                           </div>
-                        )}
+
+                          {(qrSender || qrTxnId || qrScreenshot) && (
+                            <button
+                              onClick={() => setPaymentInfoModal({ sender: qrSender, txnId: qrTxnId, screenshot: qrScreenshot, orderId: order._id })}
+                              className="p-1.5 bg-[#FBB6E6]/20 text-[#EA638C] hover:bg-[#EA638C] hover:text-white rounded-xl transition-all shadow-xs cursor-pointer flex items-center justify-center"
+                              title="View Payment Proof & Details"
+                            >
+                              <QrCode size={14} />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <div className="w-32 pr-4">
@@ -395,7 +381,7 @@ export default function AdminOrdersPage() {
                         </button>
                         <button 
                           onClick={() => handleDelete(order._id)} 
-                          className="p-3 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                          className="p-3 text-red-400 transition-all shadow-sm bg-red-50 rounded-2xl hover:bg-red-500 hover:text-white"
                         >
                           <Trash2 size={18}/>
                         </button>
@@ -428,7 +414,7 @@ export default function AdminOrdersPage() {
               <div className="flex items-center gap-1 px-1">
                 {getPageNumbers().map((p, i) => (
                   p === "..." ? (
-                    <span key={`dots-${i}`} className="px-2 text-gray-300 font-bold text-xs">...</span>
+                    <span key={`dots-${i}`} className="px-2 text-xs font-bold text-gray-300">...</span>
                   ) : (
                     <button
                       key={p}
@@ -478,6 +464,102 @@ export default function AdminOrdersPage() {
             order={viewingOrder} 
             onClose={() => setViewingOrder(null)} 
           />
+        )}
+
+        {/* PAYMENT PROOF & DETAILS POP-UP MODAL */}
+        {paymentInfoModal && (
+          <div 
+            onClick={() => setPaymentInfoModal(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
+          >
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto rounded-[2.5rem] p-6 text-center shadow-2xl border-4 border-[#FBB6E6] relative space-y-4"
+            >
+              <button
+                onClick={() => setPaymentInfoModal(null)}
+                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-[#EA638C] hover:bg-[#FBB6E6]/20 rounded-full transition-all cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="pt-1 space-y-1">
+                <h3 className="text-lg font-serif font-bold text-[#3E442B] italic uppercase flex items-center justify-center gap-2">
+                  <QrCode className="text-[#EA638C]" size={22} />
+                  <span>Payment Verification</span>
+                </h3>
+                <p className="text-[10px] font-black text-gray-400 uppercase font-mono">
+                  Order #{paymentInfoModal.orderId?.slice(-6).toUpperCase()}
+                </p>
+              </div>
+
+              {/* Sender & Txn Details Card */}
+              <div className="bg-[#FAFAFA] rounded-2xl p-4 border border-gray-100 text-left space-y-2 font-mono">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-gray-400 uppercase text-[9px] flex items-center gap-1">
+                    <PhoneCall size={12} className="text-[#EA638C]" /> Sender Account
+                  </span>
+                  <span className="font-bold text-[#3E442B]">{paymentInfoModal.sender || "N/A"}</span>
+                </div>
+                <div className="flex items-center justify-between pt-1 text-xs border-t border-gray-100">
+                  <span className="font-bold text-gray-400 uppercase text-[9px] flex items-center gap-1">
+                    <Hash size={12} className="text-[#3E442B]" /> Transaction ID
+                  </span>
+                  <span className="font-black text-[#EA638C]">{paymentInfoModal.txnId || "N/A"}</span>
+                </div>
+              </div>
+
+              {/* Payment Screenshot Preview */}
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-[#3E442B] uppercase tracking-wider text-left flex items-center gap-1">
+                  <ImageIcon size={13} className="text-[#EA638C]" /> Payment Screenshot
+                </p>
+                {paymentInfoModal.screenshot ? (
+                  <div 
+                    onClick={() => setFullscreenImage(paymentInfoModal.screenshot)}
+                    className="relative flex items-center justify-center p-2 overflow-hidden border-2 border-gray-100 rounded-2xl bg-gray-50 group cursor-zoom-in transition-all hover:border-[#EA638C]"
+                  >
+                    <img 
+                      src={paymentInfoModal.screenshot} 
+                      alt="Payment Screenshot Proof" 
+                      className="object-contain w-auto shadow-xs max-h-80 rounded-xl transition-transform duration-300 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                      <span className="bg-[#3E442B] text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg">
+                        <ZoomIn size={12} /> View Full Image
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8 text-xs font-bold text-center text-gray-400 border-2 border-gray-200 border-dashed rounded-2xl">
+                    No screenshot attached
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* FULLSCREEN IMAGE PREVIEW MODAL */}
+        {fullscreenImage && (
+          <div 
+            onClick={() => setFullscreenImage(null)}
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fadeIn"
+          >
+            <button
+              onClick={() => setFullscreenImage(null)}
+              className="absolute top-6 right-6 p-3 text-white bg-white/10 hover:bg-[#EA638C] rounded-full transition-all cursor-pointer z-10"
+              title="Close Preview"
+            >
+              <X size={24} />
+            </button>
+            <img 
+              src={fullscreenImage} 
+              alt="Full Payment Screenshot" 
+              className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
         )}
       </div>
     </div>
