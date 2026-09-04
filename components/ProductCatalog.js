@@ -280,9 +280,15 @@ export default function ProductCatalog({ initialProducts = [], allProducts = [] 
                             placeholder="Search materials..."
                             value={searchQuery}
                             onChange={(e) => {
-                                setSearchQuery(e.target.value);
+                                const newVal = e.target.value;
+                                setSearchQuery(newVal);
                                 setIsDropdownOpen(true);
                                 setSelectedIndex(-1);
+
+                                // Remove search parameter from URL when input is wiped clear
+                                if (!newVal.trim()) {
+                                    commitSearchToUrl('');
+                                }
                             }}
                             onFocus={() => setIsDropdownOpen(true)}
                             onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
