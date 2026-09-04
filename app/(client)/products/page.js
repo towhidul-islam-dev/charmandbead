@@ -11,11 +11,12 @@ export const dynamic = 'force-dynamic';
 export default async function ProductsServerPage({ searchParams }) {
     const params = await searchParams;
     const categorySlug = params.category || '';
+    const searchQuery = params.search || params.q || ''; // 👈 Read search query parameter
     const currentPage = Number(params.page) || 1;
     const limit = 16; 
 
-    // KEY STABILITY: Forces a clean swap when the page/category changes
-    const suspenseKey = `${categorySlug}-${currentPage}`;
+    // KEY STABILITY: Re-trigger Suspense when search, category, or page changes
+    const suspenseKey = `${categorySlug}-${searchQuery}-${currentPage}`;
 
     return (
         <main className="relative min-h-screen pb-24 overflow-hidden bg-white">
@@ -26,7 +27,7 @@ export default async function ProductsServerPage({ searchParams }) {
             <section className="relative px-6 pb-10 text-center pt-28 md:pt-36 md:pb-14">
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white text-[#EA638C] text-[8px] font-black uppercase tracking-[0.4em] mb-6 shadow-sm border border-[#FBB6E6]/40">
                     <Sparkles size={10} fill="currentColor" className="animate-pulse" /> 
-                    {categorySlug ? categorySlug.replace(/-/g, ' ') : 'Curated Collection'}
+                    {searchQuery ? `Results for: "${searchQuery}"` : categorySlug ? categorySlug.replace(/-/g, ' ') : 'Curated Collection'}
                 </div>
 
                 <div className="max-w-2xl mx-auto">
@@ -40,7 +41,8 @@ export default async function ProductsServerPage({ searchParams }) {
             <div className="mx-auto md:px-8 max-w-7xl min-h-[70vh]">
                 <Suspense key={suspenseKey} fallback={<ProductSkeleton />}>
                     <ProductDataWrapper 
-                        categorySlug={categorySlug} 
+                        categorySlug={categorySlug}
+                        searchQuery={searchQuery} // 👈 Pass searchQuery down
                         page={currentPage} 
                         limit={limit} 
                     />
@@ -50,7 +52,7 @@ export default async function ProductsServerPage({ searchParams }) {
     );
 }
 
-async function ProductDataWrapper({ categorySlug, page, limit }) {
+async function ProductDataWrapper({ categorySlug, searchQuery, page, limit }) {
     await mongodb();
 
     const allCategories = await Category.find({}).lean();
@@ -61,7 +63,9 @@ async function ProductDataWrapper({ categorySlug, page, limit }) {
         if (foundCategory) filterId = foundCategory._id.toString();
     }
 
-    const { products: rawProducts, success, totalCount } = await getProducts(false, filterId, page, limit);
+    // 👈 Note: Ensure getProducts function supports accepting searchQuery!
+    // (If getProducts accepts searchQuery as a param, update the arguments below accordingly)
+    const { products: rawProducts, success, totalCount } = await getProducts(false, filterId, page, limit, searchQuery);
     
     if (!success || !rawProducts || rawProducts.length === 0) {
         return (
@@ -75,7 +79,6 @@ async function ProductDataWrapper({ categorySlug, page, limit }) {
     }
 
     const products = JSON.parse(JSON.stringify(rawProducts)).map(p => {
-        // 🟢 DIRECT INLINE DEFINITION: Solves Turbopack scope issues
         const ensureHttps = (url) => {
             if (!url || typeof url !== 'string') return '';
             if (url.startsWith('http://')) {
@@ -124,6 +127,15 @@ async function ProductDataWrapper({ categorySlug, page, limit }) {
         return pages;
     };
 
+    // Helper function to build query strings preserving existing search/category values
+    const buildUrl = (targetPage) => {
+        const query = new URLSearchParams();
+        if (categorySlug) query.set('category', categorySlug);
+        if (searchQuery) query.set('search', searchQuery);
+        query.set('page', targetPage.toString());
+        return `?${query.toString()}`;
+    };
+
     return (
         <>
             <ProductCatalog key={`catalog-page-${page}`} initialProducts={products} />
@@ -134,7 +146,7 @@ async function ProductDataWrapper({ categorySlug, page, limit }) {
                         
                         {/* Previous Button */}
                         <Link 
-                            href={`?${categorySlug ? `category=${categorySlug}&` : ''}page=${Math.max(1, page - 1)}`}
+                            href={buildUrl(Math.max(1, page - 1))}
                             scroll={false}
                             className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${page === 1 ? 'opacity-20 pointer-events-none' : 'bg-white text-[#3E442B] shadow-sm hover:text-[#EA638C] active:scale-95'}`}
                         >
@@ -149,7 +161,7 @@ async function ProductDataWrapper({ categorySlug, page, limit }) {
                                 ) : (
                                     <Link
                                         key={p}
-                                        href={`?${categorySlug ? `category=${categorySlug}&` : ''}page=${p}`}
+                                        href={buildUrl(p)}
                                         scroll={false}
                                         className={`min-w-[44px] h-11 flex flex-col items-center justify-center rounded-full text-[11px] font-black transition-all duration-300 active:scale-90 ${
                                             page === p 
@@ -166,7 +178,7 @@ async function ProductDataWrapper({ categorySlug, page, limit }) {
 
                         {/* Next Button */}
                         <Link 
-                            href={`?${categorySlug ? `category=${categorySlug}&` : ''}page=${Math.min(totalPages, page + 1)}`}
+                            href={buildUrl(Math.min(totalPages, page + 1))}
                             scroll={false}
                             className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${page === totalPages ? 'opacity-20 pointer-events-none' : 'bg-[#3E442B] text-white shadow-md hover:bg-[#EA638C] active:scale-95'}`}
                         >
