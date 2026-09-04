@@ -181,8 +181,7 @@ export default function OrderDetailsPage() {
       headStyles: { fillColor: [234, 99, 140], textColor: [255, 255, 255], fontStyle: 'bold' },
       styles: { fontSize: 9 },
     });
-
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
+const finalY = doc.lastAutoTable.finalY + 10;
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
     doc.text(`Total Payable: Tk ${(order.totalAmount || 0).toLocaleString()}`, 140, finalY);
