@@ -7,7 +7,7 @@ import {
   ArrowLeft, Printer, Truck, Package, User, MapPin, 
   CheckCircle, Clock, 
   Phone, Mail, ChevronDown, FileText, ShoppingBag, Loader2, RefreshCw,
-  CreditCard, Hash, ShieldCheck, Wallet, Info, PhoneCall
+  CreditCard, Hash, ShieldCheck, Wallet, PhoneCall, ExternalLink
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -156,7 +156,8 @@ export default function OrderDetailsPage() {
     doc.setFontSize(10);
     doc.setTextColor(150);
     doc.text(`Order ID: #${order._id.slice(-8)}`, 14, 30);
-    doc.text(`Generation Date: ${new Date().toLocaleString()}`, 14, 35);
+    doc.text(`Customer: ${customerName}`, 14, 35);
+    doc.text(`Generation Date: ${new Date().toLocaleString()}`, 14, 40);
 
     const tableColumn = ["#", "Product Item", "Variant / Size", "Qty", "Unit Price", "Subtotal"];
     const tableRows = [];
@@ -175,13 +176,13 @@ export default function OrderDetailsPage() {
     autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
-      startY: 45,
+      startY: 48,
       theme: 'grid',
       headStyles: { fillColor: [234, 99, 140], textColor: [255, 255, 255], fontStyle: 'bold' },
       styles: { fontSize: 9 },
     });
 
-    const finalY = doc.lastAutoTable.finalY + 10;
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
     doc.text(`Total Payable: Tk ${(order.totalAmount || 0).toLocaleString()}`, 140, finalY);
@@ -197,6 +198,14 @@ export default function OrderDetailsPage() {
   );
 
   const currentStepIndex = statusSteps.indexOf(order.status);
+
+  // Name Resolution (Check Shipping Address, User object, or top-level field)
+  const customerName = 
+    order.shippingAddress?.name || 
+    order.shippingAddress?.fullName || 
+    order.user?.name || 
+    order.customerName || 
+    "Guest Customer";
 
   // Financial calculations
   const paymentDetails = order.paymentDetails || {};
@@ -329,7 +338,7 @@ export default function OrderDetailsPage() {
                       <img 
                         src={getItemImage(item)} 
                         className="w-24 h-24 object-cover rounded-[2rem] border-2 border-gray-100 shadow-sm transition-transform group-hover:scale-105" 
-                        onError={(e) => e.target.src = "/placeholder.png"}
+                        onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.png"; }}
                         alt="Product Item"
                       />
                       <div className="absolute -top-2 -right-2 bg-[#EA638C] text-white text-[10px] font-black w-8 h-8 rounded-full flex items-center justify-center border-4 border-white shadow-sm">
@@ -391,21 +400,27 @@ export default function OrderDetailsPage() {
           {/* SIDEBAR */}
           <div className="space-y-6">
             
-            {/* CUSTOMER INFO */}
+            {/* CUSTOMER INFO WITH PROMINENT NAME */}
             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm relative overflow-hidden">
               <div className="relative z-10">
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="w-12 h-12 rounded-2xl bg-[#FBB6E6] text-[#EA638C] flex items-center justify-center"><User size={20} /></div>
-                  <h3 className="text-xs font-black uppercase text-[#3E442B]">Customer Details</h3>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 rounded-2xl bg-[#FBB6E6] text-[#EA638C] flex items-center justify-center">
+                    <User size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black uppercase text-gray-400 tracking-wider">Customer</h3>
+                    <p className="text-base font-black text-[#3E442B] uppercase tracking-tight">{customerName}</p>
+                  </div>
                 </div>
-                <div className="space-y-4">
+
+                <div className="space-y-3">
                    <div className="p-4 bg-gray-50 rounded-2xl flex items-center gap-3">
                       <Mail size={14} className="text-[#EA638C]"/>
-                      <span className="text-[10px] font-black text-[#3E442B] truncate">{order.shippingAddress?.email || 'Guest User'}</span>
+                      <span className="text-[10px] font-black text-[#3E442B] truncate">{order.shippingAddress?.email || order.user?.email || 'Guest User'}</span>
                    </div>
                    <div className="p-4 bg-gray-50 rounded-2xl flex items-center gap-3">
                       <Phone size={14} className="text-[#EA638C]"/>
-                      <span className="text-[10px] font-black text-[#3E442B]">{order.shippingAddress?.phone || 'N/A'}</span>
+                      <span className="text-[10px] font-black text-[#3E442B]">{order.shippingAddress?.phone || order.phone || 'N/A'}</span>
                    </div>
                 </div>
               </div>
@@ -454,7 +469,7 @@ export default function OrderDetailsPage() {
                 <h3 className="text-xs font-black uppercase text-[#3E442B]">Destination</h3>
               </div>
               <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 text-[11px] font-black uppercase leading-loose text-gray-500 italic">
-                <span className="text-[#3E442B] not-italic text-sm block mb-1">{order.shippingAddress?.name}</span>
+                <span className="text-[#3E442B] not-italic text-sm block mb-1">{customerName}</span>
                 {order.shippingAddress?.street || order.shippingAddress?.address}<br />
                 {order.shippingAddress?.city}{order.shippingAddress?.postalCode ? `, ${order.shippingAddress.postalCode}` : ""}
               </div>
@@ -464,5 +479,5 @@ export default function OrderDetailsPage() {
         </div>
       </div>
     </div>
-  );
+  );A
 }

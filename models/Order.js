@@ -34,7 +34,15 @@ const OrderSchema = new mongoose.Schema(
     shippingAddress: Object,
     status: {
       type: String,
-      enum: ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"],
+      enum: [
+        "Verifying",
+        "Payment Received",
+        "Pending",
+        "Processing",
+        "Shipped",
+        "Delivered",
+        "Cancelled",
+      ],
       default: "Pending",
       index: true,
     },
@@ -63,6 +71,7 @@ const OrderSchema = new mongoose.Schema(
       cardIssuer: String, // City Bank, EBL, etc.
       bankApp: String, // City Touch, EBL Skybank, etc.
       gatewayResponse: Object, // Raw JSON
+      screenshot: String,
     },
 
     trackingNumber: { type: String, default: "" },

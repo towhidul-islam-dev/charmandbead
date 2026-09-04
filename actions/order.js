@@ -7,7 +7,7 @@ import User from "@/models/User";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 import InventoryLog from "@/models/InventoryLog";
-import { createInAppNotification } from "@/actions/inAppNotifications";
+import { sendOrderEmail } from "@/lib/email";
 
 // Helper to safely escape regex search strings to avoid MongoDB query crashes
 function escapeRegex(text) {
@@ -25,14 +25,15 @@ export async function createOrder(orderData) {
       phone, 
       totalAmount, 
       userId, 
-      shippingAddress, 
+      shippingAddress = {}, 
       paidAmount, 
       dueAmount, 
       paymentMethod, 
       deliveryCharge,
       mobileBankingFee: frontendFee,
       tran_id, 
-      paymentDetails 
+      paymentDetails,
+      email: rawEmail
     } = orderData;
 
     if (!userId) throw new Error("User ID is required.");
@@ -64,6 +65,9 @@ export async function createOrder(orderData) {
     const extractedTxnId = paymentDetails?.transactionId || tran_id || orderData.transactionId || "";
     const extractedSenderPhone = paymentDetails?.sourcePhone || orderData.senderPhone || "";
 
+    // Resolve email before document creation
+    const resolvedEmail = rawEmail || shippingAddress?.email || "";
+
     // 3. Create the Order Document
     const [newOrder] = await Order.create([{
         user: userId, 
@@ -80,7 +84,10 @@ export async function createOrder(orderData) {
           price: Number(i.price) || 0,
           sku: i.sku || "N/A"
         })),
-        shippingAddress,
+        shippingAddress: {
+          ...shippingAddress,
+          email: shippingAddress?.email || resolvedEmail
+        },
         totalAmount: normalizedTotal,
         paidAmount,
         dueAmount,
@@ -92,7 +99,8 @@ export async function createOrder(orderData) {
           sourcePhone: extractedSenderPhone,
           transactionId: extractedTxnId,
           deliveryPhone: phone,
-          gatewayStatus: paymentDetails?.gatewayStatus || "MANUAL_VERIFICATION"
+          gatewayStatus: paymentDetails?.gatewayStatus || "MANUAL_VERIFICATION",
+          screenshot: paymentDetails?.screenshot || orderData.screenshot || null
         },
         status: "Pending",
         isStockReduced: false
@@ -121,7 +129,7 @@ export async function createOrder(orderData) {
       return acc;
     }, {});
 
-    const orderRef = `Order #${newOrder._id.toString().slice(-6).toUpperCase()}`;
+    const orderRef = `#${newOrder._id.toString().slice(-6).toUpperCase()}`;
 
     // 5. Process Stock Deductions
     for (const [productId, data] of Object.entries(productDeductions)) {
@@ -192,22 +200,54 @@ export async function createOrder(orderData) {
         productName: data.name,
         change: -data.totalQty,
         reason: "Order Placement",
-        performedBy: orderRef
+        performedBy: `Order ${orderRef}`
       }], { session });
     }
 
     newOrder.isStockReduced = true;
     await newOrder.save({ session });
-    
-    await createInAppNotification({
-      title: "Order Placed! 🎉",
-      message: `Your wholesale-ready order ${orderRef} has been received.`,
-      type: "order",
-      recipientId: userId,
-      link: "/dashboard/orders"
-    });
 
+    // --- FETCH REGISTERED USER DETAILS FOR EMAIL ---
+    const user = await User.findById(userId).select("email name").session(session);
+    
+    // Multi-level fallback to capture user email correctly
+    const customerEmail = user?.email || shippingAddress?.email || rawEmail || orderData?.email || "";
+    const customerName = user?.name || shippingAddress?.fullName || shippingAddress?.name || "Valued Customer";
+
+    // Commit MongoDB transaction BEFORE dispatching external emails
     await session.commitTransaction();
+
+    // --- DISPATCH DUAL EMAILS VIA UNIFIED MAILER ---
+    if (customerEmail) {
+      const formattedAddress = [
+        shippingAddress?.address,
+        shippingAddress?.city,
+        shippingAddress?.postalCode
+      ].filter(Boolean).join(", ") || "N/A";
+
+      const emailPayload = {
+        orderId: newOrder._id.toString().slice(-6).toUpperCase(),
+        customerName: customerName,
+        customerEmail: customerEmail,
+        customerPhone: phone || shippingAddress?.phone || "N/A",
+        shippingAddress: formattedAddress,
+        totalAmount: normalizedTotal,
+        paymentMethod: paymentMethod,
+        items: newOrder.items.map(i => ({
+          name: i.productName,
+          quantity: i.quantity,
+          price: i.price
+        })),
+        isStatusUpdate: false
+      };
+
+      sendOrderEmail({
+        to: customerEmail,
+        orderData: emailPayload
+      }).catch((err) => console.error("Order notification email failed:", err));
+    } else {
+      console.warn(`⚠️ User email missing for User ID: ${userId}. Confirmation email could not be sent.`);
+    }
 
     revalidatePath("/admin/products");
     revalidatePath("/admin/orders");
@@ -236,7 +276,7 @@ export async function updateOrderStatus(orderId, newStatus, trackingNumber = "")
 
   try {
     await dbConnect();
-    const order = await Order.findById(orderId).session(session);
+    const order = await Order.findById(orderId).populate("user", "email name").session(session);
     if (!order) {
       await session.abortTransaction();
       return { success: false, message: "Order not found" };
@@ -245,36 +285,31 @@ export async function updateOrderStatus(orderId, newStatus, trackingNumber = "")
     const oldStatus = order.status;
     const orderTag = order._id.toString().slice(-6).toUpperCase();
 
-    // 1. Notification Logic
     let notifyTitle = "Order Updated";
-    let notifyMessage = `The status of your Order #INV-${orderTag} is now ${newStatus}.`;
+    let notifyMessage = `The status of your Order #${orderTag} is now ${newStatus}.`;
 
-    if (newStatus === "Shipped") {
+    if (newStatus === "Payment Received") {
+      notifyTitle = "Payment Confirmed! 💳";
+      notifyMessage = `We have verified and received the payment for Order #${orderTag}.`;
+      order.paymentStatus = "Paid";
+      order.dueAmount = 0;
+      order.paidAmount = order.totalAmount;
+    } else if (newStatus === "Shipped") {
       notifyTitle = "Order Shipped! 🚚";
-      notifyMessage = `Good news! Your order #INV-${orderTag} is on the way. ${trackingNumber ? `Track: ${trackingNumber}` : ''}`;
+      notifyMessage = `Good news! Your order #${orderTag} is on the way. ${trackingNumber ? `Track: ${trackingNumber}` : ''}`;
       if (trackingNumber) order.trackingNumber = trackingNumber;
     } else if (newStatus === "Delivered") {
       notifyTitle = "Package Delivered! ✨";
-      notifyMessage = `Your order #INV-${orderTag} has been successfully delivered.`;
+      notifyMessage = `Your order #${orderTag} has been successfully delivered.`;
       order.paymentStatus = "Paid";
       order.dueAmount = 0;
       order.paidAmount = order.totalAmount;
     } else if (newStatus === "Cancelled") {
       notifyTitle = "Order Cancelled ❌";
-      notifyMessage = `Your order #INV-${orderTag} has been cancelled.`;
+      notifyMessage = `Your order #${orderTag} has been cancelled.`;
     }
 
-    if (order.user) {
-      await createInAppNotification({
-        title: notifyTitle,
-        message: notifyMessage,
-        type: "order",
-        recipientId: order.user,
-        link: "/dashboard/orders"
-      });
-    }
-
-    // 2. Stock Restoration on Cancellation
+    // Stock Restoration on Cancellation
     if (newStatus === "Cancelled" && oldStatus !== "Cancelled" && order.isStockReduced) {
       const orderRef = `Cancel #${orderTag}`;
       for (const item of order.items) {
@@ -326,15 +361,45 @@ export async function updateOrderStatus(orderId, newStatus, trackingNumber = "")
 
     order.status = newStatus;
     await order.save({ session });
+
+    if ((newStatus === "Delivered" || newStatus === "Payment Received") && order.user) {
+      await syncVIPStatus(order.user._id || order.user, session);
+    }
+
     await session.commitTransaction();
+
+    // Multi-level email resolution on status update
+    const userEmail = order.user?.email || order.shippingAddress?.email || "";
+    const userName = order.user?.name || order.shippingAddress?.fullName || order.shippingAddress?.name || "Valued Customer";
+
+    // --- STATUS UPDATE EMAIL DISPATCH (NON-BLOCKING) ---
+    if (userEmail) {
+      sendOrderEmail({
+        to: userEmail,
+        orderData: {
+          orderId: orderTag,
+          customerName: userName,
+          newStatus: newStatus,
+          statusTitle: notifyTitle,
+          statusMessage: notifyMessage,
+          trackingNumber: trackingNumber,
+          totalAmount: order.totalAmount,
+          paymentMethod: order.paymentMethod,
+          items: order.items.map(i => ({
+            name: i.productName,
+            quantity: i.quantity,
+            price: i.price
+          })),
+          isStatusUpdate: true
+        }
+      }).catch((err) => console.error("Status update email failed:", err));
+    }
 
     revalidatePath("/admin/products");
     revalidatePath("/admin/orders");
     revalidatePath("/dashboard/orders");
     revalidatePath("/products");
     revalidatePath("/");
-    
-    if (newStatus === "Delivered" && order.user) await syncVIPStatus(order.user);
 
     return { success: true, order: JSON.parse(JSON.stringify(order)) };
   } catch (error) {
@@ -410,9 +475,10 @@ export async function deleteOrder(orderId) {
 
     const userId = order.user;
     await Order.findByIdAndDelete(orderId).session(session);
-    await session.commitTransaction();
 
-    if (userId) await syncVIPStatus(userId);
+    if (userId) await syncVIPStatus(userId, session);
+
+    await session.commitTransaction();
 
     revalidatePath("/admin/products");
     revalidatePath("/admin/orders");
@@ -431,18 +497,23 @@ export async function deleteOrder(orderId) {
   }
 }
 
-export async function syncVIPStatus(userId) {
+export async function syncVIPStatus(userId, session = null) {
   try {
     await dbConnect();
     const targetUserId = typeof userId === "string" ? new mongoose.Types.ObjectId(userId) : userId;
 
-    const stats = await Order.aggregate([
-      { $match: { user: targetUserId, status: "Delivered" } },
+    const aggregateQuery = Order.aggregate([
+      { $match: { user: targetUserId, status: { $in: ["Delivered", "Payment Received"] } } },
       { $group: { _id: null, total: { $sum: "$totalAmount" } } },
     ]);
+
+    if (session) aggregateQuery.session(session);
+
+    const stats = await aggregateQuery;
     const totalSpent = stats.length > 0 ? stats[0].total : 0;
     const isVIP = totalSpent >= 10000;
-    await User.findByIdAndUpdate(userId, { totalSpent, isVIP });
+    
+    await User.findByIdAndUpdate(userId, { totalSpent, isVIP }, session ? { session } : {});
     return { success: true, totalSpent, isVIP };
   } catch (error) { 
     return { success: false, error: error.message }; 

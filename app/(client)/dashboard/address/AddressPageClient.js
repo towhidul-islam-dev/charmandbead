@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useMemo } from "react";
-import { MapPin, Home, Phone, User, Save, Trash2, CheckCircle2, Truck, Info } from "lucide-react";
+import { MapPin, Home, Phone, User, Mail, Save, Trash2, CheckCircle2, Truck, Info } from "lucide-react";
 import toast from "react-hot-toast";
 import { updateAddress, deleteAddress } from "@/actions/userActions";
 import AddressDeleteModal from "@/components/AddressDeleteModal";
@@ -39,13 +39,9 @@ export default function AddressPageClient({ initialData }) {
     
     const input = selectedCity.toLowerCase().trim();
 
-    // 1. Check if input contains "dhaka" directly
     if (input.includes("dhaka")) return 80;
 
-    // 2. Check core zones
     const isCoreZone = DHAKA_ZONES_CORE.some(zone => input.includes(zone));
-    
-    // 3. Check aliases
     const isAlias = Object.keys(DHAKA_ALIASES).some(alias => input.includes(alias));
 
     return (isCoreZone || isAlias) ? 80 : 130;
@@ -77,7 +73,7 @@ export default function AddressPageClient({ initialData }) {
     const result = await updateAddress(formData);
 
     if (result.success) {
-      toast.success("Address and delivery rate saved!");
+      toast.success("Address and email updated successfully!");
     } else {
       toast.error(result.error || "Something went wrong");
     }
@@ -124,7 +120,14 @@ export default function AddressPageClient({ initialData }) {
               <div>
                 <p className="text-[10px] uppercase font-black text-[#EA638C] mb-1 tracking-widest">Receiver</p>
                 <p className="font-black text-[#3E442B] italic uppercase">{initialData.name}</p>
-                <p className="flex items-center gap-1 mt-1 text-xs font-bold text-gray-500"><Phone size={12} /> {initialData.address.phone}</p>
+                {initialData.email && (
+                  <p className="flex items-center gap-1 mt-1 text-xs font-bold text-gray-500">
+                    <Mail size={12} /> {initialData.email}
+                  </p>
+                )}
+                <p className="flex items-center gap-1 mt-1 text-xs font-bold text-gray-500">
+                  <Phone size={12} /> {initialData.address.phone}
+                </p>
               </div>
               <div>
                 <p className="text-[10px] uppercase font-black text-[#EA638C] mb-1 tracking-widest">Location</p>
@@ -175,15 +178,23 @@ export default function AddressPageClient({ initialData }) {
           </div>
 
           <div className="space-y-2">
+            <label className="ml-1 text-[10px] font-black text-gray-400 uppercase tracking-widest">Email Address</label>
+            <div className="relative">
+              <Mail className="absolute left-4 top-3.5 text-gray-300" size={18} />
+              <input name="email" defaultValue={initialData?.email} type="email" placeholder="example@gmail.com" className="w-full py-4 pl-12 pr-4 border-none outline-none bg-gray-50 rounded-2xl focus:ring-2 focus:ring-[#EA638C] font-bold text-[#3E442B]" required />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="space-y-2">
             <label className="ml-1 text-[10px] font-black text-gray-400 uppercase tracking-widest">Phone Number</label>
             <div className="relative">
               <Phone className="absolute left-4 top-3.5 text-gray-300" size={18} />
               <input name="phone" defaultValue={initialData?.address?.phone} type="text" placeholder="017XXXXXXXX" className="w-full py-4 pl-12 pr-4 border-none outline-none bg-gray-50 rounded-2xl focus:ring-2 focus:ring-[#EA638C] font-bold text-[#3E442B]" required />
             </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="space-y-2">
             <label className="ml-1 text-[10px] font-black text-gray-400 uppercase tracking-widest">Area / City / Thana</label>
             <div className="relative">
@@ -198,7 +209,9 @@ export default function AddressPageClient({ initialData }) {
               />
             </div>
           </div>
+        </div>
 
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="space-y-2">
             <label className="ml-1 text-[10px] font-black text-gray-400 uppercase tracking-widest">Zip Code</label>
             <div className="relative">
@@ -213,13 +226,13 @@ export default function AddressPageClient({ initialData }) {
               />
             </div>
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <label className="ml-1 text-[10px] font-black text-gray-400 uppercase tracking-widest">Street Address</label>
-          <div className="relative">
-            <Home className="absolute text-gray-300 left-4 top-4" size={18} />
-            <textarea name="street" defaultValue={initialData?.address?.street} rows="3" placeholder="House #, Road #, Area..." className="w-full py-4 pl-12 pr-4 border-none outline-none bg-gray-50 rounded-2xl focus:ring-2 focus:ring-[#EA638C] font-bold text-[#3E442B]" required />
+          <div className="space-y-2 md:col-span-1">
+            <label className="ml-1 text-[10px] font-black text-gray-400 uppercase tracking-widest">Street Address</label>
+            <div className="relative">
+              <Home className="absolute text-gray-300 left-4 top-4" size={18} />
+              <textarea name="street" defaultValue={initialData?.address?.street} rows="1" placeholder="House #, Road #, Area..." className="w-full py-4 pl-12 pr-4 border-none outline-none bg-gray-50 rounded-2xl focus:ring-2 focus:ring-[#EA638C] font-bold text-[#3E442B]" required />
+            </div>
           </div>
         </div>
 
