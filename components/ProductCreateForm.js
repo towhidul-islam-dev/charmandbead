@@ -14,9 +14,9 @@ import {
 } from "@heroicons/react/24/outline";
 
 /**
- * Aggressive Image compressor to prevent MongoDB 16MB document limits
+ * Image compressor to prevent server body payload limits (413 Payload Too Large)
  */
-const compressImageMobileSafe = (file, maxWidth = 800, quality = 0.5) => {
+const compressImageMobileSafe = (file, maxWidth = 800, quality = 0.6) => {
   return new Promise((resolve) => {
     if (!file || !(file instanceof File || file instanceof Blob) || !file.type?.startsWith("image/")) {
       return resolve(file);
@@ -117,7 +117,7 @@ export default function ProductCreateForm({ initialData }) {
     initialData?.gallery?.map(url => ({ url: url, isNew: false, file: null })) || []
   );
 
-  const [state, formAction, isPending] = useActionState(saveProduct, null);
+  const [state, formAction] = useActionState(saveProduct, null);
 
   useEffect(() => { 
     setIsMounted(true); 
@@ -129,19 +129,21 @@ export default function ProductCreateForm({ initialData }) {
       return;
     }
     const prefix = previewName.replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase() || "PRD";
-    setVariants(variants.map(v => ({
+    setVariants(prev => prev.map(v => ({
       ...v, 
       sku: v.sku || `${prefix}-${Math.floor(100 + Math.random() * 900)}`
     })));
-    toast.success("Batch SKUs generated! ⚡", { position: "top-center" });
+    toast.success("Batch SKUs generated!", { position: "top-center" });
   };
 
-  const addTier = () => setPricingTiers([...pricingTiers, { minQuantity: "", unitPrice: "" }]);
-  const removeTier = (index) => setPricingTiers(pricingTiers.filter((_, i) => i !== index));
+  const addTier = () => setPricingTiers(prev => [...prev, { minQuantity: "", unitPrice: "" }]);
+  const removeTier = (index) => setPricingTiers(prev => prev.filter((_, i) => i !== index));
   const updateTier = (index, field, value) => {
-    const newTiers = [...pricingTiers];
-    newTiers[index][field] = value;
-    setPricingTiers(newTiers);
+    setPricingTiers(prev => {
+      const copy = [...prev];
+      copy[index][field] = value;
+      return copy;
+    });
   };
 
   const getBestPrice = () => {
@@ -183,41 +185,51 @@ export default function ProductCreateForm({ initialData }) {
     setSubCategory(""); 
   };
 
-  const handleGalleryUpload = (e) => {
+  const handleGalleryUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    const newPreviews = files.map(file => ({ file, url: URL.createObjectURL(file), isNew: true }));
+    
+    toast.loading("Compressing gallery images...", { id: "compress", position: "top-center" });
+    const compressedList = await Promise.all(files.map(f => compressImageMobileSafe(f)));
+    toast.dismiss("compress");
+
+    const newPreviews = compressedList.map(file => ({ file, url: URL.createObjectURL(file), isNew: true }));
     setGalleryPreviews(prev => [...prev, ...newPreviews]);
   };
 
-  const handleGalleryReplace = (e) => {
+  const handleGalleryReplace = async (e) => {
     const file = e.target.files?.[0];
     if (file && replacingGalleryIndex !== null) {
-      const updated = [...galleryPreviews];
-      updated[replacingGalleryIndex] = {
-        file,
-        url: URL.createObjectURL(file),
-        isNew: true
-      };
-      setGalleryPreviews(updated);
+      toast.loading("Compressing image...", { id: "compress", position: "top-center" });
+      const compressed = await compressImageMobileSafe(file);
+      toast.dismiss("compress");
+
+      setGalleryPreviews(prev => {
+        const updated = [...prev];
+        updated[replacingGalleryIndex] = {
+          file: compressed,
+          url: URL.createObjectURL(compressed),
+          isNew: true
+        };
+        return updated;
+      });
       setReplacingGalleryIndex(null);
     }
-  };
-
-  const triggerGalleryReplace = (index) => {
-    setReplacingGalleryIndex(index);
-    galleryReplaceInputRef.current?.click();
   };
 
   const removeGalleryImage = (index) => {
     setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleMainImageChange = (e) => {
+  const handleMainImageChange = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      setMainFile(file);
-      setMainPreview(URL.createObjectURL(file));
+      toast.loading("Compressing main photo...", { id: "compress", position: "top-center" });
+      const compressed = await compressImageMobileSafe(file);
+      toast.dismiss("compress");
+
+      setMainFile(compressed);
+      setMainPreview(URL.createObjectURL(compressed));
     }
   };
 
@@ -226,21 +238,29 @@ export default function ProductCreateForm({ initialData }) {
     setMainPreview(null);
   };
 
-  const handleVariantImageChange = (index, file) => {
+  const handleVariantImageChange = async (index, file) => {
     if (file) {
-      const newV = [...variants];
-      newV[index].preview = URL.createObjectURL(file);
-      newV[index].file = file;
-      setVariants(newV);
+      toast.loading(`Compressing variant #${index + 1}...`, { id: "compress", position: "top-center" });
+      const compressed = await compressImageMobileSafe(file);
+      toast.dismiss("compress");
+
+      setVariants(prev => {
+        const newV = [...prev];
+        newV[index].preview = URL.createObjectURL(compressed);
+        newV[index].file = compressed;
+        return newV;
+      });
     }
   };
 
   const removeVariantImage = (index) => {
-    const newV = [...variants];
-    newV[index].preview = null;
-    newV[index].file = null;
-    newV[index].imageUrl = null;
-    setVariants(newV);
+    setVariants(prev => {
+      const newV = [...prev];
+      newV[index].preview = null;
+      newV[index].file = null;
+      newV[index].imageUrl = null;
+      return newV;
+    });
   };
 
   const clientAction = async (e) => {
@@ -257,7 +277,7 @@ export default function ProductCreateForm({ initialData }) {
     }
 
     try {
-      toast.loading("Preparing submission...", { id: "saving", position: "top-center" });
+      toast.loading("Optimizing product data & uploading...", { id: "saving", position: "top-center" });
 
       const formData = new FormData();
       formData.set("id", initialData?._id || "");
@@ -269,7 +289,7 @@ export default function ProductCreateForm({ initialData }) {
       formData.set("hasVariants", String(useVariants));
       formData.set("isNewArrival", String(isNewArrival));
 
-      // Root price and stock calculations to prevent zero-price / zero-stock issue
+      // Root price and stock calculations
       const computedPrice = useVariants && variants.length > 0 
         ? Math.min(...variants.map(v => Number(v.price) || 0))
         : Number(previewPrice) || 0;
@@ -282,32 +302,33 @@ export default function ProductCreateForm({ initialData }) {
       formData.set("stock", String(computedStock));
       formData.set("minOrderQuantity", String(!useVariants ? Number(formRef.current?.minOrderQuantity?.value) || 1 : 1));
 
-      // Prevent orphan root SKU when variants are enabled
       if (!useVariants && formRef.current?.sku?.value) {
         formData.set("sku", formRef.current.sku.value);
       } else {
         formData.set("sku", "");
       }
 
-      // Main Image handling (ensures empty string fallback isn't passed)
+      // Main Image compression
       if (mainFile) {
-        formData.set("mainImageFile", mainFile);
+        const finalMainFile = await compressImageMobileSafe(mainFile);
+        formData.set("mainImageFile", finalMainFile);
       } else if (mainPreview) {
         formData.set("existingMainImageUrl", mainPreview);
       } else {
         formData.set("existingMainImageUrl", "");
       }
 
-      // Gallery Images
-      galleryPreviews.forEach((item) => {
+      // Gallery Images compression
+      for (const item of galleryPreviews) {
         if (item.isNew && item.file) {
-          formData.append("galleryFiles", item.file);
+          const finalGalleryFile = await compressImageMobileSafe(item.file);
+          formData.append("galleryFiles", finalGalleryFile);
         } else if (item.url) {
           formData.append("existingGalleryUrls", item.url);
         }
-      });
+      }
 
-      // Variants
+      // Variants optimization
       if (useVariants) {
         const variantMetadata = variants.map((v) => ({
           sku: v.sku || "",
@@ -320,11 +341,13 @@ export default function ProductCreateForm({ initialData }) {
         }));
         formData.set("variantData", JSON.stringify(variantMetadata));
 
-        variants.forEach((v, index) => {
+        for (let i = 0; i < variants.length; i++) {
+          const v = variants[i];
           if (v.file) {
-            formData.append(`variantFile_${index}`, v.file);
+            const compressedVariantFile = await compressImageMobileSafe(v.file);
+            formData.append(`variantFile_${i}`, compressedVariantFile);
           }
-        });
+        }
       }
 
       formData.set("pricingTiers", JSON.stringify(pricingTiers));
@@ -332,7 +355,7 @@ export default function ProductCreateForm({ initialData }) {
       startTransition(() => {
         formAction(formData);
       });
-    } catch (err) {
+    } catch {
       toast.dismiss("saving");
       toast.error("Submission failed. Please try again.", { position: "top-center" });
     }
@@ -341,7 +364,7 @@ export default function ProductCreateForm({ initialData }) {
   useEffect(() => {
     if (state?.success) {
       toast.dismiss("saving");
-      toast.success(state.message || "Product Saved Successfully! ✨", { position: "top-center" });
+      toast.success(state.message || "Product Saved Successfully!", { position: "top-center" });
 
       const timer = setTimeout(() => {
         router.push("/admin/products");
@@ -530,31 +553,82 @@ export default function ProductCreateForm({ initialData }) {
 
                           <div className="flex-1">
                             <span className="text-[9px] font-black uppercase text-gray-400 ml-1">SKU</span>
-                            <input placeholder="SKU" value={v.sku} onChange={e => { const n = [...variants]; n[i].sku = e.target.value; setVariants(n); }} className={variantInputClass} />
+                            <input 
+                              placeholder="SKU" 
+                              value={v.sku} 
+                              onChange={e => {
+                                const val = e.target.value;
+                                setVariants(prev => { const n = [...prev]; n[i].sku = val; return n; });
+                              }} 
+                              className={variantInputClass} 
+                            />
                           </div>
-                          <button type="button" onClick={() => setVariants(variants.filter((_, idx) => idx !== i))} className="p-2 text-red-400 transition-all bg-white rounded-full shadow-sm hover:bg-red-50"><XMarkIcon className="w-5 h-5" /></button>
+                          <button type="button" onClick={() => setVariants(prev => prev.filter((_, idx) => idx !== i))} className="p-2 text-red-400 transition-all bg-white rounded-full shadow-sm hover:bg-red-50"><XMarkIcon className="w-5 h-5" /></button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5">
                           <div>
                             <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Size</span>
-                            <input placeholder="Size" value={v.size} onChange={e => { const n = [...variants]; n[i].size = e.target.value; setVariants(n); }} className={variantInputClass} />
+                            <input 
+                              placeholder="Size" 
+                              value={v.size} 
+                              onChange={e => {
+                                const val = e.target.value;
+                                setVariants(prev => { const n = [...prev]; n[i].size = val; return n; });
+                              }} 
+                              className={variantInputClass} 
+                            />
                           </div>
                           <div>
                             <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Color</span>
-                            <input placeholder="Color" value={v.color} onChange={e => { const n = [...variants]; n[i].color = e.target.value; setVariants(n); }} className={variantInputClass} />
+                            <input 
+                              placeholder="Color" 
+                              value={v.color} 
+                              onChange={e => {
+                                const val = e.target.value;
+                                setVariants(prev => { const n = [...prev]; n[i].color = val; return n; });
+                              }} 
+                              className={variantInputClass} 
+                            />
                           </div>
                           <div>
                             <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Price</span>
-                            <input placeholder="Price" type="number" value={v.price} onChange={e => { const n = [...variants]; n[i].price = e.target.value; setVariants(n); }} className={variantInputClass} />
+                            <input 
+                              placeholder="Price" 
+                              type="number" 
+                              value={v.price} 
+                              onChange={e => {
+                                const val = e.target.value;
+                                setVariants(prev => { const n = [...prev]; n[i].price = val; return n; });
+                              }} 
+                              className={variantInputClass} 
+                            />
                           </div>
                           <div>
                             <span className="text-[9px] font-black uppercase text-gray-400 ml-1">Stock</span>
-                            <input placeholder="Stock" type="number" value={v.stock} onChange={e => { const n = [...variants]; n[i].stock = e.target.value; setVariants(n); }} className={variantInputClass} />
+                            <input 
+                              placeholder="Stock" 
+                              type="number" 
+                              value={v.stock} 
+                              onChange={e => {
+                                const val = e.target.value;
+                                setVariants(prev => { const n = [...prev]; n[i].stock = val; return n; });
+                              }} 
+                              className={variantInputClass} 
+                            />
                           </div>
                           <div className="col-span-2 sm:col-span-1">
                             <span className="text-[9px] font-black uppercase text-[#EA638C] ml-1">MOQ</span>
-                            <input placeholder="MOQ" type="number" value={v.minOrderQuantity} onChange={e => { const n = [...variants]; n[i].minOrderQuantity = e.target.value; setVariants(n); }} className={`${variantInputClass} bg-[#FBB6E6]/20 text-[#EA638C] ring-1 ring-[#EA638C]/20`} />
+                            <input 
+                              placeholder="MOQ" 
+                              type="number" 
+                              value={v.minOrderQuantity} 
+                              onChange={e => {
+                                const val = e.target.value;
+                                setVariants(prev => { const n = [...prev]; n[i].minOrderQuantity = val; return n; });
+                              }} 
+                              className={`${variantInputClass} bg-[#FBB6E6]/20 text-[#EA638C] ring-1 ring-[#EA638C]/20`} 
+                            />
                           </div>
                         </div>
 
@@ -568,7 +642,7 @@ export default function ProductCreateForm({ initialData }) {
                       </div>
                     );
                   })}
-                  <button type="button" onClick={() => setVariants([...variants, { size: "", color: "", price: "", stock: "", sku: "", minOrderQuantity: 1, preview: null, file: null }])} className="w-full py-3.5 sm:py-4 border-2 border-dashed border-gray-200 rounded-[1.5rem] text-[10px] font-black uppercase text-[#3E442B] hover:bg-[#FBB6E6]/10 transition-all flex items-center justify-center gap-2">
+                  <button type="button" onClick={() => setVariants(prev => [...prev, { size: "", color: "", price: "", stock: "", sku: "", minOrderQuantity: 1, preview: null, file: null }])} className="w-full py-3.5 sm:py-4 border-2 border-dashed border-gray-200 rounded-[1.5rem] text-[10px] font-black uppercase text-[#3E442B] hover:bg-[#FBB6E6]/10 transition-all flex items-center justify-center gap-2">
                     <PlusIcon className="w-4 h-4 text-[#EA638C]" /> Add Variant Row
                   </button>
                 </div>
@@ -667,65 +741,33 @@ export default function ProductCreateForm({ initialData }) {
 
                 <div className="grid grid-cols-3 gap-2.5 p-2.5 rounded-2xl bg-gray-50/70 border border-gray-100 min-h-[110px]">
                   {galleryPreviews.map((p, idx) => (
-                    <div 
-                      key={idx} 
-                      className="relative overflow-hidden bg-white border border-gray-200 shadow-sm rounded-xl aspect-square group/g"
-                    >
-                      <img src={p.url} className="object-cover w-full h-full transition-transform duration-300 group-hover/g:scale-105" alt={`Gallery ${idx}`} />
-                      
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-[2px] opacity-0 group-hover/g:opacity-100 transition-opacity duration-200 p-1">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button 
-                            type="button" 
-                            onClick={() => setPreviewModalImg(p.url)} 
-                            className="p-1.5 text-gray-800 rounded-full bg-white/95 hover:bg-white shadow-md hover:scale-110 transition-all"
-                            title="View Image"
-                          >
-                            <MagnifyingGlassPlusIcon className="w-3.5 h-3.5" />
-                          </button>
-                          <button 
-                            type="button" 
-                            onClick={() => triggerGalleryReplace(idx)} 
-                            className="p-1.5 text-gray-800 rounded-full bg-white/95 hover:bg-white shadow-md hover:scale-110 transition-all"
-                            title="Replace Image"
-                          >
-                            <ArrowsRightLeftIcon className="w-3.5 h-3.5" />
-                          </button>
-                          <button 
-                            type="button" 
-                            onClick={() => removeGalleryImage(idx)} 
-                            className="p-1.5 text-red-500 rounded-full bg-white/95 hover:bg-white shadow-md hover:scale-110 transition-all"
-                            title="Remove Image"
-                          >
-                            <XMarkIcon className="w-3.5 h-3.5 stroke-[2.5]" />
-                          </button>
-                        </div>
+                    <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm">
+                      <img src={p.url} className="object-cover w-full h-full" alt={`Gallery ${idx}`} />
+                      <div className="absolute inset-0 flex items-center justify-center gap-1 transition-opacity opacity-0 bg-black/40 group-hover:opacity-100">
+                        <button type="button" onClick={() => setPreviewModalImg(p.url)} className="p-1 text-gray-800 rounded-full bg-white/80 hover:bg-white">
+                          <MagnifyingGlassPlusIcon className="w-3.5 h-3.5" />
+                        </button>
+                        <button type="button" onClick={() => { setReplacingGalleryIndex(idx); galleryReplaceInputRef.current?.click(); }} className="p-1 text-gray-800 rounded-full bg-white/80 hover:bg-white">
+                          <ArrowsRightLeftIcon className="w-3.5 h-3.5" />
+                        </button>
+                        <button type="button" onClick={() => removeGalleryImage(idx)} className="p-1 text-white rounded-full bg-red-500/80 hover:bg-red-500">
+                          <XMarkIcon className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   ))}
-                  {galleryPreviews.length === 0 && (
-                    <div className="flex flex-col items-center justify-center col-span-3 py-6 text-center text-gray-400">
-                      <PhotoIcon className="w-6 h-6 mb-1 text-gray-300" />
-                      <span className="text-[10px] font-bold">No gallery images uploaded</span>
-                    </div>
-                  )}
                 </div>
               </section>
 
-              {/* ACTION BUTTON */}
+              {/* SUBMIT BUTTON */}
               <button
                 type="submit"
-                disabled={isPending}
-                className="w-full py-4 sm:py-5 bg-[#3E442B] text-white font-black text-xs uppercase tracking-widest rounded-[2rem] hover:bg-[#EA638C] transition-all shadow-lg shadow-[#3E442B]/10 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-4 sm:py-5 bg-[#EA638C] hover:bg-[#d4537a] text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-lg shadow-[#EA638C]/30 transition-all hover:scale-[1.01] active:scale-95"
               >
-                {isPending ? (
-                  <span>Saving Changes...</span>
-                ) : (
-                  <>
-                    <SparklesIcon className="w-4 h-4 text-[#FBB6E6]" />
-                    <span>Save Product Details</span>
-                  </>
-                )}
+                <div className="flex items-center justify-center gap-2">
+                  <SparklesIcon className="w-4 h-4" />
+                  <span>Save Product</span>
+                </div>
               </button>
 
             </div>
