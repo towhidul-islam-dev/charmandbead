@@ -23,7 +23,9 @@ const FALLBACK_IMAGE = "/placeholder.png";
 
 // Helper function to filter out invalid or nullish image paths
 const cleanImageUrl = (url) => {
-  if (!url || typeof url !== "string") return null;
+  if (!url) return null;
+  if (typeof url === "object") return url.imageUrl || url.image || url.url || null;
+  if (typeof url !== "string") return null;
   const trimmed = url.trim();
   if (!trimmed || trimmed === "undefined" || trimmed.includes("null")) return null;
   return trimmed;
@@ -39,7 +41,7 @@ export default function ProductDetailsContent({ product }) {
 
   // --- 📸 MASTER IMAGE LOGIC ---
   const allImages = useMemo(() => {
-    if (!product) return [];
+    if (!product) return [FALLBACK_IMAGE];
     const images = new Set();
     
     const mainImg = cleanImageUrl(product.imageUrl) || cleanImageUrl(product.image);
@@ -63,53 +65,79 @@ export default function ProductDetailsContent({ product }) {
     return result.length > 0 ? result : [FALLBACK_IMAGE];
   }, [product]);
 
-  const [mainImage, setMainImage] = useState(
-    allImages[0] || FALLBACK_IMAGE,
-  );
+  const [mainImage, setMainImage] = useState(allImages[0] || FALLBACK_IMAGE);
   const [detailGalleryImage, setDetailGalleryImage] = useState(null);
   const [activeSku, setActiveSku] = useState(product?.sku || null);
 
+  // Sync state cleanly when product prop updates
   useEffect(() => {
-    if (allImages.length > 0) setMainImage(allImages[0]);
-    if (product?.gallery?.length > 0) {
-      const validGalleryFirst = product.gallery.map(cleanImageUrl).find(Boolean);
-      setDetailGalleryImage(validGalleryFirst || null);
+    if (product) {
+      const firstImg = allImages[0] || FALLBACK_IMAGE;
+      setMainImage(firstImg);
+      setActiveSku(product.sku || null);
+
+      if (Array.isArray(product.gallery) && product.gallery.length > 0) {
+        const validGalleryFirst = product.gallery.map(cleanImageUrl).find(Boolean);
+        setDetailGalleryImage(validGalleryFirst || null);
+      } else {
+        setDetailGalleryImage(null);
+      }
     }
-  }, [allImages, product?.gallery]);
+  }, [product?._id, allImages, product]);
 
   useEffect(() => {
-    console.log("New product");
-    console.log(product);
     setIsMounted(true);
   }, []);
 
   // --- RECENTLY VIEWED TRACKING ---
   useEffect(() => {
     if (product?._id) {
-      const history = JSON.parse(
-        localStorage.getItem("recentlyViewed") || "[]",
-      );
-      const filteredHistory = history.filter(
-        (item) => item._id !== product._id,
-      );
-      const newHistory = [product, ...filteredHistory].slice(0, 10);
-      localStorage.setItem("recentlyViewed", JSON.stringify(newHistory));
-      window.dispatchEvent(new Event("recentlyViewedUpdated"));
+      try {
+        const history = JSON.parse(
+          localStorage.getItem("recentlyViewed") || "[]"
+        );
+        const filteredHistory = history.filter(
+          (item) => item._id !== product._id
+        );
+        const newHistory = [product, ...filteredHistory].slice(0, 10);
+        localStorage.setItem("recentlyViewed", JSON.stringify(newHistory));
+        window.dispatchEvent(new Event("recentlyViewedUpdated"));
+      } catch (e) {
+        console.error("Failed to update recently viewed history:", e);
+      }
     }
   }, [product?._id, product]);
 
   // --- 🔍 ENHANCED ZOOM LOGIC ---
   const handleMouseMove = (e) => {
     if (typeof window !== "undefined" && window.innerWidth < 768) return;
-    const { left, top, width, height } =
-      e.currentTarget.getBoundingClientRect();
+    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - left) / width) * 100;
     const y = ((e.clientY - top) / height) * 100;
 
     setZoomStyle({
       display: "block",
       backgroundPosition: `${x}% ${y}%`,
-      backgroundImage: `url(${mainImage})`,
+      backgroundImage: `url("${mainImage}")`,
+      backgroundSize: "250%",
+    });
+  };
+
+  const handleGalleryMouseMove = (e) => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) return;
+    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - left) / width) * 100;
+    const y = ((e.clientY - top) / height) * 100;
+
+    const activeGalleryImg =
+      detailGalleryImage ||
+      cleanImageUrl(product?.gallery?.[0]) ||
+      FALLBACK_IMAGE;
+
+    setZoomStyle({
+      display: "block",
+      backgroundPosition: `${x}% ${y}%`,
+      backgroundImage: `url("${activeGalleryImg}")`,
       backgroundSize: "250%",
     });
   };
@@ -117,8 +145,8 @@ export default function ProductDetailsContent({ product }) {
   const handleMouseLeave = () => setZoomStyle({ display: "none" });
 
   const handleCopyLink = () => {
-    const shortlink = typeof window !== "undefined" ? window.location.href : "";
-    navigator.clipboard.writeText(shortlink);
+    if (typeof window === "undefined") return;
+    navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     toast.success("Link copied!", {
       style: {
@@ -137,15 +165,16 @@ export default function ProductDetailsContent({ product }) {
     : Number(product?.stock) || 0;
 
   const inCartQtyTotal = useMemo(() => {
+    if (!Array.isArray(cart)) return 0;
     return cart.reduce((acc, item) => {
-      return item.productId === product?._id ? acc + item.quantity : acc;
+      return item.productId === product?._id ? acc + (Number(item.quantity) || 0) : acc;
     }, 0);
   }, [cart, product?._id]);
 
   const currentStock = Math.max(0, baseStockTotal - inCartQtyTotal);
   const displayMoq = product?.hasVariants && product.variants?.length
-    ? Math.min(...product.variants.map((v) => v.minOrderQuantity || 1))
-    : product?.minOrderQuantity || 1;
+    ? Math.min(...product.variants.map((v) => Number(v.minOrderQuantity) || 1))
+    : Number(product?.minOrderQuantity) || 1;
 
   const isOutOfStock = currentStock <= 0;
   const isLowStock = !isOutOfStock && currentStock <= displayMoq * 3;
@@ -157,7 +186,10 @@ export default function ProductDetailsContent({ product }) {
         className="fixed inset-0 flex items-center justify-center bg-black/95 backdrop-blur-xl z-[999999] p-4 md:p-12 cursor-pointer"
         onClick={() => setIsModalOpen(false)}
       >
-        <button className="absolute top-6 right-6 p-4 bg-[#EA638C] text-white rounded-full shadow-2xl transition-all hover:rotate-90">
+        <button
+          className="absolute top-6 right-6 p-4 bg-[#EA638C] text-white rounded-full shadow-2xl transition-all hover:rotate-90"
+          onClick={() => setIsModalOpen(false)}
+        >
           <X size={32} />
         </button>
         <div className="relative w-full h-full max-w-5xl max-h-[80vh]">
@@ -172,7 +204,7 @@ export default function ProductDetailsContent({ product }) {
           />
         </div>
       </div>,
-      document.body,
+      document.body
     );
   };
 
@@ -195,6 +227,7 @@ export default function ProductDetailsContent({ product }) {
             alt={product.name || "Product Image"}
             fill
             priority
+            unoptimized
             className="object-cover transition-opacity duration-300"
             sizes="(max-width: 1024px) 100vw, 40vw"
             onError={() => setMainImage(FALLBACK_IMAGE)}
@@ -212,7 +245,7 @@ export default function ProductDetailsContent({ product }) {
           <div className="flex flex-wrap justify-center gap-2 px-1 md:gap-3 md:justify-start">
             {allImages.map((img, idx) => {
               const matchingVariant = product.variants?.find(
-                (v) => (cleanImageUrl(v.imageUrl) || cleanImageUrl(v.image)) === img,
+                (v) => (cleanImageUrl(v.imageUrl) || cleanImageUrl(v.image)) === img
               );
               return (
                 <button
@@ -231,12 +264,11 @@ export default function ProductDetailsContent({ product }) {
                   <Image
                     src={img}
                     fill
+                    unoptimized
                     className="object-cover"
                     alt={`thumbnail-${idx}`}
                     sizes="80px"
-                    onError={(e) => {
-                      e.currentTarget.src = FALLBACK_IMAGE;
-                    }}
+                    onError={() => setMainImage(FALLBACK_IMAGE)}
                   />
                   {matchingVariant && (
                     <div className="absolute top-0 right-0 p-1 bg-[#EA638C] rounded-bl-xl shadow-sm z-10">
@@ -261,30 +293,7 @@ export default function ProductDetailsContent({ product }) {
             </div>
             <div
               className="relative w-full mb-3 overflow-hidden border-2 border-white shadow-sm aspect-video rounded-2xl cursor-none group/gallery"
-              onMouseMove={(e) => {
-                if (typeof window !== "undefined" && window.innerWidth < 768)
-                  return;
-                const { width, height } =
-                  e.currentTarget.getBoundingClientRect();
-                const x = (e.nativeEvent.offsetX / width) * 100;
-                const y = (e.nativeEvent.offsetY / height) * 100;
-                const activeGalleryImg =
-                  detailGalleryImage ||
-                  cleanImageUrl(product.gallery[0]) ||
-                  FALLBACK_IMAGE;
-
-                setZoomStyle({
-                  display: "block",
-                  backgroundPosition: `${x}% ${y}%`,
-                  backgroundImage: `url(${activeGalleryImg})`,
-                  backgroundSize: "250%",
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
-                });
-              }}
+              onMouseMove={handleGalleryMouseMove}
               onMouseLeave={handleMouseLeave}
             >
               <Image
@@ -294,6 +303,7 @@ export default function ProductDetailsContent({ product }) {
                   FALLBACK_IMAGE
                 }
                 fill
+                unoptimized
                 className="z-10 object-cover"
                 alt="Gallery Active"
                 sizes="(max-width: 1024px) 100vw, 40vw"
@@ -323,12 +333,11 @@ export default function ProductDetailsContent({ product }) {
                     <Image
                       src={cleanedUrl}
                       fill
+                      unoptimized
                       alt={`Detail ${idx}`}
                       className="object-cover"
                       sizes="150px"
-                      onError={(e) => {
-                        e.currentTarget.src = FALLBACK_IMAGE;
-                      }}
+                      onError={() => setDetailGalleryImage(FALLBACK_IMAGE)}
                     />
                   </div>
                 );
@@ -362,7 +371,7 @@ export default function ProductDetailsContent({ product }) {
                   ? "bg-red-500 text-white"
                   : isLowStock
                   ? "bg-orange-100 text-orange-600 border border-orange-200"
-                  : "bg-gray-900 text-white"
+                  : "bg-[#3E442B] text-white"
               }`}
             >
               {!isOutOfStock && (
@@ -379,7 +388,7 @@ export default function ProductDetailsContent({ product }) {
                 : "In Stock"}
             </div>
             {displayMoq > 1 && (
-              <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-pink-50 px-5 py-2 rounded-full border border-pink-100">
+              <div className="flex items-center gap-1.5 text-[#EA638C] font-black text-[10px] uppercase tracking-widest bg-[#FBB6E6]/20 px-5 py-2 rounded-full border border-[#FBB6E6]/40">
                 <Zap size={12} className="fill-current" />
                 <span>MOQ : {displayMoq} Units</span>
               </div>
@@ -391,7 +400,7 @@ export default function ProductDetailsContent({ product }) {
               </div>
             )}
           </div>
-          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-gray-900 uppercase">
+          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-[#3E442B] uppercase">
             {product.name}
           </h1>
         </div>
@@ -414,7 +423,7 @@ export default function ProductDetailsContent({ product }) {
                   >
                     {parts.length > 1 ? (
                       <p>
-                        <span className="mr-2 text-sm font-black text-gray-900 uppercase">
+                        <span className="mr-2 text-sm font-black text-[#3E442B] uppercase">
                           {parts[0].trim()} :
                         </span>
                         {parts.slice(1).join(":").trim()}
@@ -432,7 +441,7 @@ export default function ProductDetailsContent({ product }) {
           product={product}
           isOutOfStock={isOutOfStock}
           onVariantChange={(variantData) => {
-            const cleanedVal = cleanImageUrl(variantData?.imageUrl);
+            const cleanedVal = cleanImageUrl(variantData?.imageUrl) || cleanImageUrl(variantData?.image);
             if (cleanedVal) setMainImage(cleanedVal);
             if (variantData?.sku) setActiveSku(variantData.sku);
           }}
