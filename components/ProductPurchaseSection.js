@@ -17,6 +17,20 @@ import { useCart } from "@/Context/CartContext";
 import toast from "react-hot-toast";
 import Image from "next/image";
 
+// Helper to safely extract clean image strings across different data formats
+const cleanImageUrl = (url) => {
+  if (!url) return null;
+  if (typeof url === "object") return url.imageUrl || url.image || url.url || null;
+  if (typeof url !== "string") return null;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed === "undefined" || trimmed.includes("null")) return null;
+  return trimmed;
+};
+
+// Inline SVG Data URI fallback (No dependencies on /public/placeholder.png)
+const FALLBACK_IMAGE =
+  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100%' height='100%' fill='%23FBB6E61A'/><g fill='none' stroke='%23EA638C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='25' y='25' width='50' height='50' rx='8'/><line x1='25' y1='60' x2='40' y2='45'/><line x1='35' y1='50' x2='55' y2='30'/><line x1='50' y1='35' x2='75' y2='60'/><circle cx='60' cy='40' r='4'/></g></svg>";
+
 export default function ProductPurchaseSection({ product, onVariantChange }) {
   const { addToCart, cart } = useCart();
   const { data: session } = useSession();
@@ -193,7 +207,10 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
       }
 
       const itemImage =
-        v.imageUrl || v.image || product.imageUrl || "/placeholder.png";
+        cleanImageUrl(v.imageUrl) ||
+        cleanImageUrl(v.image) ||
+        cleanImageUrl(product.imageUrl) ||
+        FALLBACK_IMAGE;
 
       addToCart(
         {
@@ -424,7 +441,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
 
             {/* Content */}
             <h3 className="text-base font-black uppercase text-[#3E442B] tracking-tight mb-1.5">
-Sign In First
+              Sign In First
             </h3>
             <p className="mb-5 text-xs font-bold leading-relaxed text-gray-500">
               Please login or Create an account first to add product in the cart.
@@ -497,6 +514,9 @@ Sign In First
                         className="object-contain select-none"
                         sizes="(max-width: 768px) 100vw, 50vw"
                         unoptimized
+                        onError={(e) => {
+                          e.currentTarget.src = FALLBACK_IMAGE;
+                        }}
                       />
                     </div>
                   </TransformComponent>
@@ -526,7 +546,7 @@ function VariantRow({
   getEffectiveUnitPrice,
 }) {
   const liveDisplayStock = Math.max(0, v.stock - inBagQty - selectionQty);
-  const imgUrl = v.image || v.imageUrl || "/placeholder.png";
+  const imgUrl = cleanImageUrl(v.image) || cleanImageUrl(v.imageUrl) || FALLBACK_IMAGE;
   const unitPrice = getEffectiveUnitPrice
     ? getEffectiveUnitPrice(v)
     : Number(v.price) || 0;
@@ -544,7 +564,11 @@ function VariantRow({
               src={imgUrl}
               alt={v.color || "Product variant"}
               fill
+              unoptimized
               className="object-cover group-hover:opacity-90"
+              onError={(e) => {
+                e.currentTarget.src = FALLBACK_IMAGE;
+              }}
             />
           </button>
           <div>
@@ -601,7 +625,7 @@ function VariantCard({
   getEffectiveUnitPrice,
 }) {
   const liveDisplayStock = Math.max(0, v.stock - inBagQty - selectionQty);
-  const imgUrl = v.image || v.imageUrl || "/placeholder.png";
+  const imgUrl = cleanImageUrl(v.image) || cleanImageUrl(v.imageUrl) || FALLBACK_IMAGE;
   const unitPrice = getEffectiveUnitPrice
     ? getEffectiveUnitPrice(v)
     : Number(v.price) || 0;
@@ -618,7 +642,11 @@ function VariantCard({
             src={imgUrl}
             alt={v.color || "Product variant"}
             fill
+            unoptimized
             className="object-cover group-hover:opacity-90"
+            onError={(e) => {
+              e.currentTarget.src = FALLBACK_IMAGE;
+            }}
           />
         </button>
         <div className="flex-1 min-w-0">
