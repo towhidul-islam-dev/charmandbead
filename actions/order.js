@@ -396,27 +396,38 @@ export async function updateOrderStatus(orderId, newStatus, trackingNumber = "")
     const userName = order.user?.name || order.shippingAddress?.fullName || order.shippingAddress?.name || "Valued Customer";
 
     // --- STATUS UPDATE EMAIL DISPATCH (NON-BLOCKING) ---
-    if (userEmail) {
-      sendOrderEmail({
-        to: userEmail,
-        orderData: {
-          orderId: orderTag,
-          customerName: userName,
-          newStatus: newStatus,
-          statusTitle: notifyTitle,
-          statusMessage: notifyMessage,
-          trackingNumber: trackingNumber,
-          totalAmount: order.totalAmount,
-          paymentMethod: order.paymentMethod,
-          items: order.items.map(i => ({
-            name: i.productName,
-            quantity: i.quantity,
-            price: i.price
-          })),
-          isStatusUpdate: true
-        }
-      }).catch((err) => console.error("Status update email failed:", err));
+// ✅ CORRECT
+if (userEmail && userEmail.includes("@")) {
+  try {
+    const mailResult = await sendOrderEmail({
+      to: userEmail,
+      orderData: {
+        orderId: orderTag,
+        customerName: userName,
+        newStatus: newStatus,
+        statusTitle: notifyTitle,
+        statusMessage: notifyMessage,
+        trackingNumber: trackingNumber,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        items: order.items.map((i) => ({
+          name: i.productName,
+          quantity: i.quantity,
+          price: i.price,
+        })),
+        isStatusUpdate: true,
+      },
+    });
+
+    if (!mailResult?.success) {
+      console.error("❌ Status update email failed:", mailResult?.error);
+    } else {
+      console.log(`✅ Status update email sent to: ${userEmail}`);
     }
+  } catch (err) {
+    console.error("❌ Status update email exception:", err.message);
+  }
+}
 
     revalidatePath("/admin/products");
     revalidatePath("/admin/orders");
