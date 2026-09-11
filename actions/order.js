@@ -9,7 +9,6 @@ import { revalidatePath } from "next/cache";
 import InventoryLog from "@/models/InventoryLog";
 import { sendOrderEmail } from "@/lib/email";
 
-// Helper to safely escape regex search strings to avoid MongoDB query crashes
 function escapeRegex(text) {
   return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
 }
@@ -65,8 +64,24 @@ export async function createOrder(orderData) {
     const extractedTxnId = paymentDetails?.transactionId || tran_id || orderData.transactionId || "";
     const extractedSenderPhone = paymentDetails?.sourcePhone || orderData.senderPhone || "";
 
-    // Resolve email before document creation
-    const resolvedEmail = rawEmail || shippingAddress?.email || "";
+    // Resolve user details for fallback email/name resolution
+    const user = await User.findById(userId).select("email name").session(session);
+
+    // Comprehensive email resolution
+    const resolvedEmail = (
+      rawEmail || 
+      orderData?.email || 
+      shippingAddress?.email || 
+      user?.email || 
+      ""
+    ).trim();
+
+    const customerName = (
+      shippingAddress?.fullName || 
+      shippingAddress?.name || 
+      user?.name || 
+      "Valued Customer"
+    ).trim();
 
     // 3. Create the Order Document
     const [newOrder] = await Order.create([{
@@ -75,7 +90,7 @@ export async function createOrder(orderData) {
           product: i.productId || i.product || i._id,
           productName: i.productName || i.name || "Unnamed Product",
           variant: {
-            name: i.variant?.name || i.color || "Default",
+            name: i.variant?.name || i.variant?.title || i.color || "Default",
             size: i.size || i.variant?.size || "N/A",
             variantId: i.variantId || i.variant?._id || i.variant?.variantId || null,
             image: i.variant?.image || i.image || null
@@ -131,7 +146,7 @@ export async function createOrder(orderData) {
 
     const orderRef = `#${newOrder._id.toString().slice(-6).toUpperCase()}`;
 
-    // 5. Process Stock Deductions
+    // 5. Process Stock Deductions & Validations
     for (const [productId, data] of Object.entries(productDeductions)) {
       const product = await Product.findById(productId).session(session);
       if (!product) throw new Error(`Product "${data.name}" not found.`);
@@ -177,7 +192,7 @@ export async function createOrder(orderData) {
           );
         }
 
-        // Re-fetch product to update overall stock
+        // Re-fetch product to recalculate total overall stock
         const updatedProd = await Product.findById(productId).session(session);
         updatedProd.stock = updatedProd.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
         await updatedProd.save({ session });
@@ -195,6 +210,7 @@ export async function createOrder(orderData) {
         );
       }
 
+      // Create Audit Trail Log
       await InventoryLog.create([{
         productId,
         productName: data.name,
@@ -207,18 +223,11 @@ export async function createOrder(orderData) {
     newOrder.isStockReduced = true;
     await newOrder.save({ session });
 
-    // --- FETCH REGISTERED USER DETAILS FOR EMAIL ---
-    const user = await User.findById(userId).select("email name").session(session);
-    
-    // Multi-level fallback to capture user email correctly
-    const customerEmail = user?.email || shippingAddress?.email || rawEmail || orderData?.email || "";
-    const customerName = user?.name || shippingAddress?.fullName || shippingAddress?.name || "Valued Customer";
-
-    // Commit MongoDB transaction BEFORE dispatching external emails
+    // Commit transaction BEFORE executing external network calls (Email API)
     await session.commitTransaction();
 
-    // --- DISPATCH DUAL EMAILS VIA UNIFIED MAILER ---
-    if (customerEmail) {
+    // --- DISPATCH EMAIL (Non-blocking transaction-wise) ---
+    if (resolvedEmail && resolvedEmail.includes("@")) {
       const formattedAddress = [
         shippingAddress?.address,
         shippingAddress?.city,
@@ -228,7 +237,7 @@ export async function createOrder(orderData) {
       const emailPayload = {
         orderId: newOrder._id.toString().slice(-6).toUpperCase(),
         customerName: customerName,
-        customerEmail: customerEmail,
+        customerEmail: resolvedEmail,
         customerPhone: phone || shippingAddress?.phone || "N/A",
         shippingAddress: formattedAddress,
         totalAmount: normalizedTotal,
@@ -236,19 +245,33 @@ export async function createOrder(orderData) {
         items: newOrder.items.map(i => ({
           name: i.productName,
           quantity: i.quantity,
-          price: i.price
+          price: i.price,
+          variantName: i.variant?.name !== "Default" ? i.variant?.name : null,
+          size: i.variant?.size !== "N/A" ? i.variant?.size : null,
+          image: i.variant?.image || null
         })),
         isStatusUpdate: false
       };
 
-      sendOrderEmail({
-        to: customerEmail,
-        orderData: emailPayload
-      }).catch((err) => console.error("Order notification email failed:", err));
+      try {
+        const mailResult = await sendOrderEmail({
+          to: resolvedEmail,
+          orderData: emailPayload
+        });
+
+        if (!mailResult?.success) {
+          console.error("⚠️ Order email failed to send:", mailResult?.error);
+        } else {
+          console.log(`✅ Order email sent successfully to: ${resolvedEmail}`);
+        }
+      } catch (mailErr) {
+        console.error("❌ Unexpected order email dispatch error:", mailErr.message);
+      }
     } else {
-      console.warn(`⚠️ User email missing for User ID: ${userId}. Confirmation email could not be sent.`);
+      console.warn(`⚠️ No valid email address found for Order ID: ${newOrder._id}. Confirmation email skipped.`);
     }
 
+    // Revalidate paths for Next.js cache updating
     revalidatePath("/admin/products");
     revalidatePath("/admin/orders");
     revalidatePath("/dashboard/orders");
