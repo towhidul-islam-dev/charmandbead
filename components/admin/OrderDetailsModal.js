@@ -147,7 +147,7 @@ export default function OrderDetailsModal({ order, onClose }) {
 
   const handleCopyAddress = (e) => {
     if (e) e.stopPropagation();
-    const name = order.shippingAddress?.name || "";
+    const name = order.shippingAddress?.fullName || "";
     const phone = order.shippingAddress?.phone || "";
     const street = order.shippingAddress?.street || order.shippingAddress?.address || "";
     const city = order.shippingAddress?.city || "";
@@ -216,7 +216,7 @@ export default function OrderDetailsModal({ order, onClose }) {
           {/* CUSTOMER & TOGGLE BAR */}
           <div className="flex items-center justify-between px-4 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 bg-gray-50/50 gap-2">
              <div className="leading-tight min-w-0 flex-1">
-                <p className="text-[10px] font-black text-[#3E442B] uppercase truncate">{order.shippingAddress?.name || "Customer"}</p>
+                <p className="text-[10px] font-black text-[#3E442B] uppercase truncate">{order.shippingAddress?.fullName || "Customer"}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[8px] font-bold text-gray-400 truncate">{order.shippingAddress?.phone || "N/A"}</span>
                   {order.shippingAddress?.phone && (
@@ -447,7 +447,7 @@ export default function OrderDetailsModal({ order, onClose }) {
                       <div className="space-y-1.5 text-[8.5px] sm:text-[9px]">
                         <div>
                           <p className="text-[6.5px] sm:text-[7px] text-gray-300 uppercase font-extrabold">Name</p>
-                          <p className="font-black text-white truncate">{order.shippingAddress?.name || "Customer"}</p>
+                          <p className="font-black text-white truncate">{order.shippingAddress?.fullName || "Customer"}</p>
                         </div>
 
                         <div>
@@ -488,7 +488,7 @@ export default function OrderDetailsModal({ order, onClose }) {
                       </button>
                     </div>
                     <p className="text-[9px] sm:text-[10px] font-black text-[#3E442B] uppercase leading-tight truncate">
-                      {order.shippingAddress?.name || "Customer"}
+                      {order.shippingAddress?.fullName || "Customer"}
                     </p>
                     <p className="text-[8px] sm:text-[9px] font-bold text-gray-500 uppercase leading-tight truncate mt-0.5">
                       {order.shippingAddress?.street || order.shippingAddress?.address || "N/A"}
