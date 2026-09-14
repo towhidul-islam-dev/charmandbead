@@ -9,7 +9,7 @@ import EmailCopy from "@/components/admin/EmailCopy";
 import Surprise from "@/models/Surprise";
 import RewardHistory from "@/models/RewardHistory";
 import dbConnect from "@/lib/mongodb";
-import { ShieldCheck, Users, Zap, SearchX, ChevronLeft, ChevronRight, Calendar, UserCheck } from "lucide-react"; 
+import { ShieldCheck, Users, Zap, SearchX, ChevronLeft, ChevronRight, Calendar, UserCheck, ShoppingBag } from "lucide-react"; 
 import Link from "next/link";
 import Image from "next/image";
 
@@ -19,9 +19,9 @@ const VIP_THRESHOLD = 10000;
 export default async function AdminUsersPage({ searchParams }) {
   const resolvedSearchParams = await searchParams;
   const activeFilter = resolvedSearchParams?.filter || "all";
-  const query = resolvedSearchParams?.query?.toLowerCase() || "";
+  const query = resolvedSearchParams?.query || "";
   const currentPage = Number(resolvedSearchParams?.page) || 1;
-  const itemsPerPage = 5;
+  const itemsPerPage = 20;
   
   await dbConnect();
   const { users: rawUsers, success, error } = await getUsers();
@@ -61,8 +61,12 @@ export default async function AdminUsersPage({ searchParams }) {
         extractedPercent = match ? `${match[0]}% OFF` : null;
     }
 
+    const orderList = user.orders || [];
+    const totalOrders = orderList.length;
+
     return {
       ...user,
+      totalOrders,
       lastGiftAt: reward ? reward.lastGiftAt : null,
       lastGiftTitle: reward ? reward.lastGiftTitle : null,
       lastGiftValue: extractedPercent 
@@ -74,21 +78,65 @@ export default async function AdminUsersPage({ searchParams }) {
   const totalVipCount = users.filter(u => u.isVIP || u.totalSpent >= VIP_THRESHOLD).length;
 
   const filteredUsers = users.filter((user) => {
-    const matchesTier = activeFilter === "all" || (activeFilter === "vip" && (user.isVIP || user.totalSpent >= VIP_THRESHOLD)) || (activeFilter === "regular" && !(user.isVIP || user.totalSpent >= VIP_THRESHOLD));
-    const matchesSearch = (user.name?.toLowerCase() || "").includes(query) || (user.email?.toLowerCase() || "").includes(query) || (user.phone || "").includes(query);
-    return matchesTier && matchesSearch;
+    // 1. Tier filter logic
+    const matchesTier =
+      activeFilter === "all" ||
+      (activeFilter === "vip" && (user.isVIP || user.totalSpent >= VIP_THRESHOLD)) ||
+      (activeFilter === "regular" && !(user.isVIP || user.totalSpent >= VIP_THRESHOLD));
+
+    if (!matchesTier) return false;
+
+    // 2. Search query normalization
+    const cleanQuery = query.trim().toLowerCase();
+    if (!cleanQuery) return true;
+
+    // Direct Name & Email Matches
+    const matchesName = (user.name?.toLowerCase() || "").includes(cleanQuery);
+    const matchesEmail = (user.email?.toLowerCase() || "").includes(cleanQuery);
+
+    // 3. Phone Search Logic across primary and address phone fields
+    const primaryPhone = user.phone || user.phoneNumber || user.mobile || "";
+    const addressPhones = Array.isArray(user.addresses)
+      ? user.addresses.map((a) => a.phone).filter(Boolean)
+      : [user.shippingAddress?.phone].filter(Boolean);
+
+    const allPhones = [primaryPhone, ...addressPhones].map((p) => String(p).trim().toLowerCase());
+
+    const queryDigits = cleanQuery.replace(/\D/g, "");
+    const normalizedQueryDigits = queryDigits.startsWith("880") ? queryDigits.slice(2) : queryDigits;
+
+    const matchesPhone = allPhones.some((rawPhone) => {
+      if (rawPhone.includes(cleanQuery)) return true;
+
+      const phoneDigits = rawPhone.replace(/\D/g, "");
+      const normalizedPhoneDigits = phoneDigits.startsWith("880") ? phoneDigits.slice(2) : phoneDigits;
+
+      if (queryDigits.length > 0 && phoneDigits.includes(queryDigits)) return true;
+      if (normalizedQueryDigits.length > 0 && normalizedPhoneDigits.includes(normalizedQueryDigits)) return true;
+
+      return false;
+    });
+
+    return matchesName || matchesEmail || matchesPhone;
   });
 
-  // --- PAGINATION LOGIC ---
+  // --- PAGINATION LOGIC WITH SAFE PAGE FALLBACK ---
   const totalUsers = filteredUsers.length;
-  const totalPages = Math.ceil(totalUsers / itemsPerPage);
-  const paginatedUsers = filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = Math.ceil(totalUsers / itemsPerPage) || 1;
+
+  // Fallback to Page 1 if search query reduces results below current page index
+  const safeCurrentPage = currentPage > totalPages ? 1 : currentPage;
+
+  const paginatedUsers = filteredUsers.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage
+  );
 
   const getPageNumbers = () => {
     const pages = [];
     const range = 1;
     for (let i = 1; i <= totalPages; i++) {
-      if (i === 1 || i === totalPages || (i >= currentPage - range && i <= currentPage + range)) {
+      if (i === 1 || i === totalPages || (i >= safeCurrentPage - range && i <= safeCurrentPage + range)) {
         pages.push(i);
       } else if (pages[pages.length - 1] !== "...") {
         pages.push("...");
@@ -210,9 +258,15 @@ export default async function AdminUsersPage({ searchParams }) {
                         <span>Joined: {formatDate(user.createdAt)}</span>
                       </div>
                     </div>
-                    <div className="text-right">
-                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Spendings</p>
-                        <span className="text-sm font-black text-[#3E442B]">৳{user.totalSpent?.toLocaleString() || 0}</span>
+
+                    {/* Mobile Orders & Spent Info */}
+                    <div className="text-right flex flex-col items-end gap-1">
+                      <span className="text-[9px] font-black text-[#EA638C] bg-[#EA638C]/10 px-2.5 py-0.5 rounded-lg flex items-center gap-1 w-fit border border-[#EA638C]/20">
+                        <ShoppingBag size={10} /> {user.totalOrders} {user.totalOrders === 1 ? 'Order' : 'Orders'}
+                      </span>
+                      <span className="text-sm font-black text-[#3E442B]">
+                        ৳{user.totalSpent?.toLocaleString() || 0}
+                      </span>
                     </div>
                   </div>
                   <div className="space-y-5 p-5 bg-gray-50/80 rounded-[2.2rem] border border-gray-100/50 overflow-visible">
@@ -255,7 +309,7 @@ export default async function AdminUsersPage({ searchParams }) {
                   <th className="px-6 py-5 text-[9px] font-black uppercase text-gray-400 text-left tracking-widest">User Profile</th>
                   <th className="px-4 py-5 text-[9px] font-black uppercase text-gray-400 text-left tracking-widest w-[260px]">Surprise Reward</th>
                   <th className="px-4 py-5 text-[9px] font-black uppercase text-gray-400 text-left tracking-widest">Access Level</th>
-                  <th className="px-4 py-5 text-[9px] font-black uppercase text-gray-400 text-left tracking-widest">Spendings</th>
+                  <th className="px-4 py-5 text-[9px] font-black uppercase text-gray-400 text-left tracking-widest">Orders & Spent</th>
                   <th className="px-6 py-5 text-right text-[9px] font-black uppercase text-gray-400 tracking-widest">Actions</th>
                 </tr>
               </thead>
@@ -300,11 +354,19 @@ export default async function AdminUsersPage({ searchParams }) {
                            <RoleSelect userId={user._id.toString()} currentRole={user.role || "user"} />
                         </div>
                       </td>
+                      
+                      {/* --- ORDERS & SPENT DISPLAY --- */}
                       <td className="px-4 py-4">
-                        <span className="text-[10px] font-black text-[#3E442B] bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
-                           ৳{user.totalSpent?.toLocaleString() || 0}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="text-[9px] font-black text-[#EA638C] bg-[#EA638C]/10 px-2.5 py-0.5 rounded-lg flex items-center gap-1 border border-[#EA638C]/20">
+                            <ShoppingBag size={10} /> {user.totalOrders} {user.totalOrders === 1 ? 'Order' : 'Orders'}
+                          </span>
+                          <span className="text-[11px] font-black text-[#3E442B] bg-gray-50 px-2.5 py-1 rounded-xl border border-gray-100">
+                            ৳{user.totalSpent?.toLocaleString() || 0}
+                          </span>
+                        </div>
                       </td>
+
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2 scale-90 origin-right">
                           <UserDetailsModal user={user} orders={user.orders || []} totalSpent={user.totalSpent || 0} lastGiftAt={user.lastGiftAt} lastGiftTitle={user.lastGiftTitle} lastGiftValue={user.lastGiftValue} />
@@ -323,8 +385,8 @@ export default async function AdminUsersPage({ searchParams }) {
             <div className="flex flex-col items-center justify-center gap-6 mt-16 pb-10">
               <div className="flex items-center gap-2 p-1.5 bg-white shadow-xl rounded-full border border-gray-50">
                 <Link
-                  href={`?page=${Math.max(1, currentPage - 1)}&filter=${activeFilter}&query=${query}`}
-                  className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${currentPage === 1 ? 'opacity-20 pointer-events-none' : 'bg-gray-50 text-[#3E442B] hover:text-[#EA638C]'}`}
+                  href={`?page=${Math.max(1, safeCurrentPage - 1)}&filter=${activeFilter}&query=${query}`}
+                  className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${safeCurrentPage === 1 ? 'opacity-20 pointer-events-none' : 'bg-gray-50 text-[#3E442B] hover:text-[#EA638C]'}`}
                 >
                   <ChevronLeft size={18} />
                 </Link>
@@ -338,10 +400,10 @@ export default async function AdminUsersPage({ searchParams }) {
                         key={p}
                         href={`?page=${p}&filter=${activeFilter}&query=${query}`}
                         className={`w-11 h-11 flex flex-col items-center justify-center rounded-full text-[10px] font-black transition-all ${
-                          currentPage === p ? 'bg-[#3E442B] text-white shadow-lg' : 'text-gray-400 hover:text-[#EA638C]'
+                          safeCurrentPage === p ? 'bg-[#3E442B] text-white shadow-lg' : 'text-gray-400 hover:text-[#EA638C]'
                         }`}
                       >
-                        {currentPage === p && <span className="text-[5px] uppercase tracking-tighter opacity-60 leading-none">Pg</span>}
+                        {safeCurrentPage === p && <span className="text-[5px] uppercase tracking-tighter opacity-60 leading-none">Pg</span>}
                         {p}
                       </Link>
                     )
@@ -349,8 +411,8 @@ export default async function AdminUsersPage({ searchParams }) {
                 </div>
 
                 <Link
-                  href={`?page=${Math.min(totalPages, currentPage + 1)}&filter=${activeFilter}&query=${query}`}
-                  className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${currentPage === totalPages ? 'opacity-20 pointer-events-none' : 'bg-[#3E442B] text-white hover:bg-[#EA638C] shadow-lg'}`}
+                  href={`?page=${Math.min(totalPages, safeCurrentPage + 1)}&filter=${activeFilter}&query=${query}`}
+                  className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${safeCurrentPage === totalPages ? 'opacity-20 pointer-events-none' : 'bg-[#3E442B] text-white hover:bg-[#EA638C] shadow-lg'}`}
                 >
                   <ChevronRight size={18} />
                 </Link>
