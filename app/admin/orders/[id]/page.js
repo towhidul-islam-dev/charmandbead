@@ -408,7 +408,7 @@ const finalY = doc.lastAutoTable.finalY + 10;
                   </div>
                   <div>
                     <h3 className="text-xs font-black tracking-wider text-gray-400 uppercase">Customer</h3>
-                    <p className="text-base font-black text-[#3E442B] uppercase tracking-tight">{customerName}</p>
+                    <p className="text-base font-black text-[#3E442B] uppercase tracking-tight">{order.shippingAddress?.fullName}</p>
                   </div>
                 </div>
 
@@ -468,7 +468,7 @@ const finalY = doc.lastAutoTable.finalY + 10;
                 <h3 className="text-xs font-black uppercase text-[#3E442B]">Destination</h3>
               </div>
               <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 text-[11px] font-black uppercase leading-loose text-gray-500 italic">
-                <span className="text-[#3E442B] not-italic text-sm block mb-1">{customerName}</span>
+                <span className="text-[#3E442B] not-italic text-sm block mb-1">{order.shippingAddress?.fullName}</span>
                 {order.shippingAddress?.street || order.shippingAddress?.address}<br />
                 {order.shippingAddress?.city}{order.shippingAddress?.postalCode ? `, ${order.shippingAddress.postalCode}` : ""}
               </div>

@@ -8,14 +8,13 @@ import {
   ChevronLeft, ChevronRight, Trash2, 
   CreditCard, Banknote, Info, Trash,
   Wallet, Receipt, Truck, Loader2, PhoneCall, Hash,
-  QrCode, X, Image as ImageIcon, ZoomIn
+  QrCode, X, Image as ImageIcon, ZoomIn, Bookmark, Check, Filter
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrderDetailsModal from "@/components/admin/OrderDetailsModal";
 
 // Brand Colors: Green: #3E442B | Pink: #EA638C | LightPink: #FBB6E6
 
-// 🟢 Helper for Pathao Status (Internal)
 const PathaoStatus = ({ trackingId }) => {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -42,14 +41,13 @@ const PathaoStatus = ({ trackingId }) => {
   }, [trackingId]);
 
   return (
-    <span className="font-black text-[#EA638C] uppercase inline-flex items-center gap-1 bg-[#EA638C]/10 px-1.5 py-0.5 rounded-md">
+    <span className="font-black text-[#EA638C] uppercase inline-flex items-center gap-1 bg-[#EA638C]/10 px-1.5 py-0.5 rounded-md text-[8px]">
       {loading ? <Loader2 size={8} className="animate-spin" /> : <Truck size={8} />}
       {status || "Syncing..."}
     </span>
   );
 };
 
-// 🟢 Status styling dictionary (Updated with Payment Received)
 const statusColors = {
   Verifying: "bg-purple-50 text-purple-600 border-purple-100",
   "Payment Received": "bg-emerald-50 text-emerald-600 border-emerald-100",
@@ -65,6 +63,8 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [defaultTab, setDefaultTab] = useState("All");
+  const [statusCounts, setStatusCounts] = useState({});
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [viewingOrder, setViewingOrder] = useState(null);
   const [paymentInfoModal, setPaymentInfoModal] = useState(null);
@@ -72,6 +72,20 @@ export default function AdminOrdersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
+
+  useEffect(() => {
+    const savedDefault = localStorage.getItem("admin_orders_default_tab");
+    if (savedDefault) {
+      setDefaultTab(savedDefault);
+      setStatusFilter(savedDefault);
+    }
+  }, []);
+
+  const handleSetDefaultTab = (status) => {
+    localStorage.setItem("admin_orders_default_tab", status);
+    setDefaultTab(status);
+    toast.success(`Default status set to "${status}"`);
+  };
 
   const getProductImage = (item) => {
     return (
@@ -82,23 +96,38 @@ export default function AdminOrdersPage() {
     );
   };
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
+  // Fetch global status counts across all orders
+  const fetchGlobalStatusCounts = useCallback(async () => {
     try {
-      const res = await getAllOrders(currentPage, 10, searchTerm, statusFilter);
-      if (res.success) {
-        setOrders(res.orders);
-        setTotalPages(res.totalPages);
-        setTotalOrders(res.totalOrders);
-
-        setViewingOrder(prev => prev ? res.orders.find(o => o._id === prev._id) || prev : null);
+      const res = await getAllOrders(1, 1, "", "All");
+      if (res.success && res.statusCounts) {
+        setStatusCounts(res.statusCounts);
       }
-    } catch (error) { 
-      toast.error("Failed to load orders"); 
-    } finally { 
-      setLoading(false); 
+    } catch (err) {
+      console.error("Failed to fetch global status counts", err);
     }
-  }, [currentPage, searchTerm, statusFilter]);
+  }, []);
+
+  useEffect(() => {
+    fetchGlobalStatusCounts();
+  }, [fetchGlobalStatusCounts]);
+
+const fetchOrders = useCallback(async () => {
+  setLoading(true);
+  try {
+    const res = await getAllOrders(currentPage, 10, searchTerm, statusFilter);
+    if (res.success) {
+      setOrders(res.orders);
+      setTotalPages(res.totalPages);
+      setTotalOrders(res.totalOrders);
+      // Removed setStatusCounts overwrite here to prevent scope reduction on filter change
+    }
+  } catch (error) { 
+    toast.error("Failed to load orders"); 
+  } finally { 
+    setLoading(false); 
+  }
+}, [currentPage, searchTerm, statusFilter]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => { fetchOrders(); }, 500);
@@ -110,6 +139,7 @@ export default function AdminOrdersPage() {
     if (res.success) {
       toast.success(`Updated to ${newStatus}`);
       fetchOrders();
+      fetchGlobalStatusCounts();
     } else {
       toast.error(res.message || "Failed to update status");
     }
@@ -122,10 +152,28 @@ export default function AdminOrdersPage() {
       toast.success("Order deleted");
       setSelectedOrders(prev => prev.filter(id => id !== orderId));
       fetchOrders();
+      fetchGlobalStatusCounts();
     } else {
       toast.error(res.message || "Failed to delete order");
     }
   };
+
+  const getAccurateStatusCount = (status) => {
+  if (!statusCounts || Object.keys(statusCounts).length === 0) return 0;
+
+  const clean = (str) => str?.toString().toLowerCase().replace(/[\s_]+/g, "") || "";
+
+  if (status === "All") {
+    return Object.values(statusCounts).reduce((acc, curr) => acc + (Number(curr) || 0), 0);
+  }
+
+  const target = clean(status);
+
+  // Search exact or normalized keys from backend counts
+  const matchedKey = Object.keys(statusCounts).find((key) => clean(key) === target);
+
+  return matchedKey ? Number(statusCounts[matchedKey]) || 0 : 0;
+};
 
   const getPageNumbers = () => {
     const pages = [];
@@ -140,13 +188,14 @@ export default function AdminOrdersPage() {
     return pages;
   };
 
-  const gridLayout = "md:grid-cols-[50px_110px_1.4fr_110px_200px_170px_120px]";
+  const gridLayout = "md:grid-cols-[40px_120px_minmax(0,1.5fr)_110px_180px_140px_100px]";
+  const allStatuses = ["All", ...Object.keys(statusColors)];
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] pt-8 pb-32 px-4 md:px-12">
       <div className="mx-auto max-w-7xl">
         {/* HEADER SECTION */}
-        <div className="flex flex-col gap-4 px-2 mb-6 md:mb-10 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-4 px-2 mb-6 md:mb-8 md:flex-row md:items-end md:justify-between">
           <div className="flex flex-col">
             <div className="flex items-center gap-3">
                <Receipt className="text-[#EA638C] w-7 h-7 md:w-9 md:h-9" />
@@ -159,39 +208,119 @@ export default function AdminOrdersPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-2.5 sm:flex-row w-full md:w-auto">
-            <select 
-              value={statusFilter} 
-              onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }} 
-              className="px-4 py-3 md:px-6 md:py-4 bg-white rounded-2xl text-[10px] font-black uppercase shadow-sm border-none outline-none text-[#3E442B] cursor-pointer ring-1 ring-gray-100"
-            >
-              <option value="All">All Statuses</option>
-              {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <div className="relative w-full md:w-80">
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute text-[#3E442B]/20 -translate-y-1/2 left-4 md:left-5 top-1/2" size={16} />
               <input 
                 type="text" 
                 placeholder="Search Orders..." 
-                className="w-full pl-11 md:pl-14 pr-4 md:pr-6 py-3 md:py-4 rounded-2xl border-none shadow-sm text-[10px] font-black uppercase outline-none ring-1 ring-gray-100 focus:ring-2 focus:ring-[#EA638C]/20" 
+                className="w-full pl-11 md:pl-14 pr-4 md:pr-6 py-3 md:py-4 bg-white rounded-2xl border-none shadow-sm text-[10px] font-black uppercase outline-none ring-1 ring-gray-100 focus:ring-2 focus:ring-[#EA638C]/20" 
                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} 
               />
             </div>
+
+            <div className="relative w-full sm:w-48">
+              <Filter className="absolute text-[#3E442B]/30 -translate-y-1/2 left-4 top-1/2 pointer-events-none" size={14} />
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-10 pr-8 py-3 md:py-4 bg-white rounded-2xl border-none shadow-sm text-[10px] font-black uppercase outline-none ring-1 ring-gray-100 focus:ring-2 focus:ring-[#EA638C]/20 appearance-none cursor-pointer text-[#3E442B]"
+              >
+                {allStatuses.map((st) => (
+                  <option key={st} value={st}>
+                    {st === "All" ? "Filter Status: All" : st}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* STATUS TABS SECTION */}
+        <div className="bg-white p-3 md:p-4 rounded-3xl border border-gray-100 shadow-sm mb-6">
+          <div className="flex items-center justify-between mb-2 px-2">
+            <span className="text-[9px] font-black uppercase tracking-widest text-[#3E442B]/40">
+              Quick Filter Tabs
+            </span>
+            <span className="text-[9px] font-bold text-[#EA638C] uppercase">
+              Default: {defaultTab}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {allStatuses.map((status) => {
+              const isActive = statusFilter === status;
+              const isDefault = defaultTab === status;
+              const count = getAccurateStatusCount(status);
+
+              return (
+                <div key={status} className="flex items-center shrink-0">
+                  <button
+                    onClick={() => {
+                      setStatusFilter(status);
+                      setCurrentPage(1);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                      isActive
+                        ? "bg-[#3E442B] text-white shadow-md shadow-[#3E442B]/10"
+                        : "bg-gray-50 text-gray-500 hover:text-[#3E442B] hover:bg-gray-100"
+                    }`}
+                  >
+                    <span>{status}</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                        isActive
+                          ? "bg-[#EA638C] text-white"
+                          : "bg-white text-gray-400 border border-gray-100"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+
+                  {isActive && (
+                    <button
+                      onClick={() => handleSetDefaultTab(status)}
+                      title={isDefault ? "Current Default Tab" : "Set as Default Tab"}
+                      className={`ml-1.5 p-2 rounded-xl text-[9px] font-black transition-all flex items-center gap-1 cursor-pointer ${
+                        isDefault
+                          ? "bg-[#EA638C]/15 text-[#EA638C]"
+                          : "bg-gray-50 text-gray-400 hover:text-[#EA638C] border border-gray-100"
+                      }`}
+                    >
+                      {isDefault ? (
+                        <>
+                          <Check size={12} className="text-[#EA638C]" />
+                          <span className="hidden sm:inline text-[8px] font-bold uppercase">Default</span>
+                        </>
+                      ) : (
+                        <>
+                          <Bookmark size={12} />
+                          <span className="hidden sm:inline text-[8px] font-bold uppercase">Set Default</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* ORDER CONTAINER */}
         <div className="bg-white rounded-3xl md:rounded-[2.5rem] shadow-xl shadow-[#3E442B]/5 border border-gray-100 overflow-hidden">
           
-          {/* DESKTOP TABLE HEADER */}
           <div className={`hidden px-10 py-6 border-b border-gray-50 md:grid ${gridLayout} items-center bg-gray-50/30 text-[9px] font-black uppercase text-[#3E442B]/40 tracking-[0.2em]`}>
-              <span>Sel.</span>
-              <span>Identity</span>
-              <span>Customer</span>
-              <span>Items</span>
-              <span>Payment Details</span>
-              <span>Status</span>
-              <span className="text-right">Action</span>
+            <span>Sel.</span>
+            <span>Identity</span>
+            <span>Customer</span>
+            <span>Items</span>
+            <span>Payment Details</span>
+            <span>Status</span>
+            <span className="text-right">Action</span>
           </div>
 
           <div className={`${loading ? 'opacity-40 pointer-events-none' : ''}`}>
@@ -236,15 +365,15 @@ export default function AdminOrdersPage() {
                       </div>
 
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-8 h-8 rounded-xl bg-[#3E442B] flex items-center justify-center text-white font-black text-[10px] shrink-0">
-                            {order.shippingAddress?.name?.charAt(0) || "C"}
+                            {order.shippingAddress?.fullName?.charAt(0) || order.shippingAddress?.name?.charAt(0) || "C"}
                           </div>
-                          <div className="overflow-hidden">
+                          <div className="overflow-hidden min-w-0">
                             <p className="text-xs font-black uppercase text-[#3E442B] truncate leading-tight">
-                              {order.shippingAddress?.name || "N/A"}
+                              {order.shippingAddress?.fullName || order.shippingAddress?.name || "N/A"}
                             </p>
-                            <p className="text-[10px] font-bold text-gray-400 font-mono">
+                            <p className="text-[10px] font-bold text-gray-400 font-mono truncate">
                               {order.shippingAddress?.phone || "N/A"}
                             </p>
                           </div>
@@ -319,13 +448,15 @@ export default function AdminOrdersPage() {
                         <PathaoStatus trackingId={order.trackingNumber} />
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-[#3E442B] flex items-center justify-center text-white font-black text-xs">
-                          {order.shippingAddress?.name?.charAt(0) || "C"}
+                      <div className="flex items-center gap-3 min-w-0 pr-2">
+                        <div className="w-10 h-10 rounded-xl bg-[#3E442B] flex items-center justify-center text-white font-black text-xs shrink-0">
+                          {order.shippingAddress?.fullName?.charAt(0) || order.shippingAddress?.name?.charAt(0) || "C"}
                         </div>
-                        <div className="overflow-hidden">
-                          <p className="text-[10px] font-black uppercase text-[#3E442B] truncate">{order.shippingAddress?.name || "N/A"}</p>
-                          <p className="text-[9px] font-bold text-gray-400">{order.shippingAddress?.phone || "N/A"}</p>
+                        <div className="overflow-hidden min-w-0">
+                          <p className="text-[10px] font-black uppercase text-[#3E442B] truncate" title={order.shippingAddress?.fullName || order.shippingAddress?.name || "N/A"}>
+                            {order.shippingAddress?.fullName || order.shippingAddress?.name || "N/A"}
+                          </p>
+                          <p className="text-[9px] font-bold text-gray-400 truncate">{order.shippingAddress?.phone || "N/A"}</p>
                         </div>
                       </div>
 
@@ -337,7 +468,6 @@ export default function AdminOrdersPage() {
                         ))}
                       </div>
 
-                      {/* PAYMENT COLUMN */}
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-black text-[#3E442B]">৳{order.totalAmount?.toLocaleString()}</p>
@@ -362,11 +492,11 @@ export default function AdminOrdersPage() {
                         </div>
                       </div>
 
-                      <div className="w-32 pr-4">
+                      <div className="w-full pr-2">
                         <select 
                           value={order.status} 
                           onChange={(e) => handleStatusChange(order._id, e.target.value)} 
-                          className={`w-full text-[9px] font-black uppercase px-4 py-2.5 rounded-xl border-none appearance-none text-center cursor-pointer shadow-sm ${statusColors[order.status] || "bg-gray-50 text-gray-600"}`}
+                          className={`w-full text-[9px] font-black uppercase px-2 py-2.5 rounded-xl border-none appearance-none text-center cursor-pointer shadow-sm ${statusColors[order.status] || "bg-gray-50 text-gray-600"}`}
                         >
                           {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
@@ -493,7 +623,6 @@ export default function AdminOrdersPage() {
                 </p>
               </div>
 
-              {/* Sender & Txn Details Card */}
               <div className="bg-[#FAFAFA] rounded-2xl p-4 border border-gray-100 text-left space-y-2 font-mono">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-gray-400 uppercase text-[9px] flex items-center gap-1">
@@ -502,14 +631,13 @@ export default function AdminOrdersPage() {
                   <span className="font-bold text-[#3E442B]">{paymentInfoModal.sender || "N/A"}</span>
                 </div>
                 <div className="flex items-center justify-between pt-1 text-xs border-t border-gray-100">
-                  <span className="font-bold text-gray-400 uppercase text-[9px] flex items-center gap-1">
+                  <span className="font-bold text-[#EA638C] uppercase text-[9px] flex items-center gap-1">
                     <Hash size={12} className="text-[#3E442B]" /> Transaction ID
                   </span>
                   <span className="font-black text-[#EA638C]">{paymentInfoModal.txnId || "N/A"}</span>
                 </div>
               </div>
 
-              {/* Payment Screenshot Preview */}
               <div className="space-y-2">
                 <p className="text-[10px] font-black text-[#3E442B] uppercase tracking-wider text-left flex items-center gap-1">
                   <ImageIcon size={13} className="text-[#EA638C]" /> Payment Screenshot
@@ -522,9 +650,9 @@ export default function AdminOrdersPage() {
                     <img 
                       src={paymentInfoModal.screenshot} 
                       alt="Payment Screenshot Proof" 
-                      className="object-contain w-auto shadow-xs max-h-80 rounded-xl transition-transform duration-300 group-hover:scale-105"
+                      className="object-contain w-auto transition-transform duration-300 shadow-xs max-h-80 rounded-xl group-hover:scale-105"
                     />
-                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                    <div className="absolute inset-0 flex items-center justify-center transition-opacity opacity-0 bg-black/20 group-hover:opacity-100 rounded-xl">
                       <span className="bg-[#3E442B] text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg">
                         <ZoomIn size={12} /> View Full Image
                       </span>

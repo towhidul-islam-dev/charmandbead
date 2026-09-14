@@ -396,27 +396,38 @@ export async function updateOrderStatus(orderId, newStatus, trackingNumber = "")
     const userName = order.user?.name || order.shippingAddress?.fullName || order.shippingAddress?.name || "Valued Customer";
 
     // --- STATUS UPDATE EMAIL DISPATCH (NON-BLOCKING) ---
-    if (userEmail) {
-      sendOrderEmail({
-        to: userEmail,
-        orderData: {
-          orderId: orderTag,
-          customerName: userName,
-          newStatus: newStatus,
-          statusTitle: notifyTitle,
-          statusMessage: notifyMessage,
-          trackingNumber: trackingNumber,
-          totalAmount: order.totalAmount,
-          paymentMethod: order.paymentMethod,
-          items: order.items.map(i => ({
-            name: i.productName,
-            quantity: i.quantity,
-            price: i.price
-          })),
-          isStatusUpdate: true
-        }
-      }).catch((err) => console.error("Status update email failed:", err));
+// ✅ CORRECT
+if (userEmail && userEmail.includes("@")) {
+  try {
+    const mailResult = await sendOrderEmail({
+      to: userEmail,
+      orderData: {
+        orderId: orderTag,
+        customerName: userName,
+        newStatus: newStatus,
+        statusTitle: notifyTitle,
+        statusMessage: notifyMessage,
+        trackingNumber: trackingNumber,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        items: order.items.map((i) => ({
+          name: i.productName,
+          quantity: i.quantity,
+          price: i.price,
+        })),
+        isStatusUpdate: true,
+      },
+    });
+
+    if (!mailResult?.success) {
+      console.error("❌ Status update email failed:", mailResult?.error);
+    } else {
+      console.log(`✅ Status update email sent to: ${userEmail}`);
     }
+  } catch (err) {
+    console.error("❌ Status update email exception:", err.message);
+  }
+}
 
     revalidatePath("/admin/products");
     revalidatePath("/admin/orders");
@@ -592,19 +603,23 @@ export async function getDashboardStats(period = "all") {
 export async function getAllOrders(page = 1, limit = 10, search = "", status = "All") {
   try {
     await dbConnect();
+
+    // 1. Build search/filter query
     const query = {};
-    
-    if (status !== "All") query.status = status;
+
+    if (status !== "All") {
+      query.status = status;
+    }
 
     if (search) {
       const isObjectId = /^[0-9a-fA-F]{24}$/.test(search);
-
       if (isObjectId) {
         query._id = search;
       } else {
         const safeSearch = escapeRegex(search);
         query.$or = [
           { "shippingAddress.name": { $regex: safeSearch, $options: "i" } },
+          { "shippingAddress.fullName": { $regex: safeSearch, $options: "i" } },
           { "shippingAddress.phone": { $regex: safeSearch, $options: "i" } },
           { status: { $regex: safeSearch, $options: "i" } },
         ];
@@ -613,29 +628,53 @@ export async function getAllOrders(page = 1, limit = 10, search = "", status = "
 
     const skip = (page - 1) * limit;
 
-    const [orders, total] = await Promise.all([
+    // 2. Fetch global counts alongside filtered paginated results
+    const [statusCountsRaw, orders, total] = await Promise.all([
+      // Global status counts (unaffected by current status filter)
+      Order.aggregate([
+        { $group: { _id: "$status", count: { $sum: 1 } } }
+      ]),
+
+      // Paginated orders
       Order.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate({
-          path: 'items.product',
-          select: 'imageUrl',
-          model: Product
+          path: "items.product",
+          select: "imageUrl",
+          model: Product,
         })
         .lean(),
+
+      // Total orders matching current filter
       Order.countDocuments(query),
     ]);
+
+    // 3. Format statusCounts into key-value map e.g. { Pending: 5, Delivered: 12 }
+    const statusCounts = {};
+    statusCountsRaw.forEach((item) => {
+      if (item._id) {
+        statusCounts[item._id] = item.count;
+      }
+    });
 
     return {
       success: true,
       orders: JSON.parse(JSON.stringify(orders)),
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(total / limit) || 1,
       totalOrders: total,
+      statusCounts, // Returned for UI status tabs
     };
-  } catch (error) { 
+  } catch (error) {
     console.error("Fetch Orders Error:", error);
-    return { success: false, orders: [], totalPages: 0 }; 
+    return { 
+      success: false, 
+      orders: [], 
+      totalPages: 0, 
+      totalOrders: 0, 
+      statusCounts: {} 
+    };
   }
 }
 
