@@ -328,7 +328,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
       <div className="flex items-center justify-end gap-1.5 px-3 -mb-3 text-gray-400">
         <Info size={12} className="text-[#EA638C]" />
         <span className="text-[9px] font-bold uppercase tracking-widest">
-          Double-click any variant to view details
+          Double-click variant title to view details
         </span>
       </div>
 
@@ -432,18 +432,22 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
         </button>
       </div>
 
-      {/* VARIANT DETAILS POPUP MODAL (DOUBLE CLICK) */}
+      {/* VARIANT DETAILS POPUP MODAL (WITH ANIMATED GRADIENT BORDER) */}
       {activeVariantModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-3 duration-200 bg-black/70 backdrop-blur-sm animate-in fade-in"
           onClick={() => setActiveVariantModal(null)}
         >
-          {/* Fancier Double-Border Container */}
+          {/* Animated Gradient Border Outer Wrapper */}
           <div
-            className="relative bg-white rounded-[2rem] p-1.5 shadow-2xl max-w-xs w-full bg-gradient-to-r from-[#EA638C] via-[#FBB6E6] to-[#3E442B]"
+            className="relative overflow-hidden rounded-[2rem] p-1 shadow-2xl max-w-xs w-full"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative bg-white rounded-[1.6rem] p-4 flex flex-col border border-white/80 shadow-inner overflow-hidden">
+            {/* Spinning Conic Gradient Element */}
+            <div className="absolute inset-[-200%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg,#EA638C_0%,#FBB6E6_33%,#3E442B_66%,#EA638C_100%)]" />
+
+            {/* Inner Content Card */}
+            <div className="relative z-10 bg-white rounded-[1.7rem] p-4 flex flex-col border border-white/80 shadow-inner overflow-hidden">
               {/* Top Accent Icon & Close */}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5 bg-[#FBB6E6]/30 px-2.5 py-1 rounded-full border border-[#FBB6E6]/60">
@@ -710,10 +714,7 @@ function VariantRow({
     : Number(v.price) || 0;
 
   return (
-    <tr
-      onDoubleClick={onDoubleClick}
-      className="transition-colors hover:bg-gray-50/50 cursor-pointer select-none"
-    >
+    <tr className="transition-colors hover:bg-gray-50/50">
       <td className="px-6 py-4">
         <div className="flex items-center gap-4">
           <button
@@ -735,8 +736,11 @@ function VariantRow({
               }}
             />
           </button>
-          <div>
-            <span className="font-black text-[#3E442B] uppercase text-[12px] block leading-none mb-1">
+          <div
+            onDoubleClick={onDoubleClick}
+            className="cursor-pointer select-none group"
+          >
+            <span className="font-black text-[#3E442B] uppercase text-[12px] block leading-none mb-1 group-hover:text-[#EA638C] transition-colors">
               {v.color}
             </span>
             <div className="flex items-center gap-2">
@@ -768,10 +772,7 @@ function VariantRow({
           )}
         </div>
       </td>
-      <td
-        className="px-6 py-4 text-right"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <td className="px-6 py-4 text-right">
         <QtySelector
           v={v}
           selectionQty={selectionQty}
@@ -799,10 +800,7 @@ function VariantCard({
     : Number(v.price) || 0;
 
   return (
-    <div
-      onDoubleClick={onDoubleClick}
-      className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm flex items-center justify-between gap-3 active:border-[#FBB6E6] transition-all cursor-pointer select-none"
-    >
+    <div className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm flex items-center justify-between gap-3 transition-all">
       <div className="flex items-center min-w-0 gap-4">
         <button
           type="button"
@@ -823,9 +821,12 @@ function VariantCard({
             }}
           />
         </button>
-        <div className="flex-1 min-w-0">
+        <div
+          onDoubleClick={onDoubleClick}
+          className="flex-1 min-w-0 cursor-pointer select-none group"
+        >
           <div className="flex items-center justify-between gap-2 mb-1 pr-1">
-            <span className="font-black text-[#3E442B] uppercase text-[14px] truncate leading-none">
+            <span className="font-black text-[#3E442B] uppercase text-[14px] truncate leading-none group-hover:text-[#EA638C] transition-colors">
               {v.color}
             </span>
             <span className="text-[12px] font-black text-[#EA638C] italic shrink-0">
@@ -853,7 +854,7 @@ function VariantCard({
           </div>
         </div>
       </div>
-      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+      <div className="shrink-0">
         <QtySelector
           v={v}
           selectionQty={selectionQty}
