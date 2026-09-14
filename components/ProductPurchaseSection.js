@@ -12,6 +12,11 @@ import {
   X,
   UserCheck,
   LogIn,
+  Info,
+  Package,
+  Layers,
+  Tag,
+  Sparkles,
 } from "lucide-react";
 import { useCart } from "@/Context/CartContext";
 import toast from "react-hot-toast";
@@ -39,9 +44,10 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
 
   const variants = product?.variants || [];
 
-  // State for image zoom modal & Auth prompt modal
+  // State for image zoom modal, Auth prompt modal, and Variant Details modal
   const [selectedImage, setSelectedImage] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [activeVariantModal, setActiveVariantModal] = useState(null);
 
   // Dynamic Data Path for tiers
   const tiers = useMemo(() => {
@@ -318,6 +324,14 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
         </div>
       )}
 
+      {/* DOUBLE CLICK HINT */}
+      <div className="flex items-center justify-end gap-1.5 px-3 -mb-3 text-gray-400">
+        <Info size={12} className="text-[#EA638C]" />
+        <span className="text-[9px] font-bold uppercase tracking-widest">
+          Double-click any variant to view details
+        </span>
+      </div>
+
       {/* VARIANT TABLE (DESKTOP) */}
       <div className="hidden md:block overflow-hidden bg-white border border-gray-100 shadow-sm rounded-[2.5rem]">
         <table className="w-full text-sm text-left">
@@ -337,6 +351,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
                 selectionQty={quantities[v._id?.toString()] || 0}
                 handleUpdateQty={handleUpdateQty}
                 onImageClick={(img) => setSelectedImage(img)}
+                onDoubleClick={() => setActiveVariantModal(v)}
                 getEffectiveUnitPrice={getEffectiveUnitPrice}
               />
             ))}
@@ -354,6 +369,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
             selectionQty={quantities[v._id?.toString()] || 0}
             handleUpdateQty={handleUpdateQty}
             onImageClick={(img) => setSelectedImage(img)}
+            onDoubleClick={() => setActiveVariantModal(v)}
             getEffectiveUnitPrice={getEffectiveUnitPrice}
           />
         ))}
@@ -416,50 +432,191 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
         </button>
       </div>
 
+      {/* VARIANT DETAILS POPUP MODAL (DOUBLE CLICK) */}
+      {activeVariantModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 duration-200 bg-black/70 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setActiveVariantModal(null)}
+        >
+          {/* Fancier Double-Border Container */}
+          <div
+            className="relative bg-white rounded-[2rem] p-1.5 shadow-2xl max-w-xs w-full bg-gradient-to-r from-[#EA638C] via-[#FBB6E6] to-[#3E442B]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative bg-white rounded-[1.6rem] p-4 flex flex-col border border-white/80 shadow-inner overflow-hidden">
+              {/* Top Accent Icon & Close */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5 bg-[#FBB6E6]/30 px-2.5 py-1 rounded-full border border-[#FBB6E6]/60">
+                  <Sparkles size={12} className="text-[#EA638C]" />
+                  <span className="text-[9px] font-black text-[#3E442B] uppercase tracking-wider">
+                    {activeVariantModal.sku ? `SKU: ${activeVariantModal.sku}` : "Variant Specs"}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setActiveVariantModal(null)}
+                  className="bg-gray-100 hover:bg-[#EA638C] hover:text-white text-[#3E442B] p-1.5 rounded-full transition-all shadow-sm"
+                >
+                  <X size={14} strokeWidth={3} />
+                </button>
+              </div>
+
+              {/* Content Details */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-2 border-b border-gray-100 pb-2">
+                  <div className="min-w-0">
+                    <h3 className="text-base font-black uppercase text-[#3E442B] tracking-tight leading-none mb-0.5 truncate">
+                      {activeVariantModal.color || "Standard Variant"}
+                    </h3>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">
+                      {product?.name}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-base font-black text-[#EA638C] italic block leading-none">
+                      ৳{getEffectiveUnitPrice(activeVariantModal)}
+                    </span>
+                    <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">
+                      Unit Price
+                    </span>
+                  </div>
+                </div>
+
+                {/* Attributes Grid */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">
+                    <Layers className="w-3.5 h-3.5 text-[#EA638C] shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-[7px] font-black text-gray-400 uppercase block leading-none">
+                        Size / Specs
+                      </span>
+                      <span className="text-[11px] font-black text-[#3E442B] truncate block">
+                        {activeVariantModal.size || "Standard"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">
+                    <Package className="w-3.5 h-3.5 text-[#EA638C] shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-[7px] font-black text-gray-400 uppercase block leading-none">
+                        Min Order Qty
+                      </span>
+                      <span className="text-[11px] font-black text-[#3E442B] truncate block">
+                        {activeVariantModal.minOrderQuantity || 1} PCS
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">
+                    <Tag className="w-3.5 h-3.5 text-[#EA638C] shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-[7px] font-black text-gray-400 uppercase block leading-none">
+                        Stock Level
+                      </span>
+                      <span className="text-[11px] font-black text-[#3E442B] truncate block">
+                        {activeVariantModal.stock} Total
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 p-2 bg-[#FBB6E6]/20 rounded-xl border border-[#FBB6E6]/40">
+                    <ShoppingBag className="w-3.5 h-3.5 text-[#EA638C] shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-[7px] font-black text-[#EA638C] uppercase block leading-none">
+                        In Your Bag
+                      </span>
+                      <span className="text-[11px] font-black text-[#3E442B] truncate block">
+                        {getQtyInBag(activeVariantModal._id)} Units
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Description / Additional Notes if available */}
+                {activeVariantModal.description && (
+                  <div className="p-2 bg-gray-50 rounded-xl text-[10px] text-gray-500 font-medium leading-normal max-h-16 overflow-y-auto">
+                    {activeVariantModal.description}
+                  </div>
+                )}
+
+                {/* Qty Selector & Action inside Modal */}
+                <div className="mt-1 flex items-center justify-between gap-3 pt-2.5 border-t border-gray-100">
+                  <div>
+                    <span className="text-[8px] font-black text-gray-400 uppercase block mb-0.5">
+                      Select Quantity
+                    </span>
+                    <QtySelector
+                      v={activeVariantModal}
+                      selectionQty={
+                        quantities[activeVariantModal._id?.toString()] || 0
+                      }
+                      liveDisplayStock={Math.max(
+                        0,
+                        activeVariantModal.stock -
+                          getQtyInBag(activeVariantModal._id) -
+                          (quantities[activeVariantModal._id?.toString()] || 0),
+                      )}
+                      handleUpdateQty={handleUpdateQty}
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => setActiveVariantModal(null)}
+                    className="bg-[#3E442B] text-[#FBB6E6] hover:bg-[#2d3220] px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shrink-0 shadow-md"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AUTHENTICATION REQUIRED POPUP MODAL */}
       {showAuthModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 duration-200 bg-black/70 backdrop-blur-sm animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 duration-200 bg-black/70 backdrop-blur-sm animate-in fade-in"
           onClick={() => setShowAuthModal(false)}
         >
           <div
-            className="relative bg-white p-6 sm:p-7 rounded-[2.5rem] shadow-2xl max-w-sm w-full flex flex-col items-center text-center border border-gray-100"
+            className="relative bg-white p-5 rounded-[1.8rem] shadow-2xl max-w-[260px] w-full flex flex-col items-center text-center border border-gray-100"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close Button */}
             <button
               onClick={() => setShowAuthModal(false)}
-              className="absolute top-4 right-4 bg-gray-100 hover:bg-[#EA638C] hover:text-white text-[#3E442B] p-2 rounded-full transition-all"
+              className="absolute top-3 right-3 bg-gray-100 hover:bg-[#EA638C] hover:text-white text-[#3E442B] p-1.5 rounded-full transition-all"
             >
-              <X size={16} strokeWidth={3} />
+              <X size={14} strokeWidth={3} />
             </button>
 
             {/* Icon Header */}
-            <div className="w-14 h-14 bg-[#FBB6E6]/40 text-[#EA638C] rounded-full flex items-center justify-center mb-3 border-2 border-[#FBB6E6]">
-              <UserCheck size={28} strokeWidth={2.5} />
+            <div className="w-10 h-10 bg-[#FBB6E6]/40 text-[#EA638C] rounded-full flex items-center justify-center mb-2 border border-[#FBB6E6]">
+              <UserCheck size={20} strokeWidth={2.5} />
             </div>
 
             {/* Content */}
-            <h3 className="text-base font-black uppercase text-[#3E442B] tracking-tight mb-1.5">
+            <h3 className="text-sm font-black uppercase text-[#3E442B] tracking-tight mb-1">
               Sign In First
             </h3>
-            <p className="mb-5 text-xs font-bold leading-relaxed text-gray-500">
+            <p className="mb-4 text-[10px] font-bold leading-tight text-gray-500">
               Please login or Create an account first to add product in the cart.
             </p>
 
             {/* Action Buttons */}
-            <div className="flex flex-col gap-2.5 w-full">
+            <div className="flex flex-col gap-2 w-full">
               <button
                 onClick={() => router.push("/login")}
-                className="w-full flex items-center justify-center gap-2 bg-[#EA638C] hover:bg-[#d8527a] text-white py-3 rounded-full font-black text-xs uppercase tracking-widest shadow-md transition-all active:scale-95"
+                className="w-full flex items-center justify-center gap-1.5 bg-[#EA638C] hover:bg-[#d8527a] text-white py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-md transition-all active:scale-95"
               >
-                <LogIn size={15} strokeWidth={2.5} />
+                <LogIn size={13} strokeWidth={2.5} />
                 <span>Login / Register</span>
               </button>
 
               <button
                 onClick={() => setShowAuthModal(false)}
-                className="w-full py-2 text-[10px] font-black uppercase text-gray-400 hover:text-[#3E442B] transition-colors tracking-widest"
+                className="w-full py-1 text-[9px] font-black uppercase text-gray-400 hover:text-[#3E442B] transition-colors tracking-widest"
               >
                 Keep Browsing
               </button>
@@ -543,6 +700,7 @@ function VariantRow({
   selectionQty,
   handleUpdateQty,
   onImageClick,
+  onDoubleClick,
   getEffectiveUnitPrice,
 }) {
   const liveDisplayStock = Math.max(0, v.stock - inBagQty - selectionQty);
@@ -552,12 +710,18 @@ function VariantRow({
     : Number(v.price) || 0;
 
   return (
-    <tr className="transition-colors hover:bg-gray-50/30">
+    <tr
+      onDoubleClick={onDoubleClick}
+      className="transition-colors hover:bg-gray-50/50 cursor-pointer select-none"
+    >
       <td className="px-6 py-4">
         <div className="flex items-center gap-4">
           <button
             type="button"
-            onClick={() => onImageClick(imgUrl)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onImageClick(imgUrl);
+            }}
             className="relative flex-shrink-0 w-12 h-12 overflow-hidden transition-all border border-gray-100 shadow-sm cursor-pointer rounded-xl bg-gray-50 hover:scale-105 active:scale-95 group"
           >
             <Image
@@ -604,7 +768,10 @@ function VariantRow({
           )}
         </div>
       </td>
-      <td className="px-6 py-4 text-right">
+      <td
+        className="px-6 py-4 text-right"
+        onClick={(e) => e.stopPropagation()}
+      >
         <QtySelector
           v={v}
           selectionQty={selectionQty}
@@ -622,6 +789,7 @@ function VariantCard({
   selectionQty,
   handleUpdateQty,
   onImageClick,
+  onDoubleClick,
   getEffectiveUnitPrice,
 }) {
   const liveDisplayStock = Math.max(0, v.stock - inBagQty - selectionQty);
@@ -631,11 +799,17 @@ function VariantCard({
     : Number(v.price) || 0;
 
   return (
-    <div className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm flex items-center justify-between gap-3 active:border-[#FBB6E6] transition-all">
+    <div
+      onDoubleClick={onDoubleClick}
+      className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm flex items-center justify-between gap-3 active:border-[#FBB6E6] transition-all cursor-pointer select-none"
+    >
       <div className="flex items-center min-w-0 gap-4">
         <button
           type="button"
-          onClick={() => onImageClick(imgUrl)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onImageClick(imgUrl);
+          }}
           className="relative flex-shrink-0 overflow-hidden transition-all border border-gray-100 shadow-sm cursor-pointer w-14 h-14 rounded-2xl bg-gray-50 hover:scale-105 active:scale-95 group"
         >
           <Image
@@ -679,7 +853,7 @@ function VariantCard({
           </div>
         </div>
       </div>
-      <div className="shrink-0">
+      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
         <QtySelector
           v={v}
           selectionQty={selectionQty}
@@ -696,16 +870,16 @@ function QtySelector({ v, selectionQty, liveDisplayStock, handleUpdateQty }) {
   const moq = Number(v.minOrderQuantity) || 1;
 
   return (
-    <div className="inline-flex items-center p-1 border border-gray-200 bg-gray-50 rounded-2xl">
+    <div className="inline-flex items-center p-0.5 sm:p-1 border border-gray-200 bg-gray-50 rounded-xl sm:rounded-2xl">
       <button
         onClick={() => handleUpdateQty(vKey, -1, moq, v.stock, v)}
-        className="p-2 text-[#3E442B]/30 hover:text-[#EA638C] disabled:opacity-20 transition-colors"
+        className="p-1.5 sm:p-2 text-[#3E442B]/30 hover:text-[#EA638C] disabled:opacity-20 transition-colors"
         disabled={selectionQty === 0}
       >
-        <Minus size={16} strokeWidth={4} />
+        <Minus size={13} strokeWidth={4} />
       </button>
       <span
-        className={`px-4 font-black min-w-[40px] text-center text-[15px] italic ${
+        className={`px-2.5 sm:px-4 font-black min-w-[32px] sm:min-w-[40px] text-center text-xs sm:text-[15px] italic ${
           selectionQty > 0 ? "text-[#EA638C]" : "text-gray-300"
         }`}
       >
@@ -713,10 +887,10 @@ function QtySelector({ v, selectionQty, liveDisplayStock, handleUpdateQty }) {
       </span>
       <button
         onClick={() => handleUpdateQty(vKey, 1, moq, v.stock, v)}
-        className="p-2 text-[#3E442B]/30 hover:text-[#EA638C] disabled:opacity-20 transition-colors"
+        className="p-1.5 sm:p-2 text-[#3E442B]/30 hover:text-[#EA638C] disabled:opacity-20 transition-colors"
         disabled={liveDisplayStock < moq}
       >
-        <Plus size={16} strokeWidth={4} />
+        <Plus size={13} strokeWidth={4} />
       </button>
     </div>
   );
