@@ -328,7 +328,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
       <div className="flex items-center justify-end gap-1.5 px-3 -mb-3 text-gray-400">
         <Info size={12} className="text-[#EA638C]" />
         <span className="text-[9px] font-bold uppercase tracking-widest">
-          Double-click any variant to view details
+          Double-click variant title to view details
         </span>
       </div>
 
@@ -432,7 +432,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
         </button>
       </div>
 
-      {/* VARIANT DETAILS POPUP MODAL (DOUBLE CLICK) */}
+      {/* VARIANT DETAILS POPUP MODAL (DOUBLE CLICK TEXT ONLY) */}
       {activeVariantModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-3 duration-200 bg-black/70 backdrop-blur-sm animate-in fade-in"
@@ -638,7 +638,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
             {/* Close Button */}
             <button
               onClick={() => setSelectedImage(null)}
-              className="absolute top-3 right-3 z-30 bg-[#EA638C] text-white p-2 rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all border-2 border-white"
+              className="absolute top-3 right-[#EA638C] text-white p-2 rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all border-2 border-white"
             >
               <X size={18} strokeWidth={3} />
             </button>
@@ -710,10 +710,7 @@ function VariantRow({
     : Number(v.price) || 0;
 
   return (
-    <tr
-      onDoubleClick={onDoubleClick}
-      className="transition-colors hover:bg-gray-50/50 cursor-pointer select-none"
-    >
+    <tr className="transition-colors hover:bg-gray-50/50">
       <td className="px-6 py-4">
         <div className="flex items-center gap-4">
           <button
@@ -735,8 +732,11 @@ function VariantRow({
               }}
             />
           </button>
-          <div>
-            <span className="font-black text-[#3E442B] uppercase text-[12px] block leading-none mb-1">
+          <div
+            onDoubleClick={onDoubleClick}
+            className="cursor-pointer select-none group"
+          >
+            <span className="font-black text-[#3E442B] uppercase text-[12px] block leading-none mb-1 group-hover:text-[#EA638C] transition-colors">
               {v.color}
             </span>
             <div className="flex items-center gap-2">
@@ -768,10 +768,7 @@ function VariantRow({
           )}
         </div>
       </td>
-      <td
-        className="px-6 py-4 text-right"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <td className="px-6 py-4 text-right">
         <QtySelector
           v={v}
           selectionQty={selectionQty}
@@ -799,10 +796,7 @@ function VariantCard({
     : Number(v.price) || 0;
 
   return (
-    <div
-      onDoubleClick={onDoubleClick}
-      className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm flex items-center justify-between gap-3 active:border-[#FBB6E6] transition-all cursor-pointer select-none"
-    >
+    <div className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm flex items-center justify-between gap-3 transition-all">
       <div className="flex items-center min-w-0 gap-4">
         <button
           type="button"
@@ -823,9 +817,12 @@ function VariantCard({
             }}
           />
         </button>
-        <div className="flex-1 min-w-0">
+        <div
+          onDoubleClick={onDoubleClick}
+          className="flex-1 min-w-0 cursor-pointer select-none group"
+        >
           <div className="flex items-center justify-between gap-2 mb-1 pr-1">
-            <span className="font-black text-[#3E442B] uppercase text-[14px] truncate leading-none">
+            <span className="font-black text-[#3E442B] uppercase text-[14px] truncate leading-none group-hover:text-[#EA638C] transition-colors">
               {v.color}
             </span>
             <span className="text-[12px] font-black text-[#EA638C] italic shrink-0">
@@ -853,7 +850,7 @@ function VariantCard({
           </div>
         </div>
       </div>
-      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+      <div className="shrink-0">
         <QtySelector
           v={v}
           selectionQty={selectionQty}
