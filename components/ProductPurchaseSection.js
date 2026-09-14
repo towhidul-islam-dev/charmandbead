@@ -432,18 +432,22 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
         </button>
       </div>
 
-      {/* VARIANT DETAILS POPUP MODAL (DOUBLE CLICK TEXT ONLY) */}
+      {/* VARIANT DETAILS POPUP MODAL (WITH ANIMATED GRADIENT BORDER) */}
       {activeVariantModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-3 duration-200 bg-black/70 backdrop-blur-sm animate-in fade-in"
           onClick={() => setActiveVariantModal(null)}
         >
-          {/* Fancier Double-Border Container */}
+          {/* Animated Gradient Border Outer Wrapper */}
           <div
-            className="relative bg-white rounded-[2rem] p-1.5 shadow-2xl max-w-xs w-full bg-gradient-to-r from-[#EA638C] via-[#FBB6E6] to-[#3E442B]"
+            className="relative overflow-hidden rounded-[2rem] p-1 shadow-2xl max-w-xs w-full"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative bg-white rounded-[1.6rem] p-4 flex flex-col border border-white/80 shadow-inner overflow-hidden">
+            {/* Spinning Conic Gradient Element */}
+            <div className="absolute inset-[-200%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg,#EA638C_0%,#FBB6E6_33%,#3E442B_66%,#EA638C_100%)]" />
+
+            {/* Inner Content Card */}
+            <div className="relative z-10 bg-white rounded-[1.7rem] p-4 flex flex-col border border-white/80 shadow-inner overflow-hidden">
               {/* Top Accent Icon & Close */}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5 bg-[#FBB6E6]/30 px-2.5 py-1 rounded-full border border-[#FBB6E6]/60">
@@ -638,7 +642,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
             {/* Close Button */}
             <button
               onClick={() => setSelectedImage(null)}
-              className="absolute top-3 right-[#EA638C] text-white p-2 rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all border-2 border-white"
+              className="absolute top-3 right-3 z-30 bg-[#EA638C] text-white p-2 rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all border-2 border-white"
             >
               <X size={18} strokeWidth={3} />
             </button>
