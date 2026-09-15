@@ -35,10 +35,25 @@ import {
 } from "lucide-react";
 
 const DHAKA_ZONES = [
-  "Badda", "Banani", "Banglamotor", "Bashundhara", "Cantonment",
-  "Dhanmondi", "Gulshan", "Jatrabari", "Khilgaon", "Mirpur",
-  "Mohakhali", "Savar", "Mohammadpur", "Motijheel", "New Market",
-  "Old Dhaka", "Pallabi", "Rampura", "Uttara",
+  "Badda",
+  "Banani",
+  "Banglamotor",
+  "Bashundhara",
+  "Cantonment",
+  "Dhanmondi",
+  "Gulshan",
+  "Jatrabari",
+  "Khilgaon",
+  "Mirpur",
+  "Mohakhali",
+  "Savar",
+  "Mohammadpur",
+  "Motijheel",
+  "New Market",
+  "Old Dhaka",
+  "Pallabi",
+  "Rampura",
+  "Uttara",
 ];
 
 export default function CheckoutPage() {
@@ -101,7 +116,7 @@ export default function CheckoutPage() {
           const isInsideDhaka = DHAKA_ZONES.some(
             (zone) =>
               city.toLowerCase().includes(zone.toLowerCase()) ||
-              city.toLowerCase() === "dhaka"
+              city.toLowerCase() === "dhaka",
           );
           setShippingCharge(isInsideDhaka ? 80 : 130);
         }
@@ -123,7 +138,7 @@ export default function CheckoutPage() {
         acc.totalSavings += Math.max(0, basePrice - itemPrice) * qty;
         return acc;
       },
-      { subtotal: 0, totalSavings: 0 }
+      { subtotal: 0, totalSavings: 0 },
     );
   }, [checkoutItems]);
 
@@ -186,7 +201,9 @@ export default function CheckoutPage() {
     }
 
     if (!qrSenderPhone || !bdPhoneRegex.test(qrSenderPhone)) {
-      toast.error("Valid sender account/phone number is required for payment confirmation");
+      toast.error(
+        "Valid sender account/phone number is required for payment confirmation",
+      );
       return;
     }
     if (!qrTxnId.trim()) {
@@ -200,67 +217,22 @@ export default function CheckoutPage() {
     }
 
     try {
-      setLoading(true);
-
-      const screenshotBase64 = await convertFileToBase64(paymentScreenshot);
+      // AFTER (UPDATED)
+      const userEmail = session?.user?.email || userAddress?.email || "";
 
       const orderData = {
         userId: session?.user?.id,
+        email: userEmail, // 👈 ADDED: Root email field for order notification dispatches
         customerName: customerName.trim(),
-        items: checkoutItems.map((item) => {
-          const variantName = typeof item.variant === "string"
-            ? item.variant
-            : (item.variant?.name || item.color || "Default");
-
-          let variantImg =
-            item.variant?.image ||
-            item.variant?.img ||
-            item.variant?.thumbnail ||
-            item.variantImage ||
-            item.selectedVariant?.image;
-
-          if (!variantImg) {
-            const imagesArr = item.images || item.product?.images || item.productImages;
-            if (Array.isArray(imagesArr) && imagesArr.length > 0) {
-              let idx = -1;
-              if (typeof item.variantIndex === "number") idx = item.variantIndex;
-              else if (typeof item.variant === "number") idx = item.variant;
-              else if (typeof variantName === "string") {
-                const parsed = parseInt(variantName, 10);
-                if (!isNaN(parsed)) idx = parsed - 1;
-              }
-
-              if (idx >= 0 && idx < imagesArr.length) {
-                variantImg = imagesArr[idx];
-              } else {
-                variantImg = imagesArr[0];
-              }
-            }
-          }
-
-          if (!variantImg) {
-            variantImg = item.image || item.thumbnail || item.product?.imageUrl || null;
-          }
-
-          return {
-            productId: item.productId || item._id,
-            productName: item.name || item.productName || "Product",
-            variant: {
-              name: variantName,
-              size: item.size || "N/A",
-              variantId: item.variantId || item.variant?._id || null,
-              image: variantImg,
-            },
-            quantity: Number(item.quantity),
-            price: Number(item.price),
-            sku: item.sku || "C&B-GEN",
-          };
-        }),
+        items: checkoutItems.map(/* ... */),
         totalAmount: Number((finalTotal + mobileBankingFee).toFixed(2)),
         paidAmount: Number(payableNow.toFixed(2)),
         dueAmount: Number(dueOnDelivery.toFixed(2)),
         deliveryCharge: Number(shippingCharge),
-        paymentMethod: paymentMethod === "COD" ? "Partial_COD_BanglaQR" : "Full_PrePay_BanglaQR",
+        paymentMethod:
+          paymentMethod === "COD"
+            ? "Partial_COD_BanglaQR"
+            : "Full_PrePay_BanglaQR",
         mobileBankingFee: Number(mobileBankingFee.toFixed(2)),
         phone: phone,
         paymentDetails: {
@@ -270,39 +242,11 @@ export default function CheckoutPage() {
           gatewayStatus: "MANUAL_VERIFICATION",
         },
         paymentStatus: "Verifying",
-        shippingAddress: userAddress,
+        shippingAddress: {
+          ...userAddress,
+          email: userEmail, // 👈 ADDED: Email attached inside shipping address object
+        },
       };
-
-      const result = await createOrder(orderData);
-
-      if (result.success) {
-        try {
-          const keysToRemove = checkoutItems
-            .map((item) => item.uniqueKey || item.productId || item._id)
-            .filter(Boolean);
-
-          if (keysToRemove.length > 0 && typeof deleteSelectedItems === "function") {
-            deleteSelectedItems(keysToRemove);
-          } else if (typeof clearCart === "function") {
-            clearCart();
-          }
-        } catch (err) {
-          console.error("CART_CLEANUP_ERROR:", err);
-        }
-
-        localStorage.removeItem("checkoutItems");
-        localStorage.removeItem("purchasedKeys");
-
-        setPlacedOrderDetails({
-          id: result.orderId || result.data?._id || "NEW",
-          amountPaid: payableNow,
-          due: dueOnDelivery,
-          txnId: qrTxnId.trim(),
-        });
-        setShowSuccessModal(true);
-      } else {
-        toast.error(result.message || "Order creation failed.");
-      }
     } catch (error) {
       console.error("CHECKOUT_ERROR:", error);
       toast.error("Failed to initiate order.");
@@ -360,13 +304,22 @@ export default function CheckoutPage() {
           <div className="border-2 border-[#3E442B]/10 p-8 rounded-[2.5rem] bg-white group hover:border-[#3E442B] transition-all">
             <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
               <div className="min-w-0">
-                <p className="text-[10px] font-black text-[#EA638C] uppercase tracking-[0.2em] mb-1">Registered Address</p>
-                <p className="text-xl font-bold font-serif text-[#3E442B] truncate">{customerName || session?.user?.name}</p>
+                <p className="text-[10px] font-black text-[#EA638C] uppercase tracking-[0.2em] mb-1">
+                  Registered Address
+                </p>
+                <p className="text-xl font-bold font-serif text-[#3E442B] truncate">
+                  {customerName || session?.user?.name}
+                </p>
                 <p className="mt-1 text-sm italic font-bold leading-relaxed text-gray-400">
-                  {userAddress ? `${userAddress.street}, ${userAddress.city}` : "Missing shipping coordinates"}
+                  {userAddress
+                    ? `${userAddress.street}, ${userAddress.city}`
+                    : "Missing shipping coordinates"}
                 </p>
               </div>
-              <Link href="/dashboard/address" className="shrink-0 flex items-center gap-2 text-[10px] font-black uppercase text-[#3E442B] hover:text-[#EA638C] bg-gray-50 px-6 py-3 rounded-full transition-colors">
+              <Link
+                href="/dashboard/address"
+                className="shrink-0 flex items-center gap-2 text-[10px] font-black uppercase text-[#3E442B] hover:text-[#EA638C] bg-gray-50 px-6 py-3 rounded-full transition-colors"
+              >
                 Modify <ChevronRight size={14} />
               </Link>
             </div>
@@ -376,24 +329,50 @@ export default function CheckoutPage() {
         {/* SECTION 02: ITEMS REVIEW */}
         <section className="space-y-6">
           <h2 className="flex items-center gap-3 text-2xl font-bold font-serif text-[#3E442B] uppercase italic">
-            <ShoppingBag className="text-[#EA638C]" size={28} /> 02. Purchased Items ({checkoutItems.length})
+            <ShoppingBag className="text-[#EA638C]" size={28} /> 02. Purchased
+            Items ({checkoutItems.length})
           </h2>
           <div className="space-y-3">
             {checkoutItems.map((item, idx) => {
-              const itemImg = item.image || item.thumbnail || item.variant?.image || "/placeholder.png";
-              const variantTitle = typeof item.variant === "string" ? item.variant : item.variant?.name;
+              const itemImg =
+                item.image ||
+                item.thumbnail ||
+                item.variant?.image ||
+                "/placeholder.png";
+              const variantTitle =
+                typeof item.variant === "string"
+                  ? item.variant
+                  : item.variant?.name;
               return (
-                <div key={idx} className="flex items-center justify-between p-4 bg-white border border-gray-100 shadow-sm rounded-2xl">
+                <div
+                  key={idx}
+                  className="flex items-center justify-between p-4 bg-white border border-gray-100 shadow-sm rounded-2xl"
+                >
                   <div className="flex items-center gap-4">
-                    <img src={itemImg} alt={item.name || "Product"} className="object-cover border border-gray-100 w-14 h-14 rounded-xl" />
+                    <img
+                      src={itemImg}
+                      alt={item.name || "Product"}
+                      className="object-cover border border-gray-100 w-14 h-14 rounded-xl"
+                    />
                     <div>
-                      <h4 className="text-sm font-bold text-[#3E442B] truncate max-w-[200px] md:max-w-xs">{item.name || item.productName}</h4>
+                      <h4 className="text-sm font-bold text-[#3E442B] truncate max-w-[200px] md:max-w-xs">
+                        {item.name || item.productName}
+                      </h4>
                       <p className="text-[11px] text-gray-400 font-medium">
-                        Qty: {item.quantity} {variantTitle && `• Variant: ${variantTitle}`} {item.size && item.size !== "N/A" && `• Size: ${item.size}`}
+                        Qty: {item.quantity}{" "}
+                        {variantTitle && `• Variant: ${variantTitle}`}{" "}
+                        {item.size &&
+                          item.size !== "N/A" &&
+                          `• Size: ${item.size}`}
                       </p>
                     </div>
                   </div>
-                  <span className="font-serif font-bold text-sm text-[#3E442B]">৳{(Number(item.price) * Number(item.quantity)).toLocaleString()}</span>
+                  <span className="font-serif font-bold text-sm text-[#3E442B]">
+                    ৳
+                    {(
+                      Number(item.price) * Number(item.quantity)
+                    ).toLocaleString()}
+                  </span>
                 </div>
               );
             })}
@@ -407,8 +386,16 @@ export default function CheckoutPage() {
           </h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {[
-              { id: "COD", label: "Partial COD", sub: `Pay Shipping Now (৳${shippingCharge}) & Rest on Delivery` },
-              { id: "Online", label: "Full Pre-pay", sub: `Pay Entire Invoice Now (৳${finalTotal})` },
+              {
+                id: "COD",
+                label: "Partial COD",
+                sub: `Pay Shipping Now (৳${shippingCharge}) & Rest on Delivery`,
+              },
+              {
+                id: "Online",
+                label: "Full Pre-pay",
+                sub: `Pay Entire Invoice Now (৳${finalTotal})`,
+              },
             ].map((method) => (
               <button
                 key={method.id}
@@ -416,7 +403,9 @@ export default function CheckoutPage() {
                 onClick={() => setPaymentMethod(method.id)}
                 className={`p-6 rounded-[2.5rem] border-2 flex flex-col gap-1 items-start text-left transition-all cursor-pointer ${paymentMethod === method.id ? "border-[#EA638C] bg-[#3E442B] text-white shadow-xl scale-[1.02]" : "border-gray-100 text-gray-400 bg-white hover:border-[#EA638C]/50"}`}
               >
-                <span className={`text-sm italic font-bold font-serif tracking-widest uppercase ${paymentMethod === method.id ? "text-[#FBB6E6]" : "text-[#3E442B]"}`}>
+                <span
+                  className={`text-sm italic font-bold font-serif tracking-widest uppercase ${paymentMethod === method.id ? "text-[#FBB6E6]" : "text-[#3E442B]"}`}
+                >
                   {method.label}
                 </span>
                 <span className="text-[10px] font-black uppercase tracking-wider opacity-60">
@@ -429,7 +418,7 @@ export default function CheckoutPage() {
 
         {/* SECTION 04: BANGLA QR VERIFICATION */}
         <section className="relative overflow-hidden bg-white border-2 border-[#3E442B] p-5 sm:p-8 rounded-[2.5rem] shadow-sm transition-all space-y-6">
-          <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-4">
+          <div className="flex items-center justify-between gap-2 pb-4 border-b border-gray-100">
             <h2 className="flex items-center gap-2.5 text-lg sm:text-xl font-bold font-serif text-[#3E442B] uppercase italic">
               <QrCode className="text-[#EA638C] shrink-0" size={24} />
               <span>Islami Bank Bangla QR</span>
@@ -438,18 +427,18 @@ export default function CheckoutPage() {
               Instant Pay
             </span>
           </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+          <div className="grid items-start grid-cols-1 gap-8 lg:grid-cols-12">
             {/* Clickable QR Code Display Area */}
-            <div 
+            <div
               onClick={() => setShowQrModal(true)}
               className="lg:col-span-6 bg-gradient-to-b from-[#FBB6E6]/20 via-white to-[#FBB6E6]/10 p-6 sm:p-8 rounded-[2.5rem] border-2 border-[#EA638C]/30 text-center flex flex-col items-center justify-center shadow-md cursor-pointer group hover:border-[#EA638C] transition-all"
             >
               <div className="relative p-4 sm:p-5 bg-white shadow-xl rounded-3xl border border-gray-200 mb-4 w-full max-w-[320px] sm:max-w-[360px] aspect-square flex items-center justify-center overflow-hidden">
-                <img 
-                  src="/ibbl-bangla-qr.jpg" 
-                  alt="Islami Bank Bangla QR" 
-                  className="object-contain w-full h-full rounded-2xl group-hover:scale-105 transition-transform duration-300"
+                <img
+                  src="/charmsqrcode.jpg"
+                  alt="Islami Bank Bangla QR"
+                  className="object-contain w-full h-full transition-transform duration-300 rounded-2xl group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-[#3E442B]/40 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white font-bold text-xs uppercase tracking-wider">
                   <Maximize2 size={18} /> Click to Enlarge
@@ -467,26 +456,36 @@ export default function CheckoutPage() {
             </div>
 
             {/* Form & Instructions Column */}
-            <div className="lg:col-span-6 space-y-5">
+            <div className="space-y-5 lg:col-span-6">
               <div className="bg-[#FAFAFA] p-4 rounded-2xl border border-gray-100 text-xs text-gray-600 space-y-1">
                 <p className="font-medium leading-relaxed">
                   Scan the QR code to complete your payment of{" "}
-                  <strong className="text-[#EA638C] font-bold text-sm">৳{payableNow.toFixed(2)}</strong>
-                  <span className="text-[10px] text-gray-400 font-normal"> (+1.5% gateway charge)</span>.
+                  <strong className="text-[#EA638C] font-bold text-sm">
+                    ৳{payableNow.toFixed(2)}
+                  </strong>
+                  <span className="text-[10px] text-gray-400 font-normal">
+                    {" "}
+                    (+1.5% gateway charge)
+                  </span>
+                  .
                 </p>
                 {paymentMethod === "COD" && (
                   <p className="text-[11px] font-bold text-[#3E442B]/80 pt-1 border-t border-gray-200/60">
-                    • Remaining ৳{dueOnDelivery.toLocaleString()} payable as Cash on Delivery.
+                    • Remaining ৳{dueOnDelivery.toLocaleString()} payable as
+                    Cash on Delivery.
                   </p>
                 )}
               </div>
-              
+
               <div className="space-y-4">
                 {/* Sender Account */}
                 <div>
                   <label className="flex items-center gap-1.5 text-[10px] font-black text-[#3E442B] uppercase tracking-wider mb-1.5">
                     <Smartphone size={13} className="text-[#EA638C]" />
-                    <span>Sender Phone / Account Number <span className="text-red-500">*</span></span>
+                    <span>
+                      Sender Phone / Account Number{" "}
+                      <span className="text-red-500">*</span>
+                    </span>
                   </label>
                   <input
                     type="tel"
@@ -501,7 +500,10 @@ export default function CheckoutPage() {
                 <div>
                   <label className="flex items-center gap-1.5 text-[10px] font-black text-[#3E442B] uppercase tracking-wider mb-1.5">
                     <Hash size={13} className="text-[#EA638C]" />
-                    <span>Transaction ID (TxnID) <span className="text-red-500">*</span></span>
+                    <span>
+                      Transaction ID (TxnID){" "}
+                      <span className="text-red-500">*</span>
+                    </span>
                   </label>
                   <input
                     type="text"
@@ -516,7 +518,10 @@ export default function CheckoutPage() {
                 <div>
                   <label className="flex items-center gap-1.5 text-[10px] font-black text-[#3E442B] uppercase tracking-wider mb-1.5">
                     <ImageIcon size={13} className="text-[#EA638C]" />
-                    <span>Transaction Screenshot <span className="text-red-500">*</span></span>
+                    <span>
+                      Transaction Screenshot{" "}
+                      <span className="text-red-500">*</span>
+                    </span>
                   </label>
                   {!previewUrl ? (
                     <label className="group flex flex-col items-center justify-center w-full p-4 border-2 border-dashed border-gray-200 hover:border-[#EA638C] rounded-2xl cursor-pointer bg-gray-50/50 hover:bg-[#FBB6E6]/10 transition-all text-center">
@@ -541,20 +546,21 @@ export default function CheckoutPage() {
                       <img
                         src={previewUrl}
                         alt="Payment Screenshot Preview"
-                        className="object-cover w-12 sm:w-14 h-12 sm:h-14 rounded-xl border border-gray-200 shrink-0"
+                        className="object-cover w-12 h-12 border border-gray-200 sm:w-14 sm:h-14 rounded-xl shrink-0"
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-[#3E442B] truncate">
                           {paymentScreenshot?.name || "Payment_Proof.jpg"}
                         </p>
                         <p className="text-[10px] text-gray-400 font-medium">
-                          {(paymentScreenshot?.size / (1024 * 1024)).toFixed(2)} MB
+                          {(paymentScreenshot?.size / (1024 * 1024)).toFixed(2)}{" "}
+                          MB
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={removeScreenshot}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0 cursor-pointer"
+                        className="p-2 text-gray-400 transition-colors cursor-pointer hover:text-red-500 hover:bg-red-50 rounded-xl shrink-0"
                         title="Remove Screenshot"
                       >
                         <X size={18} />
@@ -571,49 +577,82 @@ export default function CheckoutPage() {
       {/* SIDEBAR: SUMMARY */}
       <div className="h-auto lg:sticky lg:top-6">
         <div className="bg-[#3E442B] border-t-8 border-[#EA638C] rounded-[3rem] p-6 md:p-8 shadow-2xl w-full overflow-hidden">
-          <h2 className="mb-6 font-serif text-xl italic font-bold text-white uppercase">Checkout Summary</h2>
+          <h2 className="mb-6 font-serif text-xl italic font-bold text-white uppercase">
+            Checkout Summary
+          </h2>
           <div className="mb-8 space-y-4">
             <div className="flex justify-between items-center gap-2 text-[9px] font-black text-white/40 uppercase tracking-widest">
               <span>Merchandise</span>
-              <span className="font-serif text-xs italic text-white">৳{subtotal.toLocaleString()}</span>
+              <span className="font-serif text-xs italic text-white">
+                ৳{subtotal.toLocaleString()}
+              </span>
             </div>
 
             {totalSavings > 0 && (
               <div className="flex justify-between items-center gap-2 text-[9px] font-black text-[#FBB6E6] uppercase tracking-widest bg-[#EA638C]/20 p-3 rounded-xl border border-[#EA638C]/30 animate-pulse">
-                <span className="flex items-center gap-1.5"><BadgePercent size={12} /> Wholesale Savings</span>
-                <span className="font-serif text-[11px] italic">- ৳{totalSavings.toLocaleString()}</span>
+                <span className="flex items-center gap-1.5">
+                  <BadgePercent size={12} /> Wholesale Savings
+                </span>
+                <span className="font-serif text-[11px] italic">
+                  - ৳{totalSavings.toLocaleString()}
+                </span>
               </div>
             )}
 
             <div className="flex justify-between items-center gap-2 text-[9px] font-black text-white/40 uppercase tracking-widest">
-              <span className="flex items-center gap-2"><Truck size={12} className="text-[#FBB6E6]" /> Logistics</span>
-              <span className="font-serif text-xs italic text-white">৳{shippingCharge}</span>
+              <span className="flex items-center gap-2">
+                <Truck size={12} className="text-[#FBB6E6]" /> Logistics
+              </span>
+              <span className="font-serif text-xs italic text-white">
+                ৳{shippingCharge}
+              </span>
             </div>
-            
+
             <div className="flex justify-between items-center gap-2 text-[9px] font-black text-white/30 uppercase tracking-widest bg-white/5 p-3 rounded-xl border border-white/10">
-              <span className="flex items-center gap-1.5"><Info size={12} /> Gateway Fee</span>
-              <span className="text-white/60 font-serif text-[11px] italic">৳{mobileBankingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              <span className="flex items-center gap-1.5">
+                <Info size={12} /> Gateway Fee
+              </span>
+              <span className="text-white/60 font-serif text-[11px] italic">
+                ৳
+                {mobileBankingFee.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
+              </span>
             </div>
 
             <div className="flex items-center justify-between gap-2 pt-5 text-lg border-t border-dashed border-white/10">
-              <span className="font-black text-white/30 uppercase text-[8px] tracking-[0.2em]">Final Invoice</span>
+              <span className="font-black text-white/30 uppercase text-[8px] tracking-[0.2em]">
+                Final Invoice
+              </span>
               <span className="font-serif text-lg italic font-bold text-white md:text-xl">
-                ৳{(finalTotal + mobileBankingFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                ৳
+                {(finalTotal + mobileBankingFee).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
               </span>
             </div>
           </div>
 
           <div className="rounded-[2rem] p-5 md:p-6 mb-8 bg-white/5 border border-white/10">
             <div className="flex flex-col mb-1">
-              <span className="text-[8px] font-black uppercase text-[#FBB6E6] tracking-[0.3em] mb-1">Advance Payable</span>
+              <span className="text-[8px] font-black uppercase text-[#FBB6E6] tracking-[0.3em] mb-1">
+                Advance Payable
+              </span>
               <span className="font-serif text-xl italic font-bold text-white md:text-2xl">
-                ৳{payableNow.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                ৳
+                {payableNow.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
               </span>
             </div>
             {paymentMethod === "COD" && (
               <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-white/5">
-                <span className="text-[8px] font-black uppercase text-white/20 tracking-widest">Due at Doorstep</span>
-                <span className="font-serif text-xs italic font-bold text-white/60">৳{dueOnDelivery.toLocaleString()}</span>
+                <span className="text-[8px] font-black uppercase text-white/20 tracking-widest">
+                  Due at Doorstep
+                </span>
+                <span className="font-serif text-xs italic font-bold text-white/60">
+                  ৳{dueOnDelivery.toLocaleString()}
+                </span>
               </div>
             )}
           </div>
@@ -624,7 +663,11 @@ export default function CheckoutPage() {
             className="w-full bg-[#EA638C] hover:bg-[#ea638c]/90 text-white p-2 pr-6 md:pr-8 rounded-full font-black uppercase tracking-[0.1em] text-[9px] md:text-[10px] transition-all flex items-center justify-between group disabled:bg-white/10 shadow-xl active:scale-95 cursor-pointer"
           >
             <div className="bg-white p-3 rounded-full text-[#EA638C] shadow-lg">
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+              {loading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <ShieldCheck size={16} />
+              )}
             </div>
             <span className="flex-1 font-black text-center">
               {loading ? "SUBMITTING..." : "PLACE ORDER"}
@@ -635,11 +678,11 @@ export default function CheckoutPage() {
 
       {/* QR ZOOM POP-UP MODAL */}
       {showQrModal && (
-        <div 
+        <div
           onClick={() => setShowQrModal(false)}
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-white w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto rounded-[2rem] sm:rounded-[2.5rem] p-4 sm:p-6 text-center shadow-2xl border-4 border-[#EA638C] relative space-y-3 sm:space-y-4"
           >
@@ -651,7 +694,7 @@ export default function CheckoutPage() {
               <X size={20} />
             </button>
 
-            <div className="space-y-1 pt-1">
+            <div className="pt-1 space-y-1">
               <h3 className="text-lg sm:text-xl font-serif font-bold text-[#3E442B] italic uppercase flex items-center justify-center gap-2">
                 <QrCode className="text-[#EA638C]" size={20} />
                 <span>Islami Bank Bangla QR</span>
@@ -665,15 +708,16 @@ export default function CheckoutPage() {
             <div className="bg-[#EA638C]/10 border border-[#EA638C]/30 p-2.5 sm:p-3 rounded-2xl text-left flex items-start gap-2">
               <Info size={16} className="text-[#EA638C] shrink-0 mt-0.5" />
               <p className="text-[11px] sm:text-xs font-medium text-[#3E442B] leading-tight">
-                <strong className="text-[#EA638C]">Note:</strong> To make payment open your desired payment app and then scan to pay.
+                <strong className="text-[#EA638C]">Note:</strong> To make
+                payment open your desired payment app and then scan to pay.
               </p>
             </div>
 
             {/* Responsive image container */}
             <div className="p-2 sm:p-3 bg-white border-2 border-[#FBB6E6] rounded-2xl sm:rounded-3xl shadow-lg w-full max-w-[240px] sm:max-w-[280px] aspect-square mx-auto flex items-center justify-center">
-              <img 
-                src="/ibbl-bangla-qr.jpg" 
-                alt="Islami Bank Bangla QR Enlarged" 
+              <img
+                src="/charmsqrcode.jpg"
+                alt="Islami Bank Bangla QR Enlarged"
                 className="object-contain w-full h-full rounded-xl"
               />
             </div>
@@ -699,27 +743,43 @@ export default function CheckoutPage() {
                 Order Placed Successfully!
               </h3>
               <p className="max-w-sm mx-auto text-xs font-medium leading-relaxed text-gray-600">
-                Thank you for your order! We have received your payment details. An admin will verify your payment and confirm your order shortly.
+                Thank you for your order! We have received your payment details.
+                An admin will verify your payment and confirm your order
+                shortly.
               </p>
             </div>
 
             <div className="bg-[#FAFAFA] rounded-2xl p-4 border border-gray-100 text-left space-y-2.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold tracking-wider text-gray-400 uppercase">Customer Name</span>
+                <span className="font-bold tracking-wider text-gray-400 uppercase">
+                  Customer Name
+                </span>
                 <span className="font-bold text-[#3E442B]">{customerName}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold tracking-wider text-gray-400 uppercase">Txn ID</span>
-                <span className="font-bold text-[#3E442B] font-mono">{placedOrderDetails?.txnId}</span>
+                <span className="font-bold tracking-wider text-gray-400 uppercase">
+                  Txn ID
+                </span>
+                <span className="font-bold text-[#3E442B] font-mono">
+                  {placedOrderDetails?.txnId}
+                </span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold tracking-wider text-gray-400 uppercase">Amount Advance Paid</span>
-                <span className="font-bold text-[#EA638C] font-serif">৳{placedOrderDetails?.amountPaid?.toFixed(2)}</span>
+                <span className="font-bold tracking-wider text-gray-400 uppercase">
+                  Amount Advance Paid
+                </span>
+                <span className="font-bold text-[#EA638C] font-serif">
+                  ৳{placedOrderDetails?.amountPaid?.toFixed(2)}
+                </span>
               </div>
               {placedOrderDetails?.due > 0 && (
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold tracking-wider text-gray-400 uppercase">Due on Delivery</span>
-                  <span className="font-bold text-[#3E442B] font-serif">৳{placedOrderDetails?.due?.toLocaleString()}</span>
+                  <span className="font-bold tracking-wider text-gray-400 uppercase">
+                    Due on Delivery
+                  </span>
+                  <span className="font-bold text-[#3E442B] font-serif">
+                    ৳{placedOrderDetails?.due?.toLocaleString()}
+                  </span>
                 </div>
               )}
               <div className="flex items-center justify-between pt-2 text-xs border-t border-gray-100">
