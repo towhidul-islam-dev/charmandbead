@@ -5,12 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation'; 
 import { signIn } from "next-auth/react"; 
 import toast from 'react-hot-toast';
-import { UserCircle, Eye, EyeOff, Loader2 } from "lucide-react"; // Added Eye icons and Loader
+import { UserCircle, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false); // 🟢 State for visibility
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null); 
     const router = useRouter(); 
@@ -32,8 +32,10 @@ export default function LoginPage() {
                 toast.error("Access Denied");
             } else {
                 toast.success("Identity Confirmed");
-                router.push("/");
-                router.refresh(); 
+                
+                // HARD NAVIGATION FIX: Forces a full page reload so the server 
+                // layout instantly recognizes the new auth cookies and fetches user info.
+                window.location.href = "/";
             }
 
         } catch (networkError) {
@@ -74,7 +76,7 @@ export default function LoginPage() {
                             placeholder="PARTNER@CHARMBEAD.COM"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] font-medium outline-none focus:border-[#EA638C] focus:bg-white transition-all placeholder:text-gray-300"
+                            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] font-medium outline-none focus:border-[#EA638C] focus:bg-white transition-all placeholder:text-gray-300 text-[#3E442B]"
                         />
                     </div>
 
@@ -82,14 +84,13 @@ export default function LoginPage() {
                         <label className="text-[9px] font-black text-[#3E442B] uppercase tracking-[0.2em] ml-2">Security Key</label>
                         <div className="relative">
                             <input
-                                type={showPassword ? "text" : "password"} // 🟢 Toggle type
+                                type={showPassword ? "text" : "password"}
                                 required
                                 placeholder="••••••••"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] outline-none focus:border-[#EA638C] focus:bg-white transition-all pr-12"
+                                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] outline-none focus:border-[#EA638C] focus:bg-white transition-all pr-12 text-[#3E442B]"
                             />
-                            {/* 🟢 Visibility Toggle Button */}
                             <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
@@ -114,7 +115,7 @@ export default function LoginPage() {
                 {/* Bottom Links Section */}
                 <div className="pt-4 space-y-3 text-center border-t border-gray-50">
                     <div className="flex items-center justify-center gap-4">
-                        <Link href="/forgot-password" size={14} className="text-[9px] font-black text-gray-400 uppercase tracking-widest hover:text-[#EA638C] transition-colors">
+                        <Link href="/forgot-password" className="text-[9px] font-black text-gray-400 uppercase tracking-widest hover:text-[#EA638C] transition-colors">
                             Forgot Password?
                         </Link>
                         <div className="h-3 w-[1px] bg-gray-200"></div>

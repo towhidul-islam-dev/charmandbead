@@ -2,13 +2,13 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { signIn } from 'next-auth/react'; // 🟢 Added
-import { Eye, EyeOff, UserPlus, Loader2, CheckCircle2, Sparkles } from 'lucide-react'; // 🟢 Added UI icons
+import { signIn } from 'next-auth/react'; 
+import { Eye, EyeOff, UserPlus, Loader2, CheckCircle2, Sparkles } from 'lucide-react'; 
 
 export default function RegisterPage() {
     const [formData, setFormData] = useState({ name: '', email: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
-    const [status, setStatus] = useState("idle"); // 🟢 Changed from just loading
+    const [status, setStatus] = useState("idle"); 
     const [error, setError] = useState(null); 
     const router = useRouter(); 
 
@@ -67,7 +67,7 @@ export default function RegisterPage() {
             const data = await response.json();
 
             if (response.ok) {
-                // 🟢 2. Start Auto-Login Flow
+                // 2. Start Auto-Login Flow
                 setStatus("logging-in");
                 
                 const loginResult = await signIn("credentials", {
@@ -80,9 +80,10 @@ export default function RegisterPage() {
                     router.push('/login?registered=true'); // Fallback if auto-login fails
                 } else {
                     setStatus("success");
+                    // Hard navigation ensures session cookies are read instantly 
+                    // preventing the "please login" prompt bug upon redirect.
                     setTimeout(() => {
-                        router.push('/');
-                        router.refresh();
+                        window.location.href = '/';
                     }, 2000);
                 }
             } else {
@@ -149,7 +150,7 @@ export default function RegisterPage() {
                             name="name" type="text" required
                             value={formData.name} onChange={handleChange}
                             placeholder="YOUR NAME"
-                            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] outline-none focus:border-[#EA638C] transition-all placeholder:text-gray-300"
+                            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] outline-none focus:border-[#EA638C] focus:bg-white transition-all placeholder:text-gray-300 text-[#3E442B] font-medium"
                         />
                     </div>
                     
@@ -159,7 +160,7 @@ export default function RegisterPage() {
                             name="email" type="email" required
                             value={formData.email} onChange={handleChange}
                             placeholder="EMAIL@EXAMPLE.COM"
-                            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] outline-none focus:border-[#EA638C] transition-all placeholder:text-gray-300"
+                            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] outline-none focus:border-[#EA638C] focus:bg-white transition-all placeholder:text-gray-300 text-[#3E442B] font-medium"
                         />
                     </div>
 
@@ -179,7 +180,7 @@ export default function RegisterPage() {
                                 required
                                 value={formData.password} onChange={handleChange}
                                 placeholder="MIN. 8 CHARACTERS"
-                                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] outline-none focus:border-[#EA638C] transition-all pr-12"
+                                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] outline-none focus:border-[#EA638C] focus:bg-white transition-all pr-12 text-[#3E442B] font-medium"
                             />
                             <button
                                 type="button"
