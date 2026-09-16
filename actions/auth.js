@@ -1,12 +1,14 @@
 "use server";
 
 import User from "@/models/User"; 
-import { generateOTP } from "@/lib/tokens"; // Ensure you have a function that returns a 6-digit string
+import { generateOTP } from "@/lib/tokens"; 
 import connectDB from "@/lib/mongodb"; 
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 /**
- * STEP 1: Start Reset (Generate & Send 6-Digit OTP)
+ * STEP 1: Start Reset (Generate & Send 6-Digit OTP via Resend)
  */
 export async function startPasswordReset(email) {
   try {
@@ -27,31 +29,23 @@ export async function startPasswordReset(email) {
     }
 
     // 🔢 Generate 6-Digit OTP
-    const otp = generateOTP(); // e.g., "542910"
+    const otp = generateOTP(); 
     user.otpCode = otp; 
     user.otpExpiry = Date.now() + 600000; // 10 Minutes expiry
     user.resetTokenSentAt = new Date();
     await user.save();
 
-    // ✉️ Send OTP Email
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
-    await transporter.sendMail({
-      from: `"Charm & Bead Security" <${process.env.EMAIL_USER}>`,
-      to: normalizedEmail,
+    // ✉️ Send OTP Email via Resend
+    const { error } = await resend.emails.send({
+      from: process.env.SENDER_EMAIL,
+      to: [normalizedEmail],
       subject: `Your Security Code: ${otp}`,
       html: `
         <div style="font-family: sans-serif; max-width: 450px; margin: auto; padding: 40px; border: 2px solid #FBB6E6; border-radius: 32px; background-color: #ffffff; text-align: center;">
           <h2 style="color: #3E442B; text-transform: uppercase; font-style: italic;">Identity <span style="color: #EA638C;">Verification</span></h2>
           <p style="color: #3E442B; font-size: 14px; margin-bottom: 25px;">Use the following code to authorize your password reset.</p>
           
-          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 20px; border: 1px dashed #3E442B/20;">
+          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 20px; border: 1px dashed rgba(62, 68, 43, 0.2);">
             <span style="font-size: 36px; font-weight: 900; letter-spacing: 12px; color: #3E442B; font-family: monospace;">${otp}</span>
           </div>
 
@@ -61,6 +55,11 @@ export async function startPasswordReset(email) {
         </div>
       `,
     });
+
+    if (error) {
+      console.error("Resend API Error:", error);
+      return { success: false, error: "Failed to dispatch email service." };
+    }
 
     return { success: true };
   } catch (error) {
@@ -87,7 +86,7 @@ export async function verifyOTPAction(email, otp) {
       return { success: false, error: "Invalid or expired security code." };
     }
 
-    // Generate a temporary reset token (Big companies use this to "unlock" the reset page)
+    // Generate a temporary reset token
     const resetToken = Math.random().toString(36).substring(2, 15);
     user.resetToken = resetToken;
     user.resetTokenExpiry = Date.now() + 600000; // 10 minutes to finish the password change
