@@ -90,14 +90,14 @@ export async function createOrder(orderData) {
           product: i.productId || i.product || i._id,
           productName: i.productName || i.name || "Unnamed Product",
           variant: {
-            name: i.variant?.name || i.variant?.title || i.color || "Default",
+            name: i.variant?.name || i.variant?.title || i.color || (typeof i.variant === 'string' ? i.variant : "Default"),
             size: i.size || i.variant?.size || "N/A",
             variantId: i.variantId || i.variant?._id || i.variant?.variantId || null,
             image: i.variant?.image || i.image || null
           },
           quantity: Math.max(1, Number(i.quantity) || 1),
           price: Number(i.price) || 0,
-          sku: i.sku || "N/A"
+          sku: i.sku || i.variant?.sku || "N/A"
         })),
         shippingAddress: {
           ...shippingAddress,
@@ -134,10 +134,16 @@ export async function createOrder(orderData) {
       acc[pId].totalQty += qty;
       
       const vId = item.variantId || item.variant?._id || item.variant?.variantId;
-      const key = vId ? vId.toString() : (item.sku || "default");
+      const vName = typeof item.variant === 'string' ? item.variant : (item.variant?.name || item.color);
+      const key = vId ? vId.toString() : (item.sku || vName || "default");
       
       if (!acc[pId].variants[key]) {
-        acc[pId].variants[key] = { vId: vId ? vId.toString() : null, qty: 0, sku: item.sku };
+        acc[pId].variants[key] = { 
+          vId: vId ? vId.toString() : null, 
+          vName: vName || null,
+          qty: 0, 
+          sku: item.sku || item.variant?.sku 
+        };
       }
       acc[pId].variants[key].qty += qty;
       
@@ -160,18 +166,22 @@ export async function createOrder(orderData) {
       if (product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0) {
         for (const orderedVar of Object.values(data.variants)) {
           const searchId = orderedVar.vId;
+          const searchSku = orderedVar.sku;
+          const searchName = orderedVar.vName ? orderedVar.vName.toLowerCase().trim() : null;
           
           let target = product.variants.find((v) => {
-            const idMatch = v._id && v._id.toString() === searchId;
-            const skuMatch = orderedVar.sku && v.sku && v.sku === orderedVar.sku;
-            return idMatch || skuMatch;
+            const idMatch = searchId && v._id && v._id.toString() === searchId;
+            const skuMatch = searchSku && v.sku && v.sku === searchSku;
+            const nameMatch = searchName && v.name && v.name.toLowerCase().trim() === searchName;
+            return idMatch || skuMatch || nameMatch;
           });
 
           if (!target && searchId && typeof product.variants.id === "function") {
             target = product.variants.id(searchId);
           }
 
-          if (!target && product.variants.length === 1) {
+          // Fallback: If only one variant or unmatched, match the first available variant or default fallback
+          if (!target && product.variants.length > 0) {
             target = product.variants[0];
           }
 
@@ -242,7 +252,7 @@ export async function createOrder(orderData) {
         shippingAddress: formattedAddress,
         totalAmount: normalizedTotal,
         paymentMethod: paymentMethod,
-        items: newOrder.items.map(i => ({
+        items: newOrder.items.main ? newOrder.items : newOrder.items.map(i => ({
           name: i.productName,
           quantity: i.quantity,
           price: i.price,

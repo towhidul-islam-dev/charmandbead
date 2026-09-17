@@ -216,15 +216,34 @@ export default function CheckoutPage() {
       return;
     }
 
+    setLoading(true);
+
     try {
-      // AFTER (UPDATED)
+      const screenshotBase64 = await convertFileToBase64(paymentScreenshot);
       const userEmail = session?.user?.email || userAddress?.email || "";
 
       const orderData = {
         userId: session?.user?.id,
-        email: userEmail, // 👈 ADDED: Root email field for order notification dispatches
+        email: userEmail,
         customerName: customerName.trim(),
-        items: checkoutItems.map(/* ... */),
+        items: checkoutItems.map((item) => {
+          let variantName = "N/A";
+          if (typeof item.variant === "string") {
+            variantName = item.variant;
+          } else if (item.variant?.name) {
+            variantName = item.variant.name;
+          }
+
+          return {
+            productId: item.productId || item._id,
+            name: item.name || item.productName,
+            price: Number(item.price),
+            quantity: Number(item.quantity),
+            image: item.image || item.thumbnail || "/placeholder.png",
+            variant: variantName,
+            size: item.size || "N/A",
+          };
+        }),
         totalAmount: Number((finalTotal + mobileBankingFee).toFixed(2)),
         paidAmount: Number(payableNow.toFixed(2)),
         dueAmount: Number(dueOnDelivery.toFixed(2)),
@@ -244,9 +263,24 @@ export default function CheckoutPage() {
         paymentStatus: "Verifying",
         shippingAddress: {
           ...userAddress,
-          email: userEmail, // 👈 ADDED: Email attached inside shipping address object
+          email: userEmail,
         },
       };
+
+      const response = await createOrder(orderData);
+
+      if (response?.success) {
+        setPlacedOrderDetails(response.order || orderData);
+        setShowSuccessModal(true);
+        toast.success("Order placed successfully!");
+        localStorage.removeItem("checkoutItems");
+        if (typeof deleteSelectedItems === "function") {
+          const boughtIds = checkoutItems.map((i) => i._id || i.productId);
+          deleteSelectedItems(boughtIds);
+        }
+      } else {
+        toast.error(response?.message || "Failed to create order.");
+      }
     } catch (error) {
       console.error("CHECKOUT_ERROR:", error);
       toast.error("Failed to initiate order.");
@@ -696,7 +730,7 @@ export default function CheckoutPage() {
 
             <div className="pt-1 space-y-1">
               <h3 className="text-lg sm:text-xl font-serif font-bold text-[#3E442B] italic uppercase flex items-center justify-center gap-2">
-                <QrCode className="text-[#EA638C]" size={20} />
+                <QrCode className="Text-[#EA638C]" size={20} />
                 <span>Islami Bank Bangla QR</span>
               </h3>
               <p className="text-[11px] sm:text-xs font-semibold text-gray-500">
@@ -742,61 +776,35 @@ export default function CheckoutPage() {
               <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#3E442B] italic uppercase">
                 Order Placed Successfully!
               </h3>
-              <p className="max-w-sm mx-auto text-xs font-medium leading-relaxed text-gray-600">
-                Thank you for your order! We have received your payment details.
-                An admin will verify your payment and confirm your order
-                shortly.
+              <p className="text-xs font-medium text-gray-500">
+                Your payment is currently under manual verification. We will update you shortly via SMS and email.
               </p>
             </div>
 
-            <div className="bg-[#FAFAFA] rounded-2xl p-4 border border-gray-100 text-left space-y-2.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold tracking-wider text-gray-400 uppercase">
-                  Customer Name
-                </span>
+            <div className="bg-[#FAFAFA] border border-gray-100 p-4 rounded-2xl text-left space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-gray-400 font-semibold uppercase text-[10px]">Customer:</span>
                 <span className="font-bold text-[#3E442B]">{customerName}</span>
               </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold tracking-wider text-gray-400 uppercase">
-                  Txn ID
-                </span>
-                <span className="font-bold text-[#3E442B] font-mono">
-                  {placedOrderDetails?.txnId}
-                </span>
+              <div className="flex justify-between">
+                <span className="text-gray-400 font-semibold uppercase text-[10px]">Phone:</span>
+                <span className="font-bold text-[#3E442B]">{phone}</span>
               </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold tracking-wider text-gray-400 uppercase">
-                  Amount Advance Paid
-                </span>
-                <span className="font-bold text-[#EA638C] font-serif">
-                  ৳{placedOrderDetails?.amountPaid?.toFixed(2)}
-                </span>
-              </div>
-              {placedOrderDetails?.due > 0 && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold tracking-wider text-gray-400 uppercase">
-                    Due on Delivery
-                  </span>
-                  <span className="font-bold text-[#3E442B] font-serif">
-                    ৳{placedOrderDetails?.due?.toLocaleString()}
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center justify-between pt-2 text-xs border-t border-gray-100">
-                <span className="flex items-center gap-1 font-bold tracking-wider text-gray-400 uppercase">
-                  <Clock size={12} className="text-[#EA638C]" /> Status
-                </span>
-                <span className="px-3 py-1 bg-[#FBB6E6]/40 text-[#EA638C] rounded-full font-black text-[10px] uppercase">
-                  Awaiting Admin Verification
-                </span>
+              <div className="flex justify-between border-t border-gray-200 pt-2">
+                <span className="text-gray-400 font-semibold uppercase text-[10px]">Paid Advance:</span>
+                <span className="font-serif font-bold text-[#EA638C]">৳{payableNow.toFixed(2)}</span>
               </div>
             </div>
 
             <button
-              onClick={() => router.push("/dashboard/orders")}
-              className="w-full bg-[#3E442B] hover:bg-[#EA638C] text-white py-3.5 px-6 rounded-full font-black uppercase text-xs tracking-widest transition-colors flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+              onClick={() => {
+                setShowSuccessModal(false);
+                router.push("/dashboard/orders");
+              }}
+              className="w-full bg-[#3E442B] hover:bg-[#3E442B]/90 text-white p-4 rounded-full font-black uppercase tracking-[0.1em] text-xs transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
             >
-              View Order Status <ArrowRight size={16} />
+              <span>View My Orders</span>
+              <ArrowRight size={16} />
             </button>
           </div>
         </div>
