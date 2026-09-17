@@ -35,12 +35,24 @@ export default function OrderDetailsModal({ order, onClose }) {
   // State for Image Popup
   const [selectedImage, setSelectedImage] = useState(null);
 
+  // Packing Checklist State (tracks item index -> boolean)
+  const [packedItems, setPackedItems] = useState({});
+
   // Audio Context Ref for playing sound effects without external files
   const audioCtxRef = useRef(null);
 
   // Pathao Tracking State
   const [pathaoData, setPathaoData] = useState(null);
   const [loadingPathao, setLoadingPathao] = useState(false);
+
+  // Toggle handler for individual item packing status
+  const togglePackItem = (index) => {
+    setPackedItems(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+    playPopSound();
+  };
 
   // Sound generator function (UI Pop effect)
   const playPopSound = () => {
@@ -185,12 +197,12 @@ export default function OrderDetailsModal({ order, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-2 sm:p-4">
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       {/* BACKDROP */}
       <div className="fixed inset-0 bg-[#3E442B]/40 backdrop-blur-md" onClick={onClose} />
       
-      {/* MODAL MAIN CONTAINER */}
-      <div className="relative w-full max-w-lg bg-white rounded-2xl sm:rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh] sm:max-h-[85vh] border border-white/20 my-auto z-10 overflow-hidden">
+      {/* MODAL MAIN CONTAINER - FULLY RESPONSIVE */}
+      <div className="relative w-full max-w-lg bg-white rounded-2xl sm:rounded-[2.5rem] shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[85vh] border border-white/20 my-auto z-10 overflow-hidden">
         
         {/* HEADER */}
         <div className="flex-shrink-0 h-12 sm:h-14 bg-[#3E442B] flex items-center justify-between px-4 sm:px-6">
@@ -204,7 +216,7 @@ export default function OrderDetailsModal({ order, onClose }) {
                 {order.paymentStatus || (!isPartial ? "Paid" : "Pending")}
               </span>
             </div>
-            <button onClick={onClose} className="text-white/30 hover:text-[#EA638C] transition-all p-1">
+            <button onClick={onClose} className="text-white/70 hover:text-[#EA638C] transition-all p-1">
               <X size={18}/>
             </button>
           </div>
@@ -213,37 +225,37 @@ export default function OrderDetailsModal({ order, onClose }) {
         {/* SCROLLABLE BODY CONTENT CONTAINER */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
 
-          {/* CUSTOMER & TOGGLE BAR */}
+          {/* CUSTOMER & VIEW MODE TOGGLE */}
           <div className="flex items-center justify-between px-4 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 bg-gray-50/50 gap-2">
              <div className="leading-tight min-w-0 flex-1">
-                <p className="text-[10px] font-black text-[#3E442B] uppercase truncate">{order.shippingAddress?.fullName || "Customer"}</p>
+                <p className="text-[10px] sm:text-[11px] font-black text-[#3E442B] uppercase truncate">{order.shippingAddress?.fullName || "Customer"}</p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[8px] font-bold text-gray-400 truncate">{order.shippingAddress?.phone || "N/A"}</span>
+                  <span className="text-[8px] sm:text-[8.5px] font-bold text-gray-400 truncate">{order.shippingAddress?.phone || "N/A"}</span>
                   {order.shippingAddress?.phone && (
-                    <button onClick={handleWhatsApp} className="text-green-600 transition-transform hover:scale-110 shrink-0">
+                    <button onClick={handleWhatsApp} className="text-green-600 transition-transform hover:scale-110 shrink-0 p-0.5">
                       <MessageSquare size={12} />
                     </button>
                   )}
                 </div>
              </div>
              
-             <div className="flex p-0.5 bg-white border border-gray-200 rounded-lg h-fit shrink-0">
+             <div className="flex p-0.5 bg-white border border-gray-200 rounded-lg h-fit shrink-0 shadow-sm">
                 <button 
                   onClick={() => setIncludePrice(true)} 
-                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-[7px] font-black uppercase transition-all ${includePrice ? 'bg-[#3E442B] text-white shadow-sm' : 'text-gray-400'}`}
+                  className={`px-3 py-1 sm:py-1.5 rounded-md text-[7.5px] sm:text-[8px] font-black uppercase transition-all ${includePrice ? 'bg-[#3E442B] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                   Invoice
                 </button>
                 <button 
                   onClick={() => setIncludePrice(false)} 
-                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-[7px] font-black uppercase transition-all ${!includePrice ? 'bg-[#3E442B] text-white shadow-sm' : 'text-gray-400'}`}
+                  className={`px-3 py-1 sm:py-1.5 rounded-md text-[7.5px] sm:text-[8px] font-black uppercase transition-all ${!includePrice ? 'bg-[#3E442B] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                   Pack
                 </button>
              </div>
           </div>
 
-          {/* BANGLA QR & PAYMENT INFO BAR */}
+          {/* PAYMENT METHOD & GATEWAY BAR */}
           <div className="flex flex-col gap-1.5 px-4 sm:px-6 py-2 sm:py-2.5 bg-[#F3FDF5] border-b border-green-100">
             <div className="flex items-center justify-between flex-wrap gap-1">
               <div className="flex items-center gap-1.5 sm:gap-2">
@@ -266,10 +278,10 @@ export default function OrderDetailsModal({ order, onClose }) {
                   <div 
                     onClick={handleCopyTxn}
                     title="Click to copy Transaction ID"
-                    className="flex items-center gap-1 font-mono font-black text-[#EA638C] px-2 py-0.5 sm:py-1 rounded-lg cursor-pointer bg-white/40 border border-transparent hover:border-[#EA638C]/30 hover:bg-white hover:shadow-md hover:scale-105 origin-left transition-all duration-200 ease-out"
+                    className="flex items-center gap-1 font-mono font-black text-[#EA638C] px-2 py-1 rounded-lg cursor-pointer bg-white/60 border border-transparent hover:border-[#EA638C]/30 hover:bg-white hover:shadow-sm transition-all"
                   >
                     <Hash size={10} className="text-[#3E442B]/50 shrink-0" />
-                    <span className="truncate max-w-[120px] sm:max-w-none">TXN: {transactionId}</span>
+                    <span className="truncate max-w-[130px] sm:max-w-none">TXN: {transactionId}</span>
                     {copiedTxn ? <Check size={10} className="text-green-500 ml-0.5 shrink-0" /> : <Copy size={9} className="text-gray-300 ml-0.5 shrink-0" />}
                   </div>
                 ) : <span />}
@@ -278,7 +290,7 @@ export default function OrderDetailsModal({ order, onClose }) {
                   <div 
                     onClick={handleCopyPhone}
                     title="Click to copy Sender Phone"
-                    className="flex items-center gap-1 text-gray-600 font-semibold ml-auto px-2 py-0.5 sm:py-1 rounded-lg cursor-pointer bg-white/40 border border-transparent hover:border-[#3E442B]/20 hover:bg-white hover:shadow-md hover:scale-105 origin-right transition-all duration-200 ease-out"
+                    className="flex items-center gap-1 text-gray-600 font-semibold ml-auto px-2 py-1 rounded-lg cursor-pointer bg-white/60 border border-transparent hover:border-[#3E442B]/20 hover:bg-white hover:shadow-sm transition-all"
                   >
                     <PhoneCall size={10} className="text-[#EA638C] shrink-0" />
                     <span>Sender: {senderPhone}</span>
@@ -289,10 +301,10 @@ export default function OrderDetailsModal({ order, onClose }) {
             )}
           </div>
 
-          {/* LOGISTICS INTELLIGENCE (Pathao Integration) */}
+          {/* PATHAO TRACKING INTELLIGENCE */}
           {order.trackingNumber && (
             <div className="px-4 sm:px-6 py-2 bg-white border-b border-gray-50">
-              <div className="flex items-center justify-between p-2 sm:p-2.5 bg-gray-50 rounded-xl sm:rounded-2xl border border-gray-100">
+              <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl sm:rounded-2xl border border-gray-100">
                 <div className="flex items-center gap-2.5 sm:gap-3">
                   <div className="p-1.5 sm:p-2 bg-[#EA638C]/10 text-[#EA638C] rounded-lg shrink-0">
                     <Truck size={12} />
@@ -304,18 +316,21 @@ export default function OrderDetailsModal({ order, onClose }) {
                     </p>
                   </div>
                 </div>
-                <button onClick={fetchPathaoStatus} className="p-1.5 text-gray-300 hover:text-[#3E442B] transition-colors shrink-0">
+                <button onClick={fetchPathaoStatus} className="p-1.5 text-gray-400 hover:text-[#3E442B] transition-colors shrink-0">
                   <RefreshCw size={12} className={loadingPathao ? "animate-spin" : ""} />
                 </button>
               </div>
             </div>
           )}
 
-          {/* COURIER UTILITY BAR */}
-          <div className="flex justify-end px-4 sm:px-6 py-1 bg-white border-b border-gray-50">
+          {/* CHECKLIST BAR */}
+          <div className="flex justify-between items-center px-4 sm:px-6 py-1.5 bg-white border-b border-gray-50">
+            <span className="text-[8px] font-black text-[#3E442B] uppercase tracking-wider">
+              Packing Checklist
+            </span>
             <button 
               onClick={handleCopyAddress}
-              className="flex items-center gap-1.5 text-[8px] font-black uppercase hover:text-[#EA638C] transition-all text-[#3E442B]/60 py-0.5"
+              className="flex items-center gap-1.5 text-[8px] font-black uppercase hover:text-[#EA638C] transition-all text-[#3E442B]/70 py-0.5"
             >
               {copied ? <Check size={10} className="text-green-500" /> : <Copy size={10} />}
               {copied ? "Copied" : "Copy for Courier"}
@@ -328,46 +343,87 @@ export default function OrderDetailsModal({ order, onClose }) {
                {order.items?.map((item, i) => {
                  const variantImg = getItemImage(item);
                  const variantName = getItemVariantName(item);
+                 const isPacked = !!packedItems[i];
 
                  return (
-                   <div key={i} className="flex items-center gap-2.5 sm:gap-3 p-2 sm:p-2.5 border border-gray-100 rounded-xl sm:rounded-2xl bg-gray-50/40 hover:border-[#EA638C]/30 transition-all">
-                      
-                      {/* CLICKABLE VARIANT IMAGE */}
-                      <div 
-                        onClick={() => setSelectedImage(variantImg)}
-                        className="relative flex-shrink-0 w-12 sm:w-14 h-12 sm:h-14 border border-gray-200 rounded-lg sm:rounded-xl overflow-hidden bg-white shadow-sm flex items-center justify-center cursor-pointer group/img"
-                      >
-                        <img 
-                          src={variantImg} 
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-110" 
-                          alt={item.productName || item.product?.name || "product"} 
-                          onError={(e) => { e.target.src = "/placeholder.png"; }}
-                        />
-                        <div className="absolute inset-0 bg-[#3E442B]/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
-                          <ZoomIn size={14} className="text-white drop-shadow-md" />
-                        </div>
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[9px] sm:text-[10px] font-black uppercase text-[#3E442B] truncate leading-tight">
-                          {item.productName || item.product?.name || item.name}
-                        </p>
-                        
-                        <div className="flex items-center gap-1 sm:gap-1.5 mt-1 flex-wrap">
-                          <span className="px-1.5 sm:px-2 py-0.5 bg-[#FBB6E6]/30 text-[#EA638C] border border-[#FBB6E6] text-[6.5px] sm:text-[7px] font-black uppercase rounded-md">
-                            Variant: {variantName}
-                          </span>
-                          <span className="text-[7.5px] sm:text-[8px] font-bold text-gray-400 uppercase">
-                            Qty: {item.quantity}
-                          </span>
-                        </div>
-                      </div>
+                   <div 
+                     key={i} 
+                     className={`flex items-center justify-between gap-2.5 sm:gap-3 p-2.5 sm:p-3 border rounded-xl sm:rounded-2xl transition-all duration-300 ${
+                       isPacked 
+                         ? "bg-[#3E442B]/5 border-[#3E442B]/40 shadow-sm" 
+                         : "bg-gray-50/40 border-gray-100 hover:border-[#EA638C]/30 hover:bg-white"
+                     }`}
+                   >
+                     
+                     <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                       <div 
+                         onClick={() => setSelectedImage(variantImg)}
+                         className="relative flex-shrink-0 w-12 sm:w-14 h-12 sm:h-14 border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm flex items-center justify-center cursor-pointer group/img"
+                       >
+                         <img 
+                           src={variantImg} 
+                           className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-110" 
+                           alt={item.productName || item.product?.name || "product"} 
+                           onError={(e) => { e.target.src = "/placeholder.png"; }}
+                         />
+                         <div className="absolute inset-0 bg-[#3E442B]/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                           <ZoomIn size={14} className="text-white drop-shadow-md" />
+                         </div>
+                       </div>
+                       
+                       <div className="flex-1 min-w-0">
+                         <p className={`text-[9px] sm:text-[10px] font-black uppercase truncate leading-tight ${
+                           isPacked ? "line-through text-gray-400" : "text-[#3E442B]"
+                         }`}>
+                           {item.productName || item.product?.name || item.name}
+                         </p>
+                         
+                         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                           <span className="px-1.5 sm:px-2 py-0.5 bg-[#FBB6E6]/30 text-[#EA638C] border border-[#FBB6E6] text-[6.5px] sm:text-[7px] font-black uppercase rounded-md">
+                             Variant: {variantName}
+                           </span>
+                           <span className="text-[7.5px] sm:text-[8px] font-bold text-gray-400 uppercase">
+                             Qty: {item.quantity}
+                           </span>
+                         </div>
+                       </div>
+                     </div>
 
-                      {includePrice && (
-                        <p className="text-[10px] sm:text-[11px] font-black text-[#3E442B] shrink-0">
-                          ৳{((item.price || 0) * item.quantity).toLocaleString()}
-                        </p>
-                      )}
+                     <div className="flex items-center gap-3 shrink-0">
+                       {includePrice && (
+                         <div className="text-right">
+                           <p className={`text-[10px] sm:text-[11px] font-black ${isPacked ? "line-through text-gray-400" : "text-[#3E442B]"}`}>
+                             ৳{((item.price || 0) * item.quantity).toLocaleString()}
+                           </p>
+                           <p className={`text-[7px] sm:text-[7.5px] font-black uppercase tracking-tight ${isPacked ? "text-[#3E442B]" : "text-gray-400"}`}>
+                             {isPacked ? "Packed ✓" : "Pending"}
+                           </p>
+                         </div>
+                       )}
+
+                       {/* FANCY RESPONSIVE GLOW TOGGLE SWITCH */}
+                       <button
+                         type="button"
+                         onClick={() => togglePackItem(i)}
+                         className={`relative flex items-center h-6 w-12 sm:h-7 sm:w-14 shrink-0 cursor-pointer rounded-full p-1 transition-all duration-300 ease-in-out shadow-inner focus:outline-none ${
+                           isPacked ? "bg-[#3E442B] shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]" : "bg-gray-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)]"
+                         }`}
+                         title={isPacked ? "Mark as Pending" : "Mark as Packed"}
+                       >
+                         <div
+                           className={`flex items-center justify-center h-4 w-4 sm:h-5 sm:w-5 transform rounded-full bg-white shadow-md transition-all duration-300 ease-out ${
+                             isPacked ? "translate-x-6 sm:translate-x-7 bg-white text-[#3E442B]" : "translate-x-0 text-gray-400"
+                           }`}
+                         >
+                           {isPacked ? (
+                             <Check size={10} className="stroke-[3] text-[#3E442B] animate-in zoom-in duration-200" />
+                           ) : (
+                             <span className="h-1.5 w-1.5 rounded-full bg-[#EA638C]" />
+                           )}
+                         </div>
+                       </button>
+
+                     </div>
                    </div>
                  );
                })}
@@ -416,14 +472,13 @@ export default function OrderDetailsModal({ order, onClose }) {
           {/* FOOTER & ACTUAL DUE */}
           <div className="p-3 sm:p-4 bg-white">
               <div className="flex items-center justify-between gap-2 sm:gap-4">
-                 {/* SHIP TO SECTION WITH COPY FEATURE */}
                  <div 
                    className="relative max-w-[130px] sm:max-w-[170px] cursor-pointer group"
                    onMouseEnter={() => handleShipToHover(true)}
                    onMouseLeave={() => handleShipToHover(false)}
                    onTouchStart={() => handleShipToHover(!showShipToTooltip)}
                  >
-                    {/* CUSTOMER POPUP CARD WITH DEDICATED COPY BUTTON */}
+                    {/* CUSTOMER HOVER TOOLTIP CARD */}
                     <div 
                       className={`absolute bottom-full left-0 mb-2 sm:mb-3 w-56 sm:w-64 p-3 sm:p-3.5 bg-[#3E442B] text-white rounded-xl sm:rounded-2xl shadow-2xl border border-white/20 origin-bottom-left transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-[200] ${
                         showShipToTooltip 
@@ -449,19 +504,16 @@ export default function OrderDetailsModal({ order, onClose }) {
                           <p className="text-[6.5px] sm:text-[7px] text-gray-300 uppercase font-extrabold">Name</p>
                           <p className="font-black text-white truncate">{order.shippingAddress?.fullName || "Customer"}</p>
                         </div>
-
                         <div>
                           <p className="text-[6.5px] sm:text-[7px] text-gray-300 uppercase font-extrabold">Phone</p>
                           <p className="font-bold text-[#FBB6E6]">{order.shippingAddress?.phone || "N/A"}</p>
                         </div>
-
                         <div>
                           <p className="text-[6.5px] sm:text-[7px] text-gray-300 uppercase font-extrabold">Address</p>
                           <p className="font-medium text-white/90 leading-tight">
                             {order.shippingAddress?.street || order.shippingAddress?.address || "N/A"}
                           </p>
                         </div>
-
                         {order.shippingAddress?.city && (
                           <div>
                             <p className="text-[6.5px] sm:text-[7px] text-gray-300 uppercase font-extrabold">City / Region</p>
@@ -469,15 +521,12 @@ export default function OrderDetailsModal({ order, onClose }) {
                           </div>
                         )}
                       </div>
-
-                      {/* Popup Arrow Tail */}
                       <div className="absolute top-full left-4 sm:left-5 border-8 border-transparent border-t-[#3E442B]" />
                     </div>
 
-                    {/* SHIP TO DISPLAY WITH CLICK TO COPY ICON */}
                     <div className="flex items-center justify-between">
                       <p className="text-[6.5px] sm:text-[7px] font-black text-[#EA638C] uppercase mb-0.5 flex items-center gap-1 group-hover:text-[#3E442B] transition-colors">
-                        <MapPin size={8}/> Ship To <span className="text-[5.5px] sm:text-[6px] text-gray-400 font-normal ml-0.5">(hover)</span>
+                        <MapPin size={8}/> Ship To <span className="text-[5.5px] sm:text-[6px] text-gray-400 font-normal ml-0.5">(tap/hover)</span>
                       </p>
                       <button 
                         onClick={handleCopyAddress} 
@@ -498,11 +547,11 @@ export default function OrderDetailsModal({ order, onClose }) {
                     </p>
                  </div>
                  
-                 <div className={`p-2 sm:p-2.5 px-3 sm:px-4 rounded-xl sm:rounded-2xl text-right min-w-[120px] sm:min-w-[140px] shadow-lg border-b-4 ${isPartial ? 'bg-[#EA638C] border-[#3E442B]' : 'bg-[#3E442B] border-[#EA638C]'}`}>
+                 <div className={`p-2.5 sm:p-3 px-3.5 sm:px-4 rounded-xl sm:rounded-2xl text-right min-w-[120px] sm:min-w-[140px] shadow-lg border-b-4 ${isPartial ? 'bg-[#EA638C] border-[#3E442B]' : 'bg-[#3E442B] border-[#EA638C]'}`}>
                     <p className="text-[6.5px] sm:text-[7px] font-black text-white/70 uppercase leading-none mb-1">
                        {isPartial ? "Balance Due (COD)" : "Fully Paid"}
                     </p>
-                    <p className="text-lg sm:text-xl italic font-black leading-none tracking-tighter text-white">
+                    <p className="text-base sm:text-xl italic font-black leading-none tracking-tighter text-white">
                        ৳{dueAmount.toLocaleString()}
                     </p>
                  </div>
@@ -530,7 +579,6 @@ export default function OrderDetailsModal({ order, onClose }) {
             className="relative max-w-lg w-full bg-white rounded-3xl p-2 shadow-2xl overflow-hidden border border-white/20 animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* CLOSE BUTTON */}
             <button 
               onClick={() => setSelectedImage(null)}
               className="absolute top-4 right-4 z-10 p-2 bg-[#3E442B]/80 hover:bg-[#EA638C] text-white rounded-full transition-all active:scale-90 shadow-md backdrop-blur-md"
@@ -538,7 +586,6 @@ export default function OrderDetailsModal({ order, onClose }) {
               <X size={18} />
             </button>
 
-            {/* HIGH RES IMAGE */}
             <div className="relative w-full h-auto max-h-[75vh] flex items-center justify-center bg-gray-100 rounded-2xl overflow-hidden">
               <img 
                 src={selectedImage} 
