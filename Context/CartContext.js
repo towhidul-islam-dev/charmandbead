@@ -1,10 +1,11 @@
 "use client";
-import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from "react";
 
 const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState([]);
+  const isInitialMount = useRef(true);
 
   // 1. Load from localStorage
   useEffect(() => {
@@ -18,8 +19,12 @@ export const CartProvider = ({ children }) => {
     }
   }, []);
 
-  // 2. Sync to localStorage
+  // 2. Sync to localStorage (guarded to prevent wiping storage on initial load)
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     localStorage.setItem("charm_cart", JSON.stringify(cart));
   }, [cart]);
 
