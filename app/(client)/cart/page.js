@@ -30,16 +30,20 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
     return globalCart.length > 0 ? globalCart : initialItems;
   }, [globalCart, initialItems]);
 
-  // Ensure every item has a reliable uniqueKey
+  // Ensure every item has a reliable uniqueKey, basePrice, and variantId
   const cart = useMemo(() => {
     return rawCart.map((item) => {
       const pId = item.productId || item._id;
       const vId = item.variantId || item.variant?._id || `${item.color || ""}-${item.size || ""}` || "std";
+      const generatedKey = item.uniqueKey || `${pId}-${vId}`;
+      const itemPrice = Number(item.price) || 0;
+
       return {
         ...item,
         productId: pId,
         variantId: item.variantId || item.variant?._id || null,
-        uniqueKey: item.uniqueKey || `${pId}-${vId}`,
+        uniqueKey: generatedKey,
+        basePrice: Number(item.basePrice) || itemPrice,
       };
     });
   }, [rawCart]);
@@ -155,14 +159,29 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
         .filter((item) => selectedItems.includes(item.uniqueKey))
         .map((item) => {
           const img = item.imageUrl || item.image || item.variant?.image || null;
-          const resolvedVariantId = item.variantId || item.variant?._id || item.variant?.variantId || null;
+          
+          // Enhanced resolution to fallback reliably across variant id fields
+          const resolvedVariantId = 
+            item.variantId || 
+            item.variant?._id || 
+            item.variant?.variantId || 
+            item._id || 
+            null;
+
+          const itemPrice = Number(item.price) || 0;
+          const resolvedBasePrice = Number(item.basePrice) || itemPrice;
+          const pId = item.productId || item._id;
+          const vId = resolvedVariantId || `${item.color || ""}-${item.size || ""}` || "std";
+          const resolvedUniqueKey = item.uniqueKey || `${pId}-${vId}`;
 
           return {
             ...item,
-            productId: item.productId || item._id,
+            productId: pId,
             variantId: resolvedVariantId,
+            uniqueKey: resolvedUniqueKey,
             quantity: Number(item.quantity) || 1,
-            price: Number(item.price) || 0,
+            price: itemPrice,
+            basePrice: resolvedBasePrice,
             variantImage: img,
             image: img,
             variant: {
