@@ -142,7 +142,8 @@ export async function createOrder(orderData) {
           vId: vId ? vId.toString() : null, 
           vName: vName || null,
           qty: 0, 
-          sku: item.sku || item.variant?.sku 
+          sku: item.sku || item.variant?.sku,
+          size: item.size || item.variant?.size
         };
       }
       acc[pId].variants[key].qty += qty;
@@ -165,28 +166,44 @@ export async function createOrder(orderData) {
 
       if (product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0) {
         for (const orderedVar of Object.values(data.variants)) {
-          const searchId = orderedVar.vId;
-          const searchSku = orderedVar.sku;
+          const searchId = orderedVar.vId ? orderedVar.vId.trim() : null;
+          const searchSku = orderedVar.sku ? orderedVar.sku.trim() : null;
           const searchName = orderedVar.vName ? orderedVar.vName.toLowerCase().trim() : null;
+          const searchSize = orderedVar.size ? orderedVar.size.toLowerCase().trim() : null;
           
+          // Enhanced multi-layer match to prevent false negatives
           let target = product.variants.find((v) => {
             const idMatch = searchId && v._id && v._id.toString() === searchId;
-            const skuMatch = searchSku && v.sku && v.sku === searchSku;
-            const nameMatch = searchName && v.name && v.name.toLowerCase().trim() === searchName;
-            return idMatch || skuMatch || nameMatch;
+            const skuMatch = searchSku && v.sku && v.sku.trim() === searchSku;
+            
+            // Match against actual VariantSchema fields (color and size)
+            const colorMatch = searchName && v.color && v.color.toLowerCase().trim() === searchName;
+            const sizeMatch = searchName && v.size && v.size.toLowerCase().trim() === searchName;
+            
+            // Loose fallback: check if the variant's color or size is part of the string name passed from cart
+            const looseMatch = searchName && (
+              (v.color && searchName.includes(v.color.toLowerCase().trim())) ||
+              (v.size && searchName.includes(v.size.toLowerCase().trim()))
+            );
+
+            return idMatch || skuMatch || colorMatch || sizeMatch || looseMatch;
           });
 
           if (!target && searchId && typeof product.variants.id === "function") {
-            target = product.variants.id(searchId);
+            try {
+              target = product.variants.id(searchId);
+            } catch (e) {
+              // Ignore invalid cast exceptions
+            }
           }
 
-          // Fallback: If only one variant or unmatched, match the first available variant or default fallback
-          if (!target && product.variants.length > 0) {
+          // Safety fallback: If product only has 1 variant option, match it directly instead of crashing
+          if (!target && product.variants.length === 1) {
             target = product.variants[0];
           }
 
           if (!target) {
-            throw new Error(`Variant selection not found for product "${data.name}".`);
+            throw new Error(`Selected variant not found for product "${data.name}". Please re-add the item to your cart.`);
           }
 
           const currentVariantStock = Number(target.stock) || 0;
@@ -302,7 +319,6 @@ export async function createOrder(orderData) {
     session.endSession();
   }
 }
-
 export async function updateOrderStatus(orderId, newStatus, trackingNumber = "") {
   const session = await mongoose.startSession();
   session.startTransaction();

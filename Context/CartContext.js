@@ -1,32 +1,127 @@
 "use client";
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useSession } from "next-auth/react";
 
 const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
+  const { data: session, status } = useSession();
   const [cart, setCart] = useState([]);
   const isInitialMount = useRef(true);
+  const isSyncingFromServer = useRef(false);
 
-  // 1. Load from localStorage
+  // Helper sanitizer to guarantee basePrice, uniqueKey, and clean IDs on any raw item list
+  const sanitizeItems = (items) => {
+    if (!Array.isArray(items)) return [];
+    return items.map((item) => {
+      const pId = (item.productId?.$oid || item.productId || "").toString();
+      const vId = (item.variantId?.$oid || item.variantId || "std").toString();
+      const calculatedPrice = Number(item.price || item.basePrice || 0);
+
+      return {
+        ...item,
+        productId: pId,
+        variantId: vId === "std" ? null : vId,
+        uniqueKey: item.uniqueKey || `${pId}-${vId}`,
+        basePrice: Number(item.basePrice || calculatedPrice),
+        price: calculatedPrice,
+      };
+    });
+  };
+
+  // 1. Load Cart (From Server if logged in, or localStorage if guest)
   useEffect(() => {
-    const savedCart = localStorage.getItem("charm_cart");
-    if (savedCart) {
-      try {
-        setCart(JSON.parse(savedCart));
-      } catch (e) {
-        setCart([]);
+    if (status === "loading") return;
+
+    if (session?.user) {
+      const localGuestCart = localStorage.getItem("charm_cart");
+      let parsedGuestItems = [];
+      
+      if (localGuestCart) {
+        try {
+          parsedGuestItems = sanitizeItems(JSON.parse(localGuestCart));
+        } catch (e) {
+          parsedGuestItems = [];
+        }
+      }
+
+      fetch("/api/cart")
+        .then((res) => res.json())
+        .then(async (data) => {
+          if (data.success && Array.isArray(data.items)) {
+            let finalServerItems = sanitizeItems(data.items);
+
+            if (parsedGuestItems.length > 0) {
+              const itemMap = new Map();
+              
+              finalServerItems.forEach(item => itemMap.set(item.uniqueKey, item));
+              
+              parsedGuestItems.forEach(guestItem => {
+                if (itemMap.has(guestItem.uniqueKey)) {
+                  const existing = itemMap.get(guestItem.uniqueKey);
+                  itemMap.set(guestItem.uniqueKey, {
+                    ...existing,
+                    quantity: existing.quantity + guestItem.quantity
+                  });
+                } else {
+                  itemMap.set(guestItem.uniqueKey, guestItem);
+                }
+              });
+
+              finalServerItems = Array.from(itemMap.values());
+
+              try {
+                await fetch("/api/cart", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ items: finalServerItems }),
+                });
+              } catch (syncErr) {
+                console.error("Failed to sync merged guest cart to server:", syncErr);
+              }
+
+              localStorage.removeItem("charm_cart");
+            }
+
+            isSyncingFromServer.current = true;
+            setCart(finalServerItems);
+          }
+        })
+        .catch((err) => console.error("Failed to load server cart:", err));
+    } else {
+      const savedCart = localStorage.getItem("charm_cart");
+      if (savedCart) {
+        try {
+          setCart(sanitizeItems(JSON.parse(savedCart)));
+        } catch (e) {
+          setCart([]);
+        }
       }
     }
-  }, []);
+  }, [status, session?.user]);
 
-  // 2. Sync to localStorage (guarded to prevent wiping storage on initial load)
+  // 2. Sync Cart Changes
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
-    localStorage.setItem("charm_cart", JSON.stringify(cart));
-  }, [cart]);
+
+    if (isSyncingFromServer.current) {
+      isSyncingFromServer.current = false;
+      return;
+    }
+
+    if (session?.user) {
+      fetch("/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: cart }),
+      }).catch((err) => console.error("Failed to sync cart to server:", err));
+    } else {
+      localStorage.setItem("charm_cart", JSON.stringify(cart));
+    }
+  }, [cart, session?.user]);
 
   const addToCart = (product, variantOrDelta, quantity = 0) => {
     setCart((prev) => {
@@ -40,9 +135,17 @@ export const CartProvider = ({ children }) => {
         qChange = variantOrDelta;
       } else {
         const pId = (product._id?.$oid || product._id || product.productId)?.toString();
-        const vId = (variantOrDelta?._id?.$oid || variantOrDelta?._id || product.variantId)?.toString();
         
-        targetUniqueKey = product.uniqueKey || `${pId}-${vId || "std"}`;
+        const vId = (
+          variantOrDelta?._id?.$oid || 
+          variantOrDelta?._id || 
+          variantOrDelta?.variantId || 
+          product.variantId || 
+          product.variant?._id || 
+          "std"
+        ).toString();
+        
+        targetUniqueKey = product.uniqueKey || `${pId}-${vId}`;
         qChange = Number(quantity);
         isNewAddition = true;
       }
@@ -56,7 +159,7 @@ export const CartProvider = ({ children }) => {
         const itemMoq = Number(item.minOrderQuantity) || 1;
         const availableStock = Number(item.stock) || 0;
 
-        let rawQty = isNewAddition ? item.quantity + qChange : item.quantity + qChange;
+        let rawQty = item.quantity + qChange;
         let newQty = Math.min(availableStock, Math.max(itemMoq, rawQty));
 
         if (item.quantity === newQty) return prev;
@@ -70,7 +173,15 @@ export const CartProvider = ({ children }) => {
       const availableStock = Number(variantOrDelta?.stock ?? product.stock ?? 0);
       
       const finalProductId = (product._id?.$oid || product._id || product.productId)?.toString();
-      const finalVariantId = (variantOrDelta?._id?.$oid || variantOrDelta?._id || product.variantId)?.toString() || null;
+      
+      const finalVariantId = (
+        variantOrDelta?._id?.$oid || 
+        variantOrDelta?._id || 
+        variantOrDelta?.variantId || 
+        product.variantId || 
+        product.variant?._id || 
+        null
+      )?.toString();
 
       let computedVariantName = product.variantName || variantOrDelta?.name || "";
       if (!computedVariantName && (variantOrDelta?.color || variantOrDelta?.size)) {
@@ -81,14 +192,16 @@ export const CartProvider = ({ children }) => {
         computedVariantName = "Standard Variant";
       }
 
+      const calculatedPrice = Number(variantOrDelta?.price || product.price || 0);
+
       const newItem = {
         productId: finalProductId, 
         variantId: finalVariantId,
-        uniqueKey: targetUniqueKey,
+        uniqueKey: targetUniqueKey || `${finalProductId}-${finalVariantId || "std"}`,
         name: product.name,
         variantName: computedVariantName,
-        basePrice: Number(variantOrDelta?.price || product.price || 0),
-        price: Number(variantOrDelta?.price || product.price || 0), 
+        basePrice: Number(product.basePrice || variantOrDelta?.basePrice || calculatedPrice),
+        price: calculatedPrice, 
         pricingTiers: product.pricingTiers || [], 
         imageUrl: variantOrDelta?.image || variantOrDelta?.imageUrl || product.imageUrl || "/placeholder.png",
         size: variantOrDelta?.size || product.size || "N/A",
@@ -103,7 +216,7 @@ export const CartProvider = ({ children }) => {
     });
   };
 
-  // --- 🟢 DYNAMIC PRICE CALCULATION ---
+  // --- 🟢 DYNAMIC PRICE CALCULATION & SANITIZATION ---
   const processedCart = useMemo(() => {
     const productTotals = cart.reduce((acc, item) => {
       acc[item.productId] = (acc[item.productId] || 0) + item.quantity;
@@ -111,8 +224,12 @@ export const CartProvider = ({ children }) => {
     }, {});
 
     return cart.map((item) => {
+      const pId = (item.productId?.$oid || item.productId || "").toString();
+      const vId = (item.variantId?.$oid || item.variantId || "std").toString();
+      const calculatedPrice = Number(item.price || item.basePrice || 0);
+      
       const totalQtyForThisProduct = productTotals[item.productId];
-      let activePrice = item.basePrice || item.price;
+      let activePrice = calculatedPrice;
 
       if (item.pricingTiers && item.pricingTiers.length > 0) {
         const sortedTiers = [...item.pricingTiers].sort((a, b) => b.minQuantity - a.minQuantity);
@@ -123,7 +240,14 @@ export const CartProvider = ({ children }) => {
         }
       }
 
-      return { ...item, price: activePrice };
+      return {
+        ...item,
+        productId: pId,
+        variantId: vId === "std" ? null : vId,
+        uniqueKey: item.uniqueKey || `${pId}-${vId}`,
+        basePrice: Number(item.basePrice || calculatedPrice),
+        price: activePrice,
+      };
     });
   }, [cart]);
 
@@ -131,7 +255,6 @@ export const CartProvider = ({ children }) => {
     setCart((prev) => prev.filter((item) => item.uniqueKey !== uniqueKey));
   }, []);
 
-  // --- 🟢 ROBUST MULTI-KEY DELETE ---
   const deleteSelectedItems = useCallback((selectedKeys) => {
     if (!selectedKeys || !Array.isArray(selectedKeys) || selectedKeys.length === 0) return;
 
@@ -150,8 +273,10 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = useCallback(() => {
     setCart([]);
-    localStorage.removeItem("charm_cart");
-  }, []);
+    if (!session?.user) {
+      localStorage.removeItem("charm_cart");
+    }
+  }, [session?.user]);
 
   const cartTotal = useMemo(() => {
     return processedCart.reduce((acc, item) => acc + item.price * item.quantity, 0);
