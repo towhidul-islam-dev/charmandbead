@@ -1,5 +1,7 @@
 import { getProducts } from "@/lib/data";
 import HeroCarousel from "@/components/HeroCarousel";
+import { getSlides } from "@/actions/sliderActions";
+import BilingualSlider from "@/components/BilingualSlider";
 import ProductCard from "@/components/ProductCard";
 import Link from "next/link";
 import {
@@ -24,9 +26,20 @@ export default async function HomePage({ searchParams }) {
   const currentPage = Number(params.page) || 1;
   const limit = 8; // Showing 8 products per page for the homepage grid
 
-  // Fetching with pagination parameters
-  const { products: rawProducts, success, totalCount } = await getProducts(false, null, currentPage, limit);
-  
+  // Fetching products and slides concurrently with pagination parameters
+  const [productsData, slidesData] = await Promise.all([
+    getProducts(false, null, currentPage, limit),
+    getSlides(),
+  ]);
+
+  const {
+    products: rawProducts,
+    success,
+    totalCount,
+  } = productsData;
+
+  const slides = slidesData.success ? slidesData.slides : [];
+
   const instagramUrl = "https://www.instagram.com/charm.and.bead";
 
   const products =
@@ -49,7 +62,11 @@ export default async function HomePage({ searchParams }) {
     const pages = [];
     const range = 1;
     for (let i = 1; i <= totalPages; i++) {
-      if (i === 1 || i === totalPages || (i >= currentPage - range && i <= currentPage + range)) {
+      if (
+        i === 1 ||
+        i === totalPages ||
+        (i >= currentPage - range && i <= currentPage + range)
+      ) {
         pages.push(i);
       } else if (pages[pages.length - 1] !== "...") {
         pages.push("...");
@@ -61,7 +78,7 @@ export default async function HomePage({ searchParams }) {
   return (
     <main className="min-h-screen bg-white">
       <HeroCarousel />
-
+      <BilingualSlider slides={slides} />
       {/* Hero Section - UI Unchanged */}
       <section className="px-4 py-16 text-center md:py-24 bg-gradient-to-b from-white to-gray-50/50">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#EA638C]/10 text-[#EA638C] text-[10px] font-black uppercase tracking-[0.2em] mb-6 border border-[#EA638C]/10">
@@ -114,34 +131,41 @@ export default async function HomePage({ searchParams }) {
                   <Link
                     href={`?page=${Math.max(1, currentPage - 1)}`}
                     scroll={false}
-                    className={`flex items-center justify-center w-10 h-10 rounded-full transition-all ${currentPage === 1 ? 'opacity-20 pointer-events-none' : 'bg-white text-[#3E442B] hover:text-[#EA638C] shadow-sm'}`}
+                    className={`flex items-center justify-center w-10 h-10 rounded-full transition-all ${currentPage === 1 ? "opacity-20 pointer-events-none" : "bg-white text-[#3E442B] hover:text-[#EA638C] shadow-sm"}`}
                   >
                     <ChevronLeft size={18} />
                   </Link>
 
                   <div className="flex items-center gap-1 px-1">
-                    {getPageNumbers().map((p, i) => (
+                    {getPageNumbers().map((p, i) =>
                       p === "..." ? (
-                        <span key={`dots-${i}`} className="px-2 text-gray-300 font-bold text-xs">...</span>
+                        <span
+                          key={`dots-${i}`}
+                          className="px-2 text-gray-300 font-bold text-xs"
+                        >
+                          ...
+                        </span>
                       ) : (
                         <Link
                           key={p}
                           href={`?page=${p}`}
                           scroll={false}
                           className={`w-10 h-10 flex items-center justify-center rounded-full text-[10px] font-black transition-all ${
-                            currentPage === p ? 'bg-[#3E442B] text-white shadow-md' : 'text-gray-400 hover:text-[#EA638C]'
+                            currentPage === p
+                              ? "bg-[#3E442B] text-white shadow-md"
+                              : "text-gray-400 hover:text-[#EA638C]"
                           }`}
                         >
                           {p}
                         </Link>
-                      )
-                    ))}
+                      ),
+                    )}
                   </div>
 
                   <Link
                     href={`?page=${Math.min(totalPages, currentPage + 1)}`}
                     scroll={false}
-                    className={`flex items-center justify-center w-10 h-10 rounded-full transition-all ${currentPage === totalPages ? 'opacity-20 pointer-events-none' : 'bg-[#3E442B] text-white hover:bg-[#EA638C] shadow-md'}`}
+                    className={`flex items-center justify-center w-10 h-10 rounded-full transition-all ${currentPage === totalPages ? "opacity-20 pointer-events-none" : "bg-[#3E442B] text-white hover:bg-[#EA638C] shadow-md"}`}
                   >
                     <ChevronRight size={18} />
                   </Link>
@@ -166,7 +190,9 @@ export default async function HomePage({ searchParams }) {
           <div className="z-10 w-full md:w-1/2 p-10 md:p-6 md:pl-16 bg-gradient-to-br from-white to-gray-50/50 flex flex-col items-center md:items-start text-center md:text-left h-full justify-center">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EA638C]/10 text-[#EA638C] mb-4 md:mb-2 border border-[#EA638C]/5">
               <Instagram size={12} strokeWidth={3} />
-              <span className="text-[10px] md:text-[8px] font-black uppercase tracking-[0.2em]">Connect with us</span>
+              <span className="text-[10px] md:text-[8px] font-black uppercase tracking-[0.2em]">
+                Connect with us
+              </span>
             </div>
             <h2 className="text-3xl font-black text-[#3E442B] uppercase italic tracking-tighter leading-[0.85] mb-4 md:mb-1.5 md:text-2xl">
               Style On <span className="text-[#EA638C]">Your Feed.</span>
@@ -174,13 +200,18 @@ export default async function HomePage({ searchParams }) {
             <p className="max-w-xs md:max-w-none text-sm md:text-[9px] font-bold text-gray-400 uppercase tracking-tight mb-6 md:mb-3">
               Scan for exclusive drops & design inspiration.
             </p>
-            <a 
+            <a
               href={instagramUrl}
               target="_blank"
               className="group inline-flex items-center gap-2 bg-[#3E442B] text-white px-8 md:px-5 py-3.5 md:py-2 rounded-xl hover:bg-black transition-all duration-500 shadow-xl shadow-[#3E442B]/20"
             >
-              <span className="font-black uppercase text-[10px] md:text-[8px] tracking-[0.1em]">Follow @charm.and.bead</span>
-              <ArrowUpRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              <span className="font-black uppercase text-[10px] md:text-[8px] tracking-[0.1em]">
+                Follow @charm.and.bead
+              </span>
+              <ArrowUpRight
+                size={14}
+                className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
+              />
             </a>
           </div>
 
@@ -191,14 +222,16 @@ export default async function HomePage({ searchParams }) {
               <div className="relative bg-white p-4 md:p-2.5 rounded-[2.2rem] md:rounded-[1.2rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] transition-all duration-700 group-hover:scale-110 group-hover:-rotate-2">
                 <div className="p-2 md:p-1 border-[1.5px] border-dashed border-gray-100 rounded-[1.8rem] md:rounded-[1rem] bg-white flex items-center justify-center">
                   <div className="w-[160px] h-[160px] md:w-[100px] md:h-[100px] flex items-center justify-center">
-                    <InstagramQR url={instagramUrl} size={100} /> 
+                    <InstagramQR url={instagramUrl} size={100} />
                   </div>
                 </div>
                 <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#EA638C] text-white px-4 py-1.5 rounded-full shadow-[0_8px_20px_rgba(234,99,140,0.4)] border-2 border-white/20">
-                   <div className="flex items-center gap-1.5">
-                     <div className="w-1 h-1 bg-white rounded-full animate-ping" />
-                     <span className="text-[8px] md:text-[6px] font-black uppercase tracking-[0.25em] whitespace-nowrap">Scan</span>
-                   </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1 h-1 bg-white rounded-full animate-ping" />
+                    <span className="text-[8px] md:text-[6px] font-black uppercase tracking-[0.25em] whitespace-nowrap">
+                      Scan
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -215,7 +248,8 @@ export default async function HomePage({ searchParams }) {
             href="/products"
             className="z-10 bg-[#EA638C] text-white px-10 py-5 rounded-[2rem] font-black uppercase text-[11px] tracking-[0.2em] hover:bg-white hover:text-[#3E442B] transition-all duration-300 shadow-xl shadow-[#EA638C]/20 flex items-center gap-2 group"
           >
-            <ShoppingBag size={16} className="group-hover:animate-bounce" /> Go to Shop
+            <ShoppingBag size={16} className="group-hover:animate-bounce" /> Go
+            to Shop
           </Link>
         </div>
       </section>
