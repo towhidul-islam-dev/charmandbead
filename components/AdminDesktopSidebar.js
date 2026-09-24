@@ -17,6 +17,7 @@ import {
   PhotoIcon,
   BeakerIcon,
   DocumentTextIcon,
+  RectangleStackIcon,
 } from "@heroicons/react/24/outline";
 
 export default function AdminDesktopSidebar({ user, globalData, currentPath, dbImage }) { // 🟢 Added dbImage
@@ -45,6 +46,7 @@ export default function AdminDesktopSidebar({ user, globalData, currentPath, dbI
       badge: globalData?.pendingLabCount || 0,
     },
     { name: "Carousel", href: "/admin/carousel", icon: PhotoIcon }, 
+    { name: "Sliders", href: "/admin/sliders", icon: RectangleStackIcon },
     { name: "Inventory", href: "/admin/inventory", icon: WrenchIcon },
     {
       name: "New Arrivals",
