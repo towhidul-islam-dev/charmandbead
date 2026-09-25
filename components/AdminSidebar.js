@@ -13,7 +13,8 @@ import {
     FolderIcon,
     PhotoIcon,
     BeakerIcon,
-    DocumentTextIcon 
+    DocumentTextIcon,
+    RectangleStackIcon,
 } from '@heroicons/react/24/outline';
 import AdminDesktopSidebar from './AdminDesktopSidebar';
 
@@ -45,6 +46,7 @@ export default function AdminSidebar({ user, globalData, dbImage }) {
             badge: globalData?.pendingLabCount || 0 
         },
         { name: 'Carousel', href: '/admin/carousel', icon: PhotoIcon }, 
+        { name: "Sliders", href: "/admin/sliders", icon: RectangleStackIcon },
         { name: 'Inventory', href: '/admin/inventory', icon: WrenchIcon },
         { name: 'New Arrivals', href: '/admin/new-arrivals', icon: SparklesIcon }, 
         { name: 'Orders', href: '/admin/orders', icon: ShoppingCartIcon, badge: globalData?.newOrdersCount || 0 },
