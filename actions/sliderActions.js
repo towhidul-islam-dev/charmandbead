@@ -61,3 +61,30 @@ export async function deleteSlide(slideId) {
     return { success: false, error: error.message };
   }
 }
+export async function updateSlide(formData) {
+  try {
+    await dbConnect();
+    
+    const id = formData.get("id");
+    const badge = formData.get("badge");
+    const enTitle = formData.get("enTitle");
+    const bnTitle = formData.get("bnTitle");
+    const enSubtitle = formData.get("enSubtitle");
+    const bnSubtitle = formData.get("bnSubtitle");
+
+    await Slide.findByIdAndUpdate(id, {
+      badge,
+      enTitle,
+      bnTitle,
+      enSubtitle,
+      bnSubtitle,
+    });
+
+    revalidatePath("/admin/sliders");
+    revalidatePath("/"); // If the slider shows on the public home page
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update slide:", error);
+    return { success: false, error: error.message };
+  }
+}
