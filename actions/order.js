@@ -626,7 +626,7 @@ export async function getDashboardStats(period = "all") {
   } catch (error) { return { success: false }; }
 }
 
-export async function getAllOrders(page = 1, limit = 10, search = "", status = "All") {
+export async function getAllOrders(page = 1, limit = 10, search = "", status = "All", sortBy = "new-old") {
   try {
     await dbConnect();
 
@@ -652,45 +652,95 @@ export async function getAllOrders(page = 1, limit = 10, search = "", status = "
       }
     }
 
-    const skip = (page - 1) * limit;
+    // 2. Determine MongoDB sort configuration based on sortBy parameter
+    let sortOption = { createdAt: -1 }; // default: new-old
+    if (sortBy === "old-new") {
+      sortOption = { createdAt: 1 };
+    } else if (sortBy === "high-low") {
+      sortOption = { totalAmount: -1 };
+    } else if (sortBy === "low-high") {
+      sortOption = { totalAmount: 1 };
+    }
 
-    // 2. Fetch global counts alongside filtered paginated results
-    const [statusCountsRaw, orders, total] = await Promise.all([
-      // Global status counts (unaffected by current status filter)
-      Order.aggregate([
-        { $group: { _id: "$status", count: { $sum: 1 } } }
-      ]),
+    const safeLimit = Math.max(1, Number(limit) || 10);
+    const safePage = Math.max(1, Number(page) || 1);
+    const skip = (safePage - 1) * safeLimit;
 
-      // Paginated orders
+    // Define all statuses precisely matching your frontend tabs
+    const statusKeys = [
+      "Verifying",
+      "Payment Received",
+      "Pending",
+      "Processing",
+      "Shipped",
+      "Delivered",
+      "Cancelled"
+    ];
+
+    const countPromises = statusKeys.map((st) => Order.countDocuments({ status: st }));
+
+    // 3. Fetch exact counts and orders simultaneously using native countDocuments
+    const [
+      verifyingCount, 
+      paymentReceivedCount, 
+      pendingCount, 
+      processingCount, 
+      shippedCount, 
+      deliveredCount, 
+      cancelledCount, 
+      orders, 
+      total
+    ] = await Promise.all([
+      ...countPromises,
       Order.find(query)
-        .sort({ createdAt: -1 })
+        .sort(sortOption)
         .skip(skip)
-        .limit(limit)
+        .limit(safeLimit)
         .populate({
           path: "items.product",
           select: "imageUrl",
           model: Product,
         })
         .lean(),
-
-      // Total orders matching current filter
       Order.countDocuments(query),
     ]);
 
-    // 3. Format statusCounts into key-value map e.g. { Pending: 5, Delivered: 12 }
-    const statusCounts = {};
-    statusCountsRaw.forEach((item) => {
-      if (item._id) {
-        statusCounts[item._id] = item.count;
-      }
-    });
+    // 4. Fully sanitize every single order to guarantee 100% plain serializability for Next.js Client Components
+    const sanitizedOrders = orders.map((order) => ({
+      ...order,
+      _id: order._id ? order._id.toString() : "",
+      user: order.user ? order.user.toString() : null,
+      createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : null,
+      updatedAt: order.updatedAt ? new Date(order.updatedAt).toISOString() : null,
+      items: order.items?.map((item) => ({
+        ...item,
+        _id: item._id ? item._id.toString() : undefined,
+        product: item.product && typeof item.product === "object" && item.product._id
+          ? { ...item.product, _id: item.product._id.toString() }
+          : item.product,
+      })),
+    }));
+
+    // 5. Format status counts correctly
+    const statusCounts = {
+      Verifying: verifyingCount,
+      "Payment Received": paymentReceivedCount,
+      Pending: pendingCount,
+      Processing: processingCount,
+      Shipped: shippedCount,
+      Delivered: deliveredCount,
+      Cancelled: cancelledCount,
+    };
+
+    // Calculate true absolute "All" count
+    statusCounts["All"] = Object.values(statusCounts).reduce((acc, curr) => acc + curr, 0);
 
     return {
       success: true,
-      orders: JSON.parse(JSON.stringify(orders)),
-      totalPages: Math.ceil(total / limit) || 1,
+      orders: sanitizedOrders,
+      totalPages: Math.ceil(total / safeLimit) || 1,
       totalOrders: total,
-      statusCounts, // Returned for UI status tabs
+      statusCounts,
     };
   } catch (error) {
     console.error("Fetch Orders Error:", error);

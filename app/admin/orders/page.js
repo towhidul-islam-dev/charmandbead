@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Image from "next/image";
 import { getAllOrders, updateOrderStatus, deleteOrder } from "@/actions/order";
 import {
@@ -8,7 +8,7 @@ import {
   ChevronLeft, ChevronRight, Trash2, 
   CreditCard, Banknote, Info, Trash,
   Wallet, Receipt, Truck, Loader2, PhoneCall, Hash,
-  QrCode, X, Image as ImageIcon, ZoomIn, Bookmark, Check, Filter
+  QrCode, X, Image as ImageIcon, ZoomIn, Bookmark, Check, Filter, ArrowUpDown
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrderDetailsModal from "@/components/admin/OrderDetailsModal";
@@ -73,6 +73,9 @@ export default function AdminOrdersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
 
+  // Sorting state: 'new-old' | 'old-new' | 'high-low' | 'low-high'
+  const [sortBy, setSortBy] = useState("new-old");
+
   useEffect(() => {
     const savedDefault = localStorage.getItem("admin_orders_default_tab");
     if (savedDefault) {
@@ -96,7 +99,6 @@ export default function AdminOrdersPage() {
     );
   };
 
-  // Fetch global status counts across all orders
   const fetchGlobalStatusCounts = useCallback(async () => {
     try {
       const res = await getAllOrders(1, 1, "", "All");
@@ -112,22 +114,36 @@ export default function AdminOrdersPage() {
     fetchGlobalStatusCounts();
   }, [fetchGlobalStatusCounts]);
 
-const fetchOrders = useCallback(async () => {
-  setLoading(true);
-  try {
-    const res = await getAllOrders(currentPage, 10, searchTerm, statusFilter);
-    if (res.success) {
-      setOrders(res.orders);
-      setTotalPages(res.totalPages);
-      setTotalOrders(res.totalOrders);
-      // Removed setStatusCounts overwrite here to prevent scope reduction on filter change
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getAllOrders(currentPage, 10, searchTerm, statusFilter);
+      if (res.success) {
+        let fetchedOrders = res.orders || [];
+
+        fetchedOrders.sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0);
+          const dateB = new Date(b.createdAt || 0);
+          const totalA = Number(a.totalAmount || 0);
+          const totalB = Number(b.totalAmount || 0);
+
+          if (sortBy === "new-old") return dateB - dateA;
+          if (sortBy === "old-new") return dateA - dateB;
+          if (sortBy === "high-low") return totalB - totalA;
+          if (sortBy === "low-high") return totalA - totalB;
+          return 0;
+        });
+
+        setOrders(fetchedOrders);
+        setTotalPages(res.totalPages);
+        setTotalOrders(res.totalOrders);
+      }
+    } catch (error) { 
+      toast.error("Failed to load orders"); 
+    } finally { 
+      setLoading(false); 
     }
-  } catch (error) { 
-    toast.error("Failed to load orders"); 
-  } finally { 
-    setLoading(false); 
-  }
-}, [currentPage, searchTerm, statusFilter]);
+  }, [currentPage, searchTerm, statusFilter, sortBy]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => { fetchOrders(); }, 500);
@@ -159,21 +175,23 @@ const fetchOrders = useCallback(async () => {
   };
 
   const getAccurateStatusCount = (status) => {
-  if (!statusCounts || Object.keys(statusCounts).length === 0) return 0;
+    if (!statusCounts || Object.keys(statusCounts).length === 0) return 0;
+    const clean = (str) => str?.toString().toLowerCase().replace(/[\s_]+/g, "") || "";
+    if (status === "All") {
+      return Object.values(statusCounts).reduce((acc, curr) => acc + (Number(curr) || 0), 0);
+    }
+    const target = clean(status);
+    const matchedKey = Object.keys(statusCounts).find((key) => clean(key) === target);
+    return matchedKey ? Number(statusCounts[matchedKey]) || 0 : 0;
+  };
 
-  const clean = (str) => str?.toString().toLowerCase().replace(/[\s_]+/g, "") || "";
-
-  if (status === "All") {
-    return Object.values(statusCounts).reduce((acc, curr) => acc + (Number(curr) || 0), 0);
-  }
-
-  const target = clean(status);
-
-  // Search exact or normalized keys from backend counts
-  const matchedKey = Object.keys(statusCounts).find((key) => clean(key) === target);
-
-  return matchedKey ? Number(statusCounts[matchedKey]) || 0 : 0;
-};
+  const getStatusTotalAmount = useMemo(() => {
+    return (status) => {
+      return orders
+        .filter(o => status === "All" || o.status === status)
+        .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+    };
+  }, [orders]);
 
   const getPageNumbers = () => {
     const pages = [];
@@ -194,6 +212,7 @@ const fetchOrders = useCallback(async () => {
   return (
     <div className="min-h-screen bg-[#FAFAFA] pt-8 pb-32 px-4 md:px-12">
       <div className="mx-auto max-w-7xl">
+        
         {/* HEADER SECTION */}
         <div className="flex flex-col gap-4 px-2 mb-6 md:mb-8 md:flex-row md:items-end md:justify-between">
           <div className="flex flex-col">
@@ -209,7 +228,8 @@ const fetchOrders = useCallback(async () => {
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-            <div className="relative w-full sm:w-64">
+            {/* SEARCH INPUT */}
+            <div className="relative w-full sm:w-52">
               <Search className="absolute text-[#3E442B]/20 -translate-y-1/2 left-4 md:left-5 top-1/2" size={16} />
               <input 
                 type="text" 
@@ -219,31 +239,53 @@ const fetchOrders = useCallback(async () => {
               />
             </div>
 
-            <div className="relative w-full sm:w-48">
-              <Filter className="absolute text-[#3E442B]/30 -translate-y-1/2 left-4 top-1/2 pointer-events-none" size={14} />
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full pl-10 pr-8 py-3 md:py-4 bg-white rounded-2xl border-none shadow-sm text-[10px] font-black uppercase outline-none ring-1 ring-gray-100 focus:ring-2 focus:ring-[#EA638C]/20 appearance-none cursor-pointer text-[#3E442B]"
-              >
-                {allStatuses.map((st) => (
-                  <option key={st} value={st}>
-                    {st === "All" ? "Filter Status: All" : st}
-                  </option>
-                ))}
-              </select>
+            {/* FILTER & SORT ROW FOR MOBILE AND DESKTOP */}
+            <div className="grid grid-cols-2 sm:flex items-center gap-3 w-full sm:w-auto">
+              {/* STATUS FILTER DROPDOWN */}
+              <div className="relative w-full sm:w-44">
+                <Filter className="absolute text-[#3E442B]/30 -translate-y-1/2 left-4 top-1/2 pointer-events-none" size={14} />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full pl-10 pr-8 py-3 md:py-4 bg-white rounded-2xl border-none shadow-sm text-[10px] font-black uppercase outline-none ring-1 ring-gray-100 focus:ring-2 focus:ring-[#EA638C]/20 appearance-none cursor-pointer text-[#3E442B]"
+                >
+                  {allStatuses.map((st) => (
+                    <option key={st} value={st}>
+                      {st === "All" ? "Status: All" : st}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* SORT DROPDOWN WITH ICON */}
+              <div className="relative w-full sm:w-48">
+                <ArrowUpDown className="absolute text-[#EA638C] -translate-y-1/2 left-4 top-1/2 pointer-events-none" size={14} />
+                <select
+                  value={sortBy}
+                  onChange={(e) => {
+                    setSortBy(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full pl-10 pr-8 py-3 md:py-4 bg-white rounded-2xl border-none shadow-sm text-[10px] font-black uppercase outline-none ring-1 ring-gray-100 focus:ring-2 focus:ring-[#EA638C]/20 appearance-none cursor-pointer text-[#3E442B]"
+                >
+                  <option value="new-old">New to Old</option>
+                  <option value="old-new">Old to New</option>
+                  <option value="high-low">High Value to Low</option>
+                  <option value="low-high">Low Value to High</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* STATUS TABS SECTION */}
+        {/* STATUS TABS SECTION WITH TOTAL AMOUNTS */}
         <div className="bg-white p-3 md:p-4 rounded-3xl border border-gray-100 shadow-sm mb-6">
           <div className="flex items-center justify-between mb-2 px-2">
             <span className="text-[9px] font-black uppercase tracking-widest text-[#3E442B]/40">
-              Quick Filter Tabs
+              Quick Filter Tabs & Status Totals
             </span>
             <span className="text-[9px] font-bold text-[#EA638C] uppercase">
               Default: {defaultTab}
@@ -255,6 +297,7 @@ const fetchOrders = useCallback(async () => {
               const isActive = statusFilter === status;
               const isDefault = defaultTab === status;
               const count = getAccurateStatusCount(status);
+              const totalAmt = getStatusTotalAmount(status);
 
               return (
                 <div key={status} className="flex items-center shrink-0">
@@ -263,13 +306,18 @@ const fetchOrders = useCallback(async () => {
                       setStatusFilter(status);
                       setCurrentPage(1);
                     }}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                       isActive
                         ? "bg-[#3E442B] text-white shadow-md shadow-[#3E442B]/10"
                         : "bg-gray-50 text-gray-500 hover:text-[#3E442B] hover:bg-gray-100"
                     }`}
                   >
-                    <span>{status}</span>
+                    <div className="flex flex-col items-start">
+                      <span>{status}</span>
+                      <span className={`text-[8px] font-mono font-bold ${isActive ? 'text-[#FBB6E6]' : 'text-gray-400'}`}>
+                        ৳{totalAmt.toLocaleString()}
+                      </span>
+                    </div>
                     <span
                       className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                         isActive
@@ -604,91 +652,63 @@ const fetchOrders = useCallback(async () => {
           >
             <div 
               onClick={(e) => e.stopPropagation()}
-              className="bg-white w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto rounded-[2.5rem] p-6 text-center shadow-2xl border-4 border-[#FBB6E6] relative space-y-4"
+              className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4"
             >
-              <button
-                onClick={() => setPaymentInfoModal(null)}
-                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-[#EA638C] hover:bg-[#FBB6E6]/20 rounded-full transition-all cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-
-              <div className="pt-1 space-y-1">
-                <h3 className="text-lg font-serif font-bold text-[#3E442B] italic uppercase flex items-center justify-center gap-2">
-                  <QrCode className="text-[#EA638C]" size={22} />
-                  <span>Payment Verification</span>
-                </h3>
-                <p className="text-[10px] font-black text-gray-400 uppercase font-mono">
-                  Order #{paymentInfoModal.orderId?.slice(-6).toUpperCase()}
-                </p>
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <h3 className="text-xs font-black uppercase text-[#3E442B] tracking-wider">Payment Verification</h3>
+                <button onClick={() => setPaymentInfoModal(null)} className="p-1 rounded-xl bg-gray-50 text-gray-400 hover:text-[#EA638C]">
+                  <X size={16} />
+                </button>
               </div>
 
-              <div className="bg-[#FAFAFA] rounded-2xl p-4 border border-gray-100 text-left space-y-2 font-mono">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-gray-400 uppercase text-[9px] flex items-center gap-1">
-                    <PhoneCall size={12} className="text-[#EA638C]" /> Sender Account
-                  </span>
-                  <span className="font-bold text-[#3E442B]">{paymentInfoModal.sender || "N/A"}</span>
+              <div className="space-y-3 text-[10px] font-black uppercase">
+                <div className="flex justify-between bg-gray-50 p-3 rounded-2xl">
+                  <span className="text-gray-400">Sender Number:</span>
+                  <span className="text-[#3E442B] font-mono">{paymentInfoModal.sender || "N/A"}</span>
                 </div>
-                <div className="flex items-center justify-between pt-1 text-xs border-t border-gray-100">
-                  <span className="font-bold text-[#EA638C] uppercase text-[9px] flex items-center gap-1">
-                    <Hash size={12} className="text-[#3E442B]" /> Transaction ID
-                  </span>
-                  <span className="font-black text-[#EA638C]">{paymentInfoModal.txnId || "N/A"}</span>
+                <div className="flex justify-between bg-gray-50 p-3 rounded-2xl">
+                  <span className="text-gray-400">Transaction ID:</span>
+                  <span className="text-[#EA638C] font-mono">{paymentInfoModal.txnId || "N/A"}</span>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <p className="text-[10px] font-black text-[#3E442B] uppercase tracking-wider text-left flex items-center gap-1">
-                  <ImageIcon size={13} className="text-[#EA638C]" /> Payment Screenshot
-                </p>
-                {paymentInfoModal.screenshot ? (
-                  <div 
-                    onClick={() => setFullscreenImage(paymentInfoModal.screenshot)}
-                    className="relative flex items-center justify-center p-2 overflow-hidden border-2 border-gray-100 rounded-2xl bg-gray-50 group cursor-zoom-in transition-all hover:border-[#EA638C]"
-                  >
-                    <img 
+              {paymentInfoModal.screenshot && (
+                <div className="space-y-1">
+                  <span className="text-[9px] font-black uppercase text-gray-400">Payment Screenshot</span>
+                  <div className="relative w-full h-48 rounded-2xl overflow-hidden bg-gray-100 border border-gray-100">
+                    <Image 
                       src={paymentInfoModal.screenshot} 
-                      alt="Payment Screenshot Proof" 
-                      className="object-contain w-auto transition-transform duration-300 shadow-xs max-h-80 rounded-xl group-hover:scale-105"
+                      fill 
+                      alt="Payment proof" 
+                      className="object-contain cursor-pointer"
+                      onClick={() => setFullscreenImage(paymentInfoModal.screenshot)}
+                      unoptimized 
                     />
-                    <div className="absolute inset-0 flex items-center justify-center transition-opacity opacity-0 bg-black/20 group-hover:opacity-100 rounded-xl">
-                      <span className="bg-[#3E442B] text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg">
-                        <ZoomIn size={12} /> View Full Image
-                      </span>
-                    </div>
                   </div>
-                ) : (
-                  <div className="p-8 text-xs font-bold text-center text-gray-400 border-2 border-gray-200 border-dashed rounded-2xl">
-                    No screenshot attached
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* FULLSCREEN IMAGE PREVIEW MODAL */}
+        {/* FULLSCREEN IMAGE MODAL */}
         {fullscreenImage && (
           <div 
             onClick={() => setFullscreenImage(null)}
-            className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fadeIn"
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
           >
-            <button
-              onClick={() => setFullscreenImage(null)}
-              className="absolute top-6 right-6 p-3 text-white bg-white/10 hover:bg-[#EA638C] rounded-full transition-all cursor-pointer z-10"
-              title="Close Preview"
-            >
-              <X size={24} />
-            </button>
-            <img 
-              src={fullscreenImage} 
-              alt="Full Payment Screenshot" 
-              className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
+            <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center">
+              <Image src={fullscreenImage} fill alt="Fullscreen Screenshot" className="object-contain" unoptimized />
+              <button 
+                onClick={() => setFullscreenImage(null)}
+                className="absolute top-4 right-4 p-2 bg-white/10 text-white rounded-full hover:bg-white hover:text-black transition-all"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
         )}
+
       </div>
     </div>
   );
