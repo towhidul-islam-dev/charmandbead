@@ -1,44 +1,57 @@
 "use client";
 import { useState } from "react"; // 🟢 Added state import
 import Link from "next/link";
-import Image from "next/image"; 
+import Image from "next/image";
 import { useWishlist } from "@/Context/WishlistContext";
-import { useSession } from "next-auth/react"; 
-import { Heart, Sparkles, Share2, Package } from "lucide-react"; 
+import { useSession } from "next-auth/react";
+import { Heart, Sparkles, Share2, Package } from "lucide-react";
 import toast from "react-hot-toast";
 
 const ProductCard = ({ product, index = 0 }) => {
   const { wishlist, toggleWishlist } = useWishlist();
-  const { data: session } = useSession(); 
-  const user = session?.user; 
+  const { data: session } = useSession();
+  const user = session?.user;
 
-  // 🟢 State to handle broken/unreachable image URLs gracefully
-  const [imgSrc, setImgSrc] = useState(product?.imageUrl || "/placeholder.png");
-  
+  // 🟢 Support both product.image and product.imageUrl safely
+  const [imgSrc, setImgSrc] = useState(
+    product?.image || product?.imageUrl || "/placeholder.png",
+  );
+
   const isFavorite = wishlist?.some((item) => item._id === product?._id);
   const isOutOfStock = product?.stock <= 0;
   const isLowStock = product?.stock > 0 && product?.stock <= 5;
 
   // Sale & Pricing Logic
   const hasSale = product?.isOnSale && product?.discountPrice > 0;
-  const hasWholesale = product?.pricingTiers && product?.pricingTiers.length > 0;
+  const hasWholesale =
+    product?.pricingTiers && product?.pricingTiers.length > 0;
 
   // Logic for MOQ
-  const moqValue = product?.minOrderQuantity || product?.variants?.[0]?.minOrderQuantity || 0;
+  const moqValue =
+    product?.minOrderQuantity || product?.variants?.[0]?.minOrderQuantity || 0;
 
   // Logic for New Badge
-  const isRecentlyCreated = product?.createdAt 
-    ? (new Date() - new Date(product.createdAt)) < (48 * 60 * 60 * 1000) 
+  const isRecentlyCreated = product?.createdAt
+    ? new Date() - new Date(product.createdAt) < 48 * 60 * 60 * 1000
     : false;
-  
-  const showNewBadge = (product?.isNewArrival === true || product?.isNewArrival === "true" || isRecentlyCreated) && !isOutOfStock;
+
+  const showNewBadge =
+    (product?.isNewArrival === true ||
+      product?.isNewArrival === "true" ||
+      isRecentlyCreated) &&
+    !isOutOfStock;
 
   const handleShare = (e) => {
     e.preventDefault();
     const shareUrl = `${window.location.origin}/products/${product?._id}`;
     navigator.clipboard.writeText(shareUrl);
     toast.success("Link copied!", {
-      style: { borderRadius: '10px', background: '#3E442B', color: '#fff', fontSize: '10px' },
+      style: {
+        borderRadius: "10px",
+        background: "#3E442B",
+        color: "#fff",
+        fontSize: "10px",
+      },
     });
   };
 
@@ -46,13 +59,23 @@ const ProductCard = ({ product, index = 0 }) => {
     e.preventDefault();
     if (isFavorite) {
       toast.error(`Already in wishlist!`, {
-        icon: '💖',
-        style: { borderRadius: '10px', background: '#3E442B', color: '#fff', fontSize: '10px' },
+        icon: "💖",
+        style: {
+          borderRadius: "10px",
+          background: "#3E442B",
+          color: "#fff",
+          fontSize: "10px",
+        },
       });
     } else {
       toggleWishlist(product);
       toast.success("Added to wishlist", {
-        style: { borderRadius: '10px', background: '#EA638C', color: '#fff', fontSize: '10px' },
+        style: {
+          borderRadius: "10px",
+          background: "#EA638C",
+          color: "#fff",
+          fontSize: "10px",
+        },
       });
     }
   };
@@ -61,19 +84,21 @@ const ProductCard = ({ product, index = 0 }) => {
 
   return (
     <div className="group relative flex flex-col bg-white rounded-[2rem] shadow-sm hover:shadow-xl transition-all duration-500 border border-gray-100 overflow-hidden">
-      
       {/* IMAGE CONTAINER */}
       <div className="relative w-full overflow-hidden aspect-square bg-gray-50">
-        <Link href={`/products/${product._id}`} className="relative z-0 block w-full h-full">
+        <Link
+          href={`/products/${product._id}`}
+          className="relative z-0 block w-full h-full"
+        >
           <Image
             src={imgSrc}
             alt={product.name || "Product Image"}
-            fill 
+            fill
             unoptimized // 🟢 Prevents Next.js optimization server errors for third-party uploads
             onError={() => setImgSrc("/placeholder.png")} // 🟢 Replaces broken image icon with placeholder
             sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
             className={`object-cover transition-transform duration-700 group-hover:scale-105 ${isOutOfStock ? "grayscale" : ""}`}
-            priority={index < 4} 
+            priority={index < 4}
           />
 
           {/* MOQ BADGE */}
@@ -107,27 +132,41 @@ const ProductCard = ({ product, index = 0 }) => {
             </div>
           )}
           {isOutOfStock && (
-            <div className="px-2.5 py-1 text-[9px] font-black text-white bg-gray-500 rounded-lg uppercase">SOLD</div>
+            <div className="px-2.5 py-1 text-[9px] font-black text-white bg-gray-500 rounded-lg uppercase">
+              SOLD
+            </div>
           )}
         </div>
 
         {/* FLOATING ACTIONS */}
         {user && (
           <div className="absolute z-10 flex flex-col gap-1.5 top-2.5 right-2.5 transition-all duration-300 md:opacity-0 md:translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0">
-            <button 
-              onClick={handleWishlistClick} 
-              aria-label={isFavorite ? "Remove from wishlist" : "Add to wishlist"}
+            <button
+              onClick={handleWishlistClick}
+              aria-label={
+                isFavorite ? "Remove from wishlist" : "Add to wishlist"
+              }
               className="p-2 rounded-full bg-white/90 backdrop-blur-sm shadow-md hover:bg-[#EA638C] group/heart transition-colors"
             >
-              <Heart size={14} className={isFavorite ? "fill-[#EA638C] text-[#EA638C]" : "text-gray-400 group-hover/heart:text-white"} />
+              <Heart
+                size={14}
+                className={
+                  isFavorite
+                    ? "fill-[#EA638C] text-[#EA638C]"
+                    : "text-gray-400 group-hover/heart:text-white"
+                }
+              />
             </button>
-            
-            <button 
-              onClick={handleShare} 
+
+            <button
+              onClick={handleShare}
               aria-label="Share product link"
               className="p-2 rounded-full bg-white/90 backdrop-blur-sm shadow-md hover:bg-[#3E442B] group/share transition-colors"
             >
-              <Share2 size={14} className="text-gray-400 group-hover/share:text-white" />
+              <Share2
+                size={14}
+                className="text-gray-400 group-hover/share:text-white"
+              />
             </button>
           </div>
         )}
@@ -139,27 +178,37 @@ const ProductCard = ({ product, index = 0 }) => {
           <div className="flex items-start justify-between">
             <div className="flex flex-col flex-1 min-w-0">
               <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate">
-                {product.categoryName || product.subCategoryName || "Collection"}
+                {product.categoryName ||
+                  product.subCategoryName ||
+                  "Collection"}
               </p>
-              
+
               {/* MOBILE MOQ */}
               {moqValue > 0 && (
                 <div className="flex items-center gap-1 mt-1 md:hidden">
                   <Package size={10} className="text-[#3E442B]" />
-                  <span className="text-[10px] font-black text-[#3E442B] uppercase tracking-tighter">MOQ : {moqValue}</span>
+                  <span className="text-[10px] font-black text-[#3E442B] uppercase tracking-tighter">
+                    MOQ : {moqValue}
+                  </span>
                 </div>
               )}
             </div>
 
             {/* PRICE LOGIC */}
-            <div className="flex flex-col items-end shrink-0 ml-2">
+            <div className="flex flex-col items-end ml-2 shrink-0">
               {hasSale ? (
                 <>
-                  <span className="text-lg font-black text-[#EA638C]">৳{product.discountPrice}</span>
-                  <span className="text-[10px] font-bold text-gray-300 line-through -mt-1">৳{product.price}</span>
+                  <span className="text-lg font-black text-[#EA638C]">
+                    ৳{product.discountPrice}
+                  </span>
+                  <span className="text-[10px] font-bold text-gray-300 line-through -mt-1">
+                    ৳{product.price}
+                  </span>
                 </>
               ) : (
-                <span className="text-lg font-black text-[#3E442B]">৳{product.price}</span>
+                <span className="text-lg font-black text-[#3E442B]">
+                  ৳{product.price}
+                </span>
               )}
             </div>
           </div>
@@ -173,14 +222,20 @@ const ProductCard = ({ product, index = 0 }) => {
         {!isOutOfStock && (
           <div className="mb-4">
             <div className="w-full h-1 overflow-hidden bg-gray-100 rounded-full">
-              <div 
-                className={`h-full transition-all duration-1000 ${isLowStock ? 'bg-[#EA638C]' : 'bg-[#3E442B]'}`}
-                style={{ width: `${Math.min((product.stock / 20) * 100, 100)}%` }} 
+              <div
+                className={`h-full transition-all duration-1000 ${isLowStock ? "bg-[#EA638C]" : "bg-[#3E442B]"}`}
+                style={{
+                  width: `${Math.min((product.stock / 20) * 100, 100)}%`,
+                }}
               />
             </div>
             <div className="flex items-center justify-between mt-1">
-              <p className={`text-[8px] font-black uppercase ${isLowStock ? 'text-[#EA638C]' : 'text-gray-400'}`}>
-                {isLowStock ? `Only ${product.stock} Left` : `${product.stock} in stock`}
+              <p
+                className={`text-[8px] font-black uppercase ${isLowStock ? "text-[#EA638C]" : "text-gray-400"}`}
+              >
+                {isLowStock
+                  ? `Only ${product.stock} Left`
+                  : `${product.stock} in stock`}
               </p>
               {hasWholesale && (
                 <span className="text-[7px] font-black bg-gray-100 text-[#3E442B] px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
@@ -194,9 +249,9 @@ const ProductCard = ({ product, index = 0 }) => {
         <Link
           href={`/products/${product._id}`}
           className={`mt-auto w-full py-3 text-[10px] font-black uppercase tracking-[0.2em] text-center transition-all rounded-2xl ${
-            isOutOfStock 
-            ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
-            : "bg-[#EA638C] text-white hover:bg-[#3E442B] shadow-sm hover:shadow-lg"
+            isOutOfStock
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+              : "bg-[#EA638C] text-white hover:bg-[#3E442B] shadow-sm hover:shadow-lg"
           }`}
         >
           {isOutOfStock ? "Out of Stock" : "Details"}

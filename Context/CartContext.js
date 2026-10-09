@@ -7,6 +7,7 @@ const CartContext = createContext();
 export const CartProvider = ({ children }) => {
   const { data: session, status } = useSession();
   const [cart, setCart] = useState([]);
+  const [isLoaded, setIsLoaded] = useState(false); // 🟢 Safety flag to prevent premature state overwrites
   const isInitialMount = useRef(true);
   const isSyncingFromServer = useRef(false);
 
@@ -29,7 +30,7 @@ export const CartProvider = ({ children }) => {
     });
   };
 
-  // 1. Load Cart (From Server if logged in, or localStorage if guest)
+  // 1. Load Cart (From Database if logged in, or localStorage if guest)
   useEffect(() => {
     if (status === "loading") return;
 
@@ -45,12 +46,14 @@ export const CartProvider = ({ children }) => {
         }
       }
 
+      // Fetch cart directly from MongoDB backend via API
       fetch("/api/cart")
         .then((res) => res.json())
         .then(async (data) => {
           if (data.success && Array.isArray(data.items)) {
             let finalServerItems = sanitizeItems(data.items);
 
+            // Merge guest cart items if any existed prior to logging in
             if (parsedGuestItems.length > 0) {
               const itemMap = new Map();
               
@@ -71,6 +74,7 @@ export const CartProvider = ({ children }) => {
               finalServerItems = Array.from(itemMap.values());
 
               try {
+                // Save merged cart back to database
                 await fetch("/api/cart", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -86,9 +90,14 @@ export const CartProvider = ({ children }) => {
             isSyncingFromServer.current = true;
             setCart(finalServerItems);
           }
+          setIsLoaded(true); // 🟢 Mark loaded so syncing is enabled
         })
-        .catch((err) => console.error("Failed to load server cart:", err));
+        .catch((err) => {
+          console.error("Failed to load server cart:", err);
+          setIsLoaded(true);
+        });
     } else {
+      // Fallback for guests using localStorage
       const savedCart = localStorage.getItem("charm_cart");
       if (savedCart) {
         try {
@@ -97,11 +106,14 @@ export const CartProvider = ({ children }) => {
           setCart([]);
         }
       }
+      setIsLoaded(true); // 🟢 Mark loaded
     }
   }, [status, session?.user]);
 
-  // 2. Sync Cart Changes
+  // 2. Sync Cart Changes (Guarded by isLoaded to prevent refresh wipe)
   useEffect(() => {
+    if (!isLoaded) return; // Do nothing until database/storage fetch is complete
+
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
@@ -113,23 +125,23 @@ export const CartProvider = ({ children }) => {
     }
 
     if (session?.user) {
+      // Automatically save to MongoDB database via API on every cart modification
       fetch("/api/cart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: cart }),
       }).catch((err) => console.error("Failed to sync cart to server:", err));
     } else {
+      // Save to localStorage for guests
       localStorage.setItem("charm_cart", JSON.stringify(cart));
     }
-  }, [cart, session?.user]);
+  }, [cart, session?.user, isLoaded]);
 
   const addToCart = (product, variantOrDelta, quantity = 0) => {
     setCart((prev) => {
       let targetUniqueKey;
       let qChange;
-      let isNewAddition = false;
 
-      // --- 🟢 STEP 1: NORMALIZE INPUTS ---
       if (product.uniqueKey && typeof variantOrDelta === "number") {
         targetUniqueKey = product.uniqueKey;
         qChange = variantOrDelta;
@@ -147,12 +159,10 @@ export const CartProvider = ({ children }) => {
         
         targetUniqueKey = product.uniqueKey || `${pId}-${vId}`;
         qChange = Number(quantity);
-        isNewAddition = true;
       }
 
       const existingIndex = prev.findIndex((item) => item.uniqueKey === targetUniqueKey);
 
-      // --- 🟢 STEP 2: UPDATE EXISTING ---
       if (existingIndex !== -1) {
         const updatedCart = [...prev];
         const item = updatedCart[existingIndex];
@@ -168,7 +178,6 @@ export const CartProvider = ({ children }) => {
         return updatedCart;
       }
 
-      // --- 🟢 STEP 3: ADD NEW ---
       const itemMoq = Number(product.minOrderQuantity || variantOrDelta?.minOrderQuantity || 1);
       const availableStock = Number(variantOrDelta?.stock ?? product.stock ?? 0);
       
@@ -275,6 +284,13 @@ export const CartProvider = ({ children }) => {
     setCart([]);
     if (!session?.user) {
       localStorage.removeItem("charm_cart");
+    } else {
+      // Clear database cart for logged-in user
+      fetch("/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: [] }),
+      }).catch((err) => console.error("Failed to clear server cart:", err));
     }
   }, [session?.user]);
 
