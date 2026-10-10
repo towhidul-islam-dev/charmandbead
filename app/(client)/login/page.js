@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation'; 
 import { signIn } from "next-auth/react"; 
 import toast from 'react-hot-toast';
 import { UserCircle, Eye, EyeOff, Loader2 } from "lucide-react";
 
-export default function LoginPage() {
+function LoginFormContent() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -16,10 +16,10 @@ export default function LoginPage() {
     const router = useRouter(); 
     const searchParams = useSearchParams();
 
-    // 🟢 Read callbackUrl parameter passed from middleware or NextAuth
+    // Read callbackUrl parameter passed from middleware or NextAuth
     const rawCallbackUrl = searchParams.get("callbackUrl");
 
-    // 🟢 Helper to sanitize mobile callback URLs and prevent invalid / 404 redirects
+    // Helper to sanitize mobile callback URLs and prevent invalid / 404 redirects
     const getSafeCallbackUrl = () => {
         if (!rawCallbackUrl) return "/";
         
@@ -151,5 +151,13 @@ export default function LoginPage() {
 
             </div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+            <LoginFormContent />
+        </Suspense>
     );
 }

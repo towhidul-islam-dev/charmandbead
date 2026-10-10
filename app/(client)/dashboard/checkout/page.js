@@ -84,6 +84,15 @@ export default function CheckoutPage() {
   const [showQrModal, setShowQrModal] = useState(false);
 
   useEffect(() => {
+    // 🟢 Wait until NextAuth session status finishes loading to avoid premature redirects
+    if (status === "loading") return;
+
+    if (status === "unauthenticated") {
+      toast.error("Please login to place an order");
+      router.push("/login?callbackUrl=/dashboard/checkout");
+      return;
+    }
+
     async function initCheckout() {
       const saved = localStorage.getItem("checkoutItems");
       if (saved) {
@@ -96,7 +105,7 @@ export default function CheckoutPage() {
       } else {
         if (cart.length > 0) {
           setCheckoutItems(cart);
-        } else if (status !== "loading" && !showSuccessModal) {
+        } else if (!showSuccessModal) {
           router.push("/cart");
         }
       }
@@ -289,7 +298,7 @@ export default function CheckoutPage() {
     }
   };
 
-  if (isInitializing)
+  if (isInitializing || status === "loading")
     return (
       <div className="flex items-center justify-center min-h-screen bg-white">
         <Loader2 className="animate-spin text-[#EA638C]" size={40} />
@@ -302,7 +311,7 @@ export default function CheckoutPage() {
         {/* SECTION 01: DESTINATION */}
         <section className="space-y-6">
           <h2 className="flex items-center gap-3 text-2xl font-bold font-serif text-[#3E442B] uppercase italic">
-            <MapPin className="text-[#EA638C]" size={28} /> 01. Destination
+            <MapPin className="text-[#EA638C]" size={28} /> Destination
           </h2>
 
           <div className="space-y-4">
@@ -394,10 +403,10 @@ export default function CheckoutPage() {
                       </h4>
                       <p className="text-[11px] text-gray-400 font-medium">
                         Qty: {item.quantity}{" "}
-                        {variantTitle && `• Variant: ${variantTitle}`}{" "}
+                        {variantTitle && `Variant: ${variantTitle}`}{" "}
                         {item.size &&
                           item.size !== "N/A" &&
-                          `• Size: ${item.size}`}
+                          `Size: ${item.size}`}
                       </p>
                     </div>
                   </div>
@@ -730,7 +739,7 @@ export default function CheckoutPage() {
 
             <div className="pt-1 space-y-1">
               <h3 className="text-lg sm:text-xl font-serif font-bold text-[#3E442B] italic uppercase flex items-center justify-center gap-2">
-                <QrCode className="Text-[#EA638C]" size={20} />
+                <QrCode className="text-[#EA638C]" size={20} />
                 <span>Islami Bank Bangla QR</span>
               </h3>
               <p className="text-[11px] sm:text-xs font-semibold text-gray-500">
@@ -755,53 +764,52 @@ export default function CheckoutPage() {
                 className="object-contain w-full h-full rounded-xl"
               />
             </div>
-
-            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm font-black text-[#3E442B] bg-[#FAFAFA] py-2.5 px-4 sm:px-6 rounded-full border border-gray-200">
-              <Scan size={16} className="text-[#EA638C]" />
-              <span>Amount to Pay: ৳{payableNow.toFixed(2)}</span>
-            </div>
           </div>
         </div>
       )}
 
-      {/* SUCCESS CONFIRMATION POP-UP MODAL */}
+      {/* SUCCESS MODAL */}
       {showSuccessModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 text-center shadow-2xl border-4 border-[#FBB6E6] relative space-y-4 sm:space-y-6">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[#FBB6E6] text-[#EA638C] rounded-full flex items-center justify-center mx-auto shadow-inner">
-              <CheckCircle2 size={40} className="sm:w-12 sm:h-12" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 text-center shadow-2xl border-4 border-[#3E442B] relative space-y-6">
+            <div className="w-20 h-20 bg-[#3E442B]/10 text-[#3E442B] rounded-full flex items-center justify-center mx-auto mb-2 animate-bounce">
+              <CheckCircle2 size={40} className="text-[#EA638C]" />
             </div>
-
-            <div className="space-y-1.5">
-              <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#3E442B] italic uppercase">
+            
+            <div className="space-y-2">
+              <h3 className="text-2xl font-serif font-bold text-[#3E442B] italic uppercase">
                 Order Placed Successfully!
               </h3>
-              <p className="text-xs font-medium text-gray-500">
-                Your payment is currently under manual verification. We will update you shortly via SMS and email.
+              <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                Thank you for your wholesale purchase. Your payment and order details have been submitted for manual verification.
               </p>
             </div>
 
-            <div className="bg-[#FAFAFA] border border-gray-100 p-4 rounded-2xl text-left space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-gray-400 font-semibold uppercase text-[10px]">Customer:</span>
-                <span className="font-bold text-[#3E442B]">{customerName}</span>
+            {placedOrderDetails && (
+              <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 text-left space-y-1.5 text-xs">
+                <div className="flex justify-between font-bold text-[#3E442B]">
+                  <span>Total Amount:</span>
+                  <span>৳{placedOrderDetails.totalAmount?.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-semibold text-gray-500">
+                  <span>Paid (Advance):</span>
+                  <span>৳{placedOrderDetails.paidAmount?.toLocaleString()}</span>
+                </div>
+                {placedOrderDetails.dueAmount > 0 && (
+                  <div className="flex justify-between font-semibold text-gray-500">
+                    <span>Due (COD):</span>
+                    <span>৳{placedOrderDetails.dueAmount?.toLocaleString()}</span>
+                  </div>
+                )}
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400 font-semibold uppercase text-[10px]">Phone:</span>
-                <span className="font-bold text-[#3E442B]">{phone}</span>
-              </div>
-              <div className="flex justify-between border-t border-gray-200 pt-2">
-                <span className="text-gray-400 font-semibold uppercase text-[10px]">Paid Advance:</span>
-                <span className="font-serif font-bold text-[#EA638C]">৳{payableNow.toFixed(2)}</span>
-              </div>
-            </div>
+            )}
 
             <button
               onClick={() => {
                 setShowSuccessModal(false);
                 router.push("/dashboard/orders");
               }}
-              className="w-full bg-[#3E442B] hover:bg-[#3E442B]/90 text-white p-4 rounded-full font-black uppercase tracking-[0.1em] text-xs transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+              className="w-full py-4 rounded-2xl bg-[#3E442B] hover:bg-[#EA638C] text-white font-black uppercase tracking-[0.2em] text-[10px] transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>View My Orders</span>
               <ArrowRight size={16} />
