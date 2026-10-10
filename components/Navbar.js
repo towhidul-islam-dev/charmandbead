@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-import { createPortal as renderPortal } from "react-dom" // Standard react-dom import below
+import { createPortal as renderPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   HeartIcon,
@@ -45,7 +45,7 @@ const resolveImageUrl = (img, name) => {
 const ClientHeader = ({ pathname, dbImage }) => {
   const { data: session, status } = useSession();
   const { wishlist } = useWishlist();
-  const { cart } = useCart();
+  const { cart, rawCart } = useCart(); // 🟢 Access cart state for sign-out backup
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -56,6 +56,21 @@ const ClientHeader = ({ pathname, dbImage }) => {
   const profileRef = useRef(null);
   const moreRef = useRef(null);
   const [displayImage, setDisplayImage] = useState("");
+
+  // 🟢 Safe signout wrapper to prevent cart wiping during auth transition
+  const handleSignOut = async (callbackUrl = "/") => {
+    const currentItems = rawCart?.length > 0 ? rawCart : cart;
+    if (currentItems && currentItems.length > 0) {
+      try {
+        localStorage.setItem("charm_cart", JSON.stringify(currentItems));
+      } catch (e) {
+        console.error("Cart backup failed:", e);
+      }
+    }
+    setIsProfileOpen(false);
+    setIsMenuOpen(false);
+    await signOut({ callbackUrl });
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -188,7 +203,7 @@ const ClientHeader = ({ pathname, dbImage }) => {
                       <p className="text-sm font-bold text-[#3E442B] truncate">{session.user.name}</p>
                     </div>
                     <Link href="/dashboard/orders" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-2 px-3 py-2 text-[11px] font-black uppercase text-gray-600 hover:bg-gray-50 hover:text-[#EA638C] rounded-xl"><UserIcon className="w-4 h-4" /> My Profile</Link>
-                    <button onClick={() => signOut({ callbackUrl: "/" })} className="flex items-center gap-2 w-full px-3 py-2 text-[11px] font-black uppercase text-red-500 hover:bg-red-50 rounded-xl mt-1"><ArrowRightOnRectangleIcon className="w-4 h-4" /> Sign Out</button>
+                    <button onClick={() => handleSignOut("/")} className="flex items-center gap-2 w-full px-3 py-2 text-[11px] font-black uppercase text-red-500 hover:bg-red-50 rounded-xl mt-1"><ArrowRightOnRectangleIcon className="w-4 h-4" /> Sign Out</button>
                   </div>
                 )}
               </div>
@@ -208,12 +223,11 @@ const ClientHeader = ({ pathname, dbImage }) => {
       </header>
       <div className="h-16 md:h-20" />
 
-      {/* 🚀 PORTAL TO BODY: MOVES DRAWER OUTSIDE ALL PAGE CONTAINERS */}
+      {/* PORTAL TO BODY */}
       {mounted && renderPortal(
         <AnimatePresence>
           {isMenuOpen && (
             <div className="fixed inset-0 z-[999999] md:hidden">
-              {/* BACKDROP */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -223,7 +237,6 @@ const ClientHeader = ({ pathname, dbImage }) => {
                 onClick={() => setIsMenuOpen(false)}
               />
 
-              {/* SLIDE-OUT PANEL */}
               <motion.div
                 initial={{ x: "100%" }}
                 animate={{ x: 0 }}
@@ -231,7 +244,6 @@ const ClientHeader = ({ pathname, dbImage }) => {
                 transition={{ type: "spring", damping: 25, stiffness: 220 }}
                 className="fixed top-0 right-0 bottom-0 w-[280px] sm:w-[320px] h-full bg-[#3E442B] shadow-2xl flex flex-col z-[1000000] overflow-hidden border-l border-white/10"
               >
-                {/* DRAWER SOLID HEADER BAR */}
                 <div className="flex items-center justify-between px-6 py-5 bg-[#3E442B] border-b border-white/10 shrink-0">
                   <span className="text-[10px] font-black text-[#FBB6E6] uppercase tracking-[0.3em]">
                     NAVIGATION
@@ -244,7 +256,6 @@ const ClientHeader = ({ pathname, dbImage }) => {
                   </button>
                 </div>
 
-                {/* DRAWER CONTENT */}
                 <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-2">
                   {[...mainLinks, { name: "Home", href: "/" }].reverse().map((link) => {
                     const isActive = pathname === link.href;
@@ -300,10 +311,7 @@ const ClientHeader = ({ pathname, dbImage }) => {
                     </div>
                   ) : (
                     <button
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        signOut({ callbackUrl: "/" });
-                      }}
+                      onClick={() => handleSignOut("/")}
                       className="flex items-center justify-center gap-3 w-full py-4 text-[11px] font-black uppercase text-red-400 bg-red-950/30 border border-red-900/50 rounded-2xl active:scale-95 transition-transform"
                     >
                       <ArrowRightOnRectangleIcon className="w-5 h-5" /> Sign Out

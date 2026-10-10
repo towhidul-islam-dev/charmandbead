@@ -7,9 +7,8 @@ const CartContext = createContext();
 export const CartProvider = ({ children }) => {
   const { data: session, status } = useSession();
   const [cart, setCart] = useState([]);
-  const [isLoaded, setIsLoaded] = useState(false); // 🟢 Safety flag to prevent premature state overwrites
-  const isInitialMount = useRef(true);
-  const isSyncingFromServer = useRef(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const isFetchingServerCart = useRef(false); // 🟢 1. Dedicated flag to block POST syncs while fetching GET data
 
   // Helper sanitizer to guarantee basePrice, uniqueKey, and clean IDs on any raw item list
   const sanitizeItems = (items) => {
@@ -34,10 +33,14 @@ export const CartProvider = ({ children }) => {
   useEffect(() => {
     if (status === "loading") return;
 
+    setIsLoaded(false); // Block save syncs immediately on auth/session change
+
     if (session?.user) {
+      isFetchingServerCart.current = true; // 🟢 2. Lock outgoing POST calls during refresh/fetch
+
       const localGuestCart = localStorage.getItem("charm_cart");
       let parsedGuestItems = [];
-      
+
       if (localGuestCart) {
         try {
           parsedGuestItems = sanitizeItems(JSON.parse(localGuestCart));
@@ -56,15 +59,15 @@ export const CartProvider = ({ children }) => {
             // Merge guest cart items if any existed prior to logging in
             if (parsedGuestItems.length > 0) {
               const itemMap = new Map();
-              
-              finalServerItems.forEach(item => itemMap.set(item.uniqueKey, item));
-              
-              parsedGuestItems.forEach(guestItem => {
+
+              finalServerItems.forEach((item) => itemMap.set(item.uniqueKey, item));
+
+              parsedGuestItems.forEach((guestItem) => {
                 if (itemMap.has(guestItem.uniqueKey)) {
                   const existing = itemMap.get(guestItem.uniqueKey);
                   itemMap.set(guestItem.uniqueKey, {
                     ...existing,
-                    quantity: existing.quantity + guestItem.quantity
+                    quantity: existing.quantity + guestItem.quantity,
                   });
                 } else {
                   itemMap.set(guestItem.uniqueKey, guestItem);
@@ -87,42 +90,46 @@ export const CartProvider = ({ children }) => {
               localStorage.removeItem("charm_cart");
             }
 
-            isSyncingFromServer.current = true;
             setCart(finalServerItems);
           }
           setIsLoaded(true); // 🟢 Mark loaded so syncing is enabled
         })
-        .catch((err) => {
-          console.error("Failed to load server cart:", err);
+        .catch((err) => console.error("Failed to load server cart:", err))
+        .finally(() => {
+          isFetchingServerCart.current = false; // 🟢 3. Unlock server sync only after fetch completes
           setIsLoaded(true);
         });
     } else {
-      // Fallback for guests using localStorage
-      const savedCart = localStorage.getItem("charm_cart");
-      if (savedCart) {
-        try {
-          setCart(sanitizeItems(JSON.parse(savedCart)));
-        } catch (e) {
-          setCart([]);
+      // --- GUEST / LOGGED-OUT USER ---
+      setCart((prevCart) => {
+        if (prevCart.length > 0) {
+          localStorage.setItem("charm_cart", JSON.stringify(prevCart));
+          setIsLoaded(true);
+          return prevCart;
         }
-      }
-      setIsLoaded(true); // 🟢 Mark loaded
+
+        const savedCart = localStorage.getItem("charm_cart");
+        if (savedCart) {
+          try {
+            const parsed = sanitizeItems(JSON.parse(savedCart));
+            setIsLoaded(true);
+            return parsed;
+          } catch (e) {
+            setIsLoaded(true);
+            return [];
+          }
+        }
+
+        setIsLoaded(true);
+        return [];
+      });
     }
   }, [status, session?.user]);
 
   // 2. Sync Cart Changes (Guarded by isLoaded to prevent refresh wipe)
   useEffect(() => {
-    if (!isLoaded) return; // Do nothing until database/storage fetch is complete
-
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-
-    if (isSyncingFromServer.current) {
-      isSyncingFromServer.current = false;
-      return;
-    }
+    // 🟢 4. STRICT LOCK: Never post changes if cart is still fetching or not loaded
+    if (!isLoaded || isFetchingServerCart.current) return;
 
     if (session?.user) {
       // Automatically save to MongoDB database via API on every cart modification
@@ -135,7 +142,7 @@ export const CartProvider = ({ children }) => {
       // Save to localStorage for guests
       localStorage.setItem("charm_cart", JSON.stringify(cart));
     }
-  }, [cart, session?.user, isLoaded]);
+  }, [cart, isLoaded, session?.user]);
 
   const addToCart = (product, variantOrDelta, quantity = 0) => {
     setCart((prev) => {
@@ -147,16 +154,16 @@ export const CartProvider = ({ children }) => {
         qChange = variantOrDelta;
       } else {
         const pId = (product._id?.$oid || product._id || product.productId)?.toString();
-        
+
         const vId = (
-          variantOrDelta?._id?.$oid || 
-          variantOrDelta?._id || 
-          variantOrDelta?.variantId || 
-          product.variantId || 
-          product.variant?._id || 
+          variantOrDelta?._id?.$oid ||
+          variantOrDelta?._id ||
+          variantOrDelta?.variantId ||
+          product.variantId ||
+          product.variant?._id ||
           "std"
         ).toString();
-        
+
         targetUniqueKey = product.uniqueKey || `${pId}-${vId}`;
         qChange = Number(quantity);
       }
@@ -180,15 +187,15 @@ export const CartProvider = ({ children }) => {
 
       const itemMoq = Number(product.minOrderQuantity || variantOrDelta?.minOrderQuantity || 1);
       const availableStock = Number(variantOrDelta?.stock ?? product.stock ?? 0);
-      
+
       const finalProductId = (product._id?.$oid || product._id || product.productId)?.toString();
-      
+
       const finalVariantId = (
-        variantOrDelta?._id?.$oid || 
-        variantOrDelta?._id || 
-        variantOrDelta?.variantId || 
-        product.variantId || 
-        product.variant?._id || 
+        variantOrDelta?._id?.$oid ||
+        variantOrDelta?._id ||
+        variantOrDelta?.variantId ||
+        product.variantId ||
+        product.variant?._id ||
         null
       )?.toString();
 
@@ -204,14 +211,14 @@ export const CartProvider = ({ children }) => {
       const calculatedPrice = Number(variantOrDelta?.price || product.price || 0);
 
       const newItem = {
-        productId: finalProductId, 
+        productId: finalProductId,
         variantId: finalVariantId,
         uniqueKey: targetUniqueKey || `${finalProductId}-${finalVariantId || "std"}`,
         name: product.name,
         variantName: computedVariantName,
         basePrice: Number(product.basePrice || variantOrDelta?.basePrice || calculatedPrice),
-        price: calculatedPrice, 
-        pricingTiers: product.pricingTiers || [], 
+        price: calculatedPrice,
+        pricingTiers: product.pricingTiers || [],
         imageUrl: variantOrDelta?.image || variantOrDelta?.imageUrl || product.imageUrl || "/placeholder.png",
         size: variantOrDelta?.size || product.size || "N/A",
         color: variantOrDelta?.color || product.color || "Default",
@@ -225,7 +232,6 @@ export const CartProvider = ({ children }) => {
     });
   };
 
-  // --- 🟢 DYNAMIC PRICE CALCULATION & SANITIZATION ---
   const processedCart = useMemo(() => {
     const productTotals = cart.reduce((acc, item) => {
       acc[item.productId] = (acc[item.productId] || 0) + item.quantity;
@@ -236,14 +242,14 @@ export const CartProvider = ({ children }) => {
       const pId = (item.productId?.$oid || item.productId || "").toString();
       const vId = (item.variantId?.$oid || item.variantId || "std").toString();
       const calculatedPrice = Number(item.price || item.basePrice || 0);
-      
+
       const totalQtyForThisProduct = productTotals[item.productId];
       let activePrice = calculatedPrice;
 
       if (item.pricingTiers && item.pricingTiers.length > 0) {
         const sortedTiers = [...item.pricingTiers].sort((a, b) => b.minQuantity - a.minQuantity);
         const applicableTier = sortedTiers.find((tier) => totalQtyForThisProduct >= tier.minQuantity);
-        
+
         if (applicableTier) {
           activePrice = applicableTier.unitPrice;
         }
@@ -305,8 +311,9 @@ export const CartProvider = ({ children }) => {
   return (
     <CartContext.Provider
       value={{
-        cart: processedCart, 
-        rawCart: cart,      
+        cart: processedCart,
+        rawCart: cart,
+        isLoaded,
         addToCart,
         removeFromCart,
         deleteSelectedItems,
