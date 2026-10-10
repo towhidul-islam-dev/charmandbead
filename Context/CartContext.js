@@ -29,7 +29,7 @@ export const CartProvider = ({ children }) => {
     });
   };
 
-  // 1. Load Cart (From Server if logged in, or localStorage if guest)
+  // 1. Load Cart (From Database if logged in, or localStorage if guest)
   useEffect(() => {
     if (status === "loading") return;
 
@@ -49,12 +49,14 @@ export const CartProvider = ({ children }) => {
         }
       }
 
+      // Fetch cart directly from MongoDB backend via API
       fetch("/api/cart")
         .then((res) => res.json())
         .then(async (data) => {
           if (data.success && Array.isArray(data.items)) {
             let finalServerItems = sanitizeItems(data.items);
 
+            // Merge guest cart items if any existed prior to logging in
             if (parsedGuestItems.length > 0) {
               const itemMap = new Map();
 
@@ -75,6 +77,7 @@ export const CartProvider = ({ children }) => {
               finalServerItems = Array.from(itemMap.values());
 
               try {
+                // Save merged cart back to database
                 await fetch("/api/cart", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -89,6 +92,7 @@ export const CartProvider = ({ children }) => {
 
             setCart(finalServerItems);
           }
+          setIsLoaded(true); // 🟢 Mark loaded so syncing is enabled
         })
         .catch((err) => console.error("Failed to load server cart:", err))
         .finally(() => {
@@ -122,18 +126,20 @@ export const CartProvider = ({ children }) => {
     }
   }, [status, session?.user]);
 
-  // 2. Sync Cart Changes
+  // 2. Sync Cart Changes (Guarded by isLoaded to prevent refresh wipe)
   useEffect(() => {
     // 🟢 4. STRICT LOCK: Never post changes if cart is still fetching or not loaded
     if (!isLoaded || isFetchingServerCart.current) return;
 
     if (session?.user) {
+      // Automatically save to MongoDB database via API on every cart modification
       fetch("/api/cart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: cart }),
       }).catch((err) => console.error("Failed to sync cart to server:", err));
     } else {
+      // Save to localStorage for guests
       localStorage.setItem("charm_cart", JSON.stringify(cart));
     }
   }, [cart, isLoaded, session?.user]);
@@ -284,6 +290,13 @@ export const CartProvider = ({ children }) => {
     setCart([]);
     if (!session?.user) {
       localStorage.removeItem("charm_cart");
+    } else {
+      // Clear database cart for logged-in user
+      fetch("/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: [] }),
+      }).catch((err) => console.error("Failed to clear server cart:", err));
     }
   }, [session?.user]);
 
