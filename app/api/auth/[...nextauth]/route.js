@@ -5,13 +5,14 @@ import User from "@/models/User";
 import bcrypt from "bcryptjs";
 
 export const authOptions = {
+  trustHost: true, // 🟢 CRITICAL FOR MOBILE: Trusts proxy headers on Vercel and prevents cookie drops
   providers: [
     CredentialsProvider({
       name: "credentials",
       credentials: {},
 
       async authorize(credentials) {
-        // 1. Ensure credentials exist to avoid destructuring errors
+        // Ensure credentials exist to avoid destructuring errors
         if (!credentials?.email || !credentials?.password) {
           throw new Error("Please enter both email and password");
         }
@@ -21,22 +22,21 @@ export const authOptions = {
         try {
           await dbConnect();
           
-          // 2. Find user and explicitly select password if it's hidden by default in your model
+          // Find user and explicitly select password if it's hidden by default in your model
           const user = await User.findOne({ email : email.toLowerCase() }).select("+password");
 
           if (!user || !user.password) {
-            // Throwing an error provides better feedback than returning null
             throw new Error("No user found with this email");
           }
 
-          // 3. bcrypt.compare(plainPassword, hashedBycryptPassword)
+          // bcrypt.compare(plainPassword, hashedBycryptPassword)
           const passwordsMatch = await bcrypt.compare(credentials.password, user.password);
 
           if (!passwordsMatch) {
             throw new Error("Invalid password");
           }
 
-          // 4. Return the user object (this goes to the JWT callback)
+          // Return the user object (this goes to the JWT callback)
           return {
             id: user._id.toString(),
             name: user.name,
@@ -44,7 +44,6 @@ export const authOptions = {
             role: user.role,
           };
         } catch (error) {
-          // Log the specific error for debugging
           console.error("Auth Error:", error.message);
           throw new Error(error.message);
         }
@@ -65,6 +64,12 @@ export const authOptions = {
         session.user.id = token.id;
       }
       return session;
+    },
+    // 🟢 Ensures redirects stay safely on your domain for mobile devices
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      if (new URL(url).origin === baseUrl) return url;
+      return baseUrl;
     },
   },
   session: {

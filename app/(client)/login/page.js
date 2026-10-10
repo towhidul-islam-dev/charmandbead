@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; 
+import { useRouter, useSearchParams } from 'next/navigation'; 
 import { signIn } from "next-auth/react"; 
 import toast from 'react-hot-toast';
 import { UserCircle, Eye, EyeOff, Loader2 } from "lucide-react";
@@ -14,17 +14,40 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null); 
     const router = useRouter(); 
+    const searchParams = useSearchParams();
+
+    // 🟢 Read callbackUrl parameter passed from middleware or NextAuth
+    const rawCallbackUrl = searchParams.get("callbackUrl");
+
+    // 🟢 Helper to sanitize mobile callback URLs and prevent invalid / 404 redirects
+    const getSafeCallbackUrl = () => {
+        if (!rawCallbackUrl) return "/";
+        
+        // Ensure callback URL is a safe relative path
+        if (rawCallbackUrl.startsWith("/") && !rawCallbackUrl.startsWith("//")) {
+            // Fix mobile browser auto-fill/truncation (e.g. "/ad" -> "/admin/dashboard")
+            if (rawCallbackUrl === "/ad" || rawCallbackUrl.startsWith("/ad/")) {
+                return "/admin/dashboard";
+            }
+            return rawCallbackUrl;
+        }
+        
+        return "/";
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null);
         setLoading(true);
         
+        const targetDestination = getSafeCallbackUrl();
+
         try {
             const result = await signIn("credentials", {
                 email,
                 password,
                 redirect: false, 
+                callbackUrl: targetDestination,
             });
 
             if (result?.error) {
@@ -33,9 +56,9 @@ export default function LoginPage() {
             } else {
                 toast.success("Identity Confirmed");
                 
-                // HARD NAVIGATION FIX: Forces a full page reload so the server 
-                // layout instantly recognizes the new auth cookies and fetches user info.
-                window.location.href = "/";
+                // HARD NAVIGATION FIX: Forces a full page reload so mobile browsers
+                // apply cookies across all layouts and land on the correct destination.
+                window.location.href = targetDestination;
             }
 
         } catch (networkError) {
