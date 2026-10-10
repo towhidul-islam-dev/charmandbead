@@ -65,11 +65,11 @@ export async function POST(req) {
 
     await dbConnect();
 
-    // Upsert the user's cart
+// Upsert the user's cart with updated Mongoose syntax
     const updatedCart = await Cart.findOneAndUpdate(
       { userId: session.user.id },
       { items: sanitizedItems },
-      { new: true, upsert: true, runValidators: true }
+      { returnDocument: 'after', upsert: true, runValidators: true }
     );
 
     return NextResponse.json({

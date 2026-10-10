@@ -94,12 +94,15 @@ export default function CheckoutPage() {
     }
 
     async function initCheckout() {
+      // If the order has already been successfully placed, stop running cart checks/redirects
+      if (showSuccessModal) return;
+
       const saved = localStorage.getItem("checkoutItems");
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.length > 0) {
           setCheckoutItems(parsed);
-        } else if (!showSuccessModal) {
+        } else {
           router.push("/cart");
         }
       } else {
@@ -186,7 +189,7 @@ export default function CheckoutPage() {
     });
   };
 
-  const handlePlaceOrder = async () => {
+const handlePlaceOrder = async () => {
     if (status === "unauthenticated") {
       toast.error("Please login to place an order");
       router.push("/login?callbackUrl=/dashboard/checkout");
@@ -280,20 +283,27 @@ export default function CheckoutPage() {
 
       if (response?.success) {
         setPlacedOrderDetails(response.order || orderData);
-        setShowSuccessModal(true);
-        toast.success("Order placed successfully!");
+        
+        // 1. Remove local storage items first
         localStorage.removeItem("checkoutItems");
+        
+        // 2. Clear cart context if available
         if (typeof deleteSelectedItems === "function") {
           const boughtIds = checkoutItems.map((i) => i._id || i.productId);
           deleteSelectedItems(boughtIds);
         }
+
+        // 3. Trigger success modal state AFTER data updates are finished
+        setShowSuccessModal(true);
+        toast.success("Order placed successfully!");
       } else {
         toast.error(response?.message || "Failed to create order.");
       }
     } catch (error) {
       console.error("CHECKOUT_ERROR:", error);
-      toast.error("Failed to initiate order.");
+      toast.error("Failed to initiate order. Please try again.");
     } finally {
+      // 4. Guaranteed spinner dismissal
       setLoading(false);
     }
   };
@@ -375,7 +385,7 @@ export default function CheckoutPage() {
             <ShoppingBag className="text-[#EA638C]" size={28} /> 02. Purchased
             Items ({checkoutItems.length})
           </h2>
-          <div className="space-y-3">
+<div className="space-y-3">
             {checkoutItems.map((item, idx) => {
               const itemImg =
                 item.image ||
@@ -807,7 +817,7 @@ export default function CheckoutPage() {
             <button
               onClick={() => {
                 setShowSuccessModal(false);
-                router.push("/dashboard/orders");
+                router.push("/products");
               }}
               className="w-full py-4 rounded-2xl bg-[#3E442B] hover:bg-[#EA638C] text-white font-black uppercase tracking-[0.2em] text-[10px] transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer"
             >
