@@ -14,14 +14,14 @@ export async function middleware(req) {
   const isAdminPage = pathname.startsWith("/admin");
   const isUnauthorizedPage = pathname === "/admin/unauthorized";
 
-  // 1. Redirect authenticated users away from Login/Register to their dashboard
+  // Redirect authenticated users away from Login/Register to their dashboard
   if (token && isAuthPage) {
     const dashboardUrl =
       token.role === "admin" ? "/admin/dashboard" : "/dashboard/orders";
     return NextResponse.redirect(new URL(dashboardUrl, req.url));
   }
 
-  // 2. Redirect unauthenticated users trying to access protected routes to /login
+  // Redirect unauthenticated users trying to access protected routes to /login
   if (!token && (isDashboardPage || isAdminPage)) {
     if (isUnauthorizedPage) {
       return NextResponse.next();
@@ -33,7 +33,7 @@ export async function middleware(req) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // 3. STRICT ADMIN GUARD: If logged in user is NOT an admin, block access to /admin
+  // STRICT ADMIN GUARD: If logged in user is NOT an admin, block access to /admin
   if (token && isAdminPage && token.role !== "admin" && !isUnauthorizedPage) {
     return NextResponse.redirect(new URL("/admin/unauthorized", req.url));
   }
@@ -41,7 +41,6 @@ export async function middleware(req) {
   return NextResponse.next();
 }
 
-// 🟢 Optimized matcher to only target dashboard and admin routes, preventing mobile token drop loops
 export const config = {
   matcher: [
     "/dashboard/:path*",
