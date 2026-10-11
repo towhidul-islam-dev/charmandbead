@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useCart } from "@/Context/CartContext";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -17,6 +18,7 @@ import {
 
 export default function CartPage({ initialItems = [], isAdminPreview = false, user = null }) {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [isPending, setIsPending] = useState(false);
   const {
     cart: globalCart,
@@ -25,10 +27,26 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
     clearCart,
   } = useCart();
 
-  // Prioritize globalCart from Context
+  // 🟢 PERSISTENCE FIX: Fallback to localStorage on refresh if globalCart/initialItems are empty
+  const [persistedCart, setPersistedCart] = useState([]);
+  
+  useEffect(() => {
+    try {
+      const savedCart = localStorage.getItem("cart");
+      if (savedCart) {
+        setPersistedCart(JSON.parse(savedCart));
+      }
+    } catch (e) {
+      console.error("Failed to load cart from storage", e);
+    }
+  }, []);
+
+  // Prioritize globalCart, then initialItems, then localStorage fallback to prevent wipes on refresh
   const rawCart = useMemo(() => {
-    return globalCart.length > 0 ? globalCart : initialItems;
-  }, [globalCart, initialItems]);
+    if (globalCart.length > 0) return globalCart;
+    if (initialItems.length > 0) return initialItems;
+    return persistedCart;
+  }, [globalCart, initialItems, persistedCart]);
 
   // Ensure every item has a reliable uniqueKey, basePrice, and variantId
   const cart = useMemo(() => {
@@ -152,6 +170,15 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
   };
 
   const handleCheckout = () => {
+    // 🟢 AUTH GUARD & LOADING FIX: Ensure NextAuth status is resolved before acting
+    if (status === "loading") return;
+
+    if (status === "unauthenticated" || !session) {
+      toast.error("Please login to proceed to checkout");
+      router.push("/login?callbackUrl=/dashboard/checkout");
+      return;
+    }
+
     if (selectedItems.length === 0 || isPending) return;
     setIsPending(true); 
     try {
@@ -160,7 +187,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
         .map((item) => {
           const img = item.imageUrl || item.image || item.variant?.image || null;
           
-          // Enhanced resolution to fallback reliably across variant id fields
           const resolvedVariantId = 
             item.variantId || 
             item.variant?._id || 
@@ -407,7 +433,7 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                 {user?.isVIP && (
                   <div className="flex justify-between text-[10px] font-black text-[#EA638C] uppercase tracking-[0.2em] bg-[#FBB6E6]/30 p-2.5 rounded-xl border border-[#FBB6E6]/50">
                     <span>VIP Member (5%)</span>
-                    <span>- ৳{vipDiscountAmount.toLocaleString()}</span>
+                    <span>৳{vipDiscountAmount.toLocaleString()}</span>
                   </div>
                 )}
 
@@ -419,12 +445,12 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
 
               <button 
                 onClick={handleCheckout} 
-                disabled={selectedItems.length === 0 || isPending} 
+                disabled={selectedItems.length === 0 || isPending || status === "loading"} 
                 className={`w-full py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2
-                  ${isPending ? 'bg-[#3E442B]/50 text-white cursor-wait' : 'bg-[#3E442B] hover:bg-[#EA638C] text-white'} 
+                  ${isPending || status === "loading" ? 'bg-[#3E442B]/50 text-white cursor-wait' : 'bg-[#3E442B] hover:bg-[#EA638C] text-white'} 
                   ${selectedItems.length === 0 ? 'opacity-30 cursor-not-allowed' : 'opacity-100'}`}
               >
-                {isPending ? "Processing..." : selectedItems.length === 0 ? "Select Items" : "Go to Checkout"}
+                {status === "loading" ? "Checking Session..." : isPending ? "Processing..." : selectedItems.length === 0 ? "Select Items" : "Go to Checkout"}
               </button>
 
               <p className="mt-6 text-[8px] text-center text-[#3E442B]/50 font-bold uppercase tracking-widest">
