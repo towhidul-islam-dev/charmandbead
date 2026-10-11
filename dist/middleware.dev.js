@@ -41,14 +41,10 @@ export async function middleware(req) {
   return NextResponse.next();
 }
 
+// 🟢 Optimized matcher to only target dashboard and admin routes, preventing mobile token drop loops
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for:
-     * 1. /api routes
-     * 2. /_next (Next.js internals)
-     * 3. Static files (images, icons, etc.)
-     */
-    "/((?!api|_next/static|_next/image|favicon.ico|images|assets|uploads).*)",
+    "/dashboard/:path*",
+    "/admin/:path*",
   ],
 };
