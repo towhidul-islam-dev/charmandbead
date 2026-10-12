@@ -9,80 +9,113 @@ import { uploadImage, deleteImage } from "@/lib/cloudinary";
 
 // 💡 MUST MATCH YOUR auth.js LIST
 const SUPER_ADMIN_EMAILS = [
-  "towhidulislam12995@gmail.com", 
+  "towhidulislam12995@gmail.com",
   "jubydaakter994@gmail.com",
   "charmandbeads.official@gmail.com",
 ];
 
-// --- EXISTING FUNCTIONS ---
+// --- EXISTING & ENHANCED ADDRESS FUNCTIONS ---
 
 export async function getUserAddress() {
   try {
     await dbConnect();
     const session = await auth();
-    if (!session?.user?.email) return { success: false, error: "Not authenticated" };
+    if (!session?.user?.email)
+      return { success: false, error: "Not authenticated" };
     const user = await User.findOne({ email: session.user.email }).lean();
-    if (!user || !user.addresses || user.addresses.length === 0) return { success: true, address: null };
-    return { success: true, address: JSON.parse(JSON.stringify(user.addresses[0])) };
+    if (!user || !user.addresses || user.addresses.length === 0)
+      return { success: true, address: null, addresses: [] };
+
+    // Return both the primary/default address for backwards compatibility and the full list
+    const defaultAddr =
+      user.addresses.find((a) => a.isDefault) || user.addresses[0];
+    return {
+      success: true,
+      address: JSON.parse(JSON.stringify(defaultAddr)),
+      addresses: JSON.parse(JSON.stringify(user.addresses)),
+    };
   } catch (err) {
     return { success: false, error: err.message };
   }
 }
 
 export async function updateAddress(formData) {
+  console.log(
+    "Server Action Received:",
+    Object.fromEntries(formData.entries()),
+  );
   try {
     const session = await auth();
-    if (!session?.user?.email) return { success: false, error: "Not authenticated" };
+    if (!session?.user?.email)
+      return { success: false, error: "Not authenticated" };
     await dbConnect();
 
-    const name = formData.get("name");
+    const addressId = formData.get("addressId"); // Present when editing an existing address
+    const name = formData.get("name") || formData.get("fullName");
     const email = formData.get("email");
     const phone = formData.get("phone");
+    const district = formData.get("district") || "Dhaka";
+    const thana = formData.get("thana") || "";
     const city = formData.get("city");
     const street = formData.get("street");
     const zipCode = formData.get("zipCode");
-    const deliveryCharge = Number(formData.get("deliveryCharge")) || 0;
+    const deliveryCharge = Number(formData.get("deliveryCharge")) || 80;
+    const label = formData.get("label") || "Home";
 
     // Optional validation for basic email layout
     if (email && !/\S+@\S+\.\S+/.test(email)) {
       return { success: false, error: "Please provide a valid email address." };
     }
 
-    // Build address object including email & calculated delivery charge
-    const updatedAddress = {
+    const user = await User.findOne({ email: session.user.email });
+    if (!user) return { success: false, error: "User not found" };
+
+    if (!user.addresses) {
+      user.addresses = [];
+    }
+
+    const addressPayload = {
+      label,
       fullName: name,
       email: email,
       phone: phone,
-      city: city,
-      street: street,
-      zipCode: zipCode,
-      deliveryCharge: deliveryCharge,
-      isDefault: true,
-      label: "Home",
+      district,
+      thana,
+      city,
+      street,
+      zipCode,
+      deliveryCharge,
+      isDefault: true, // New or edited from single view defaults to primary
     };
 
-    const updatePayload = {
-      addresses: [updatedAddress],
-    };
+    // Make all other addresses non-default since this one is being added/saved as active
+    user.addresses.forEach((addr) => {
+      addr.isDefault = false;
+    });
+
+    if (addressId) {
+      // Edit existing sub-document
+      const addrDoc = user.addresses.id(addressId);
+      if (addrDoc) {
+        Object.assign(addrDoc, addressPayload);
+      } else {
+        user.addresses.push(addressPayload);
+      }
+    } else {
+      // Add new address to array
+      user.addresses.push(addressPayload);
+    }
 
     // Update user's name and primary email if provided
-    if (name) updatePayload.name = name;
-    if (email) updatePayload.email = email;
+    if (name) user.name = name;
+    if (email) user.email = email;
 
-    const result = await User.findOneAndUpdate(
-      { email: session.user.email },
-      { $set: updatePayload },
-      { upsert: true, new: true, runValidators: true }
-    );
-
-    if (!result) {
-      return { success: false, error: "Failed to update profile details." };
-    }
+    await user.save();
 
     revalidatePath("/dashboard/address");
     revalidatePath("/checkout");
     revalidatePath("/admin/users");
-    
+
     return { success: true };
   } catch (err) {
     console.error("UPDATE ADDRESS ERROR:", err);
@@ -90,37 +123,80 @@ export async function updateAddress(formData) {
   }
 }
 
-export async function deleteAddress() {
+export async function deleteAddress(addressId = null) {
   try {
     const session = await auth();
     if (!session?.user) return { success: false, error: "Not authenticated" };
-    
-    await dbConnect();
 
-    await User.findOneAndUpdate(
-      { email: session.user.email },
-      { $set: { addresses: [] } }
-    );
+    await dbConnect();
+    const user = await User.findOne({ email: session.user.email });
+    if (!user) return { success: false, error: "User not found" };
+
+    if (addressId) {
+      // Delete a specific address by its sub-document ID
+      user.addresses.pull({ _id: addressId });
+      // If default was deleted and items remain, set the first one as default
+      if (
+        user.addresses.length > 0 &&
+        !user.addresses.some((a) => a.isDefault)
+      ) {
+        user.addresses[0].isDefault = true;
+      }
+    } else {
+      // Clear all addresses if no specific ID is provided (backward compatibility)
+      user.addresses = [];
+    }
+
+    await user.save();
 
     revalidatePath("/dashboard/address");
+    revalidatePath("/checkout");
     return { success: true, message: "Address removed" };
   } catch (err) {
     return { success: false, error: err.message };
   }
 }
 
+export async function setDefaultAddress(addressId) {
+  try {
+    const session = await auth();
+    if (!session?.user?.email)
+      return { success: false, error: "Not authenticated" };
+
+    await dbConnect();
+    const user = await User.findOne({ email: session.user.email });
+    if (!user) return { success: false, error: "User not found" };
+
+    user.addresses.forEach((addr) => {
+      addr.isDefault = addr._id.toString() === addressId;
+    });
+
+    await user.save();
+    revalidatePath("/dashboard/address");
+    revalidatePath("/checkout");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// --- EXISTING ADMIN & PROFILE FUNCTIONS ---
+
 export async function syncVIPStatus(userId) {
   try {
     await dbConnect();
-    
+
     // Calculate sum of all delivered orders
     const orders = await Order.find({ user: userId, status: "Delivered" });
-    const totalSpent = orders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
+    const totalSpent = orders.reduce(
+      (sum, order) => sum + (order.totalPrice || 0),
+      0,
+    );
 
     const isVIP = totalSpent >= 10000;
 
-    await User.findByIdAndUpdate(userId, { 
-      $set: { isVIP: isVIP } 
+    await User.findByIdAndUpdate(userId, {
+      $set: { isVIP: isVIP },
     });
 
     revalidatePath("/admin/users");
@@ -131,9 +207,6 @@ export async function syncVIPStatus(userId) {
   }
 }
 
-/**
- * Updated updateUserRole with automatic VIP sync check
- */
 export async function updateUserRole(userId, newRole) {
   try {
     const session = await auth();
@@ -144,19 +217,24 @@ export async function updateUserRole(userId, newRole) {
     await dbConnect();
 
     if (userId === session.user.id) {
-      return { success: false, error: "Security risk: You cannot change your own role." };
+      return {
+        success: false,
+        error: "Security risk: You cannot change your own role.",
+      };
     }
 
     const targetUser = await User.findById(userId);
     if (!targetUser) return { success: false, error: "User not found" };
 
     if (SUPER_ADMIN_EMAILS.includes(targetUser.email)) {
-      return { success: false, error: "Permission Denied: Protected Super Admin." };
+      return {
+        success: false,
+        error: "Permission Denied: Protected Super Admin.",
+      };
     }
 
     await User.findByIdAndUpdate(userId, { $set: { role: newRole } });
 
-    // 🟢 After updating role, also sync VIP status to be sure
     await syncVIPStatus(userId);
 
     revalidatePath("/admin/users");
@@ -177,17 +255,14 @@ export async function updateProfile(formData) {
 
     const name = formData.get("name");
     const phone = formData.get("phone");
-    const imageBase64 = formData.get("image"); 
+    const imageBase64 = formData.get("image");
 
-    // Initialize update object
-    const updateData = { 
-      name: name || user.name, 
-      phone: phone || "" 
+    const updateData = {
+      name: name || user.name,
+      phone: phone || "",
     };
 
-    // Handle Cloudinary Image Swap
     if (imageBase64 && imageBase64.startsWith("data:image")) {
-      // 1. Delete old image if it exists
       if (user.imagePublicId) {
         try {
           await deleteImage(user.imagePublicId);
@@ -196,10 +271,8 @@ export async function updateProfile(formData) {
         }
       }
 
-      // 2. Upload new image
       const uploadResult = await uploadImage(imageBase64, "user_profiles");
       if (uploadResult) {
-        // Store the public_id in both fields for compatibility
         updateData.image = uploadResult.public_id;
         updateData.imagePublicId = uploadResult.public_id;
       }
@@ -208,24 +281,21 @@ export async function updateProfile(formData) {
     const updatedUser = await User.findOneAndUpdate(
       { email: session.user.email },
       { $set: updateData },
-      { new: true }
+      { new: true },
     ).lean();
 
-    // 🟢 REVALIDATION: Clears cache for Navbar and Profile components
-    revalidatePath("/", "layout"); 
+    revalidatePath("/", "layout");
     revalidatePath("/profile");
-    
-    // 🟢 RETURN DATA: Explicitly mapping to ensure the frontend update() 
-    // sees exactly what it needs for the session.
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       user: {
         id: updatedUser._id.toString(),
         name: updatedUser.name,
         email: updatedUser.email,
-        image: updatedUser.image, // This is the Cloudinary public_id
-        role: updatedUser.role
-      }
+        image: updatedUser.image,
+        role: updatedUser.role,
+      },
     };
   } catch (error) {
     console.error("Profile Update Error:", error);
@@ -240,7 +310,7 @@ export async function deleteAccount() {
 
     await dbConnect();
     const user = await User.findOne({ email: session.user.email });
-    
+
     if (user?.imagePublicId) {
       await deleteImage(user.imagePublicId);
     }
@@ -252,48 +322,49 @@ export async function deleteAccount() {
   }
 }
 
-// it's delete the user account.
 export async function deleteUser(userId) {
   try {
     const session = await auth();
-    
-    // 1. Security Check: Must be an admin to delete users
+
     if (!session || session.user.role !== "admin") {
       return { success: false, error: "Unauthorized: Admin access required" };
     }
 
     await dbConnect();
 
-    // 2. Security Check: Prevent self-deletion
     if (userId === session.user.id) {
-      return { success: false, error: "You cannot delete your own account from the admin panel." };
+      return {
+        success: false,
+        error: "You cannot delete your own account from the admin panel.",
+      };
     }
 
     const targetUser = await User.findById(userId);
     if (!targetUser) return { success: false, error: "User not found" };
 
-    // 3. Security Check: Prevent deleting protected Super Admins
     if (SUPER_ADMIN_EMAILS.includes(targetUser.email)) {
-      return { success: false, error: "Permission Denied: Cannot delete a protected Super Admin." };
+      return {
+        success: false,
+        error: "Permission Denied: Cannot delete a protected Super Admin.",
+      };
     }
 
-    // 4. Cleanup: Delete profile image from Cloudinary if it exists
     if (targetUser.imagePublicId) {
       try {
         await deleteImage(targetUser.imagePublicId);
       } catch (cloudinaryErr) {
         console.error("Cloudinary Delete Error:", cloudinaryErr);
-        // We continue deleting the user even if image deletion fails
       }
     }
 
-    // 5. Delete the User record
     await User.findByIdAndDelete(userId);
 
-    // 6. Refresh the UI
     revalidatePath("/admin/users");
-    
-    return { success: true, message: "User and associated data removed successfully." };
+
+    return {
+      success: true,
+      message: "User and associated data removed successfully.",
+    };
   } catch (err) {
     console.error("DELETE_USER_ERROR:", err);
     return { success: false, error: err.message };

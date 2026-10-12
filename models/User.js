@@ -40,15 +40,19 @@ const UserSchema = new mongoose.Schema(
     ],
 
     addresses: [
-      {
-        label: String,
-        fullName: String,
-        phone: String,
-        street: String,
-        city: String,
-        isDefault: { type: Boolean, default: false },
-      },
-    ],
+    {
+      label: { type: String, default: "Home" }, // e.g. "Home", "Office"
+      fullName: String,
+      phone: String,
+      district: { type: String, default: "Dhaka" },
+      thana: String,
+      city: String, // Stores formatted string like "Dhanmondi, Dhaka"
+      street: String,
+      zipCode: String,
+      deliveryCharge: { type: Number, default: 80 },
+      isDefault: { type: Boolean, default: false },
+    },
+  ],
     image: { type: String, default: "" },
     imagePublicId: { type: String, default: "" },
     isVIP: { type: Boolean, default: false },

@@ -186,7 +186,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
   };
 
   // BULK ADD HANDLER (WITH AUTH INTERCEPTION)
-  const handleBulkAdd = () => {
+const handleBulkAdd = () => {
     if (!user) {
       setShowAuthModal(true);
       return;
@@ -228,6 +228,7 @@ export default function ProductPurchaseSection({ product, onVariantChange }) {
           color: v.color || "",
           size: v.size || "",
           price: getEffectiveUnitPrice(v),
+          pricingTiers: product.pricingTiers || [], // 🟢 Added pricing tiers so the cart can calculate bulk rates
           imageUrl: itemImage,
           stock: v.stock,
           minOrderQuantity: Number(v.minOrderQuantity) || 1,

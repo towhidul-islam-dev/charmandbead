@@ -66,11 +66,26 @@ var UserSchema = new _mongoose["default"].Schema({
     ref: "Product"
   }],
   addresses: [{
-    label: String,
+    label: {
+      type: String,
+      "default": "Home"
+    },
+    // e.g. "Home", "Office"
     fullName: String,
     phone: String,
-    street: String,
+    district: {
+      type: String,
+      "default": "Dhaka"
+    },
+    thana: String,
     city: String,
+    // Stores formatted string like "Dhanmondi, Dhaka"
+    street: String,
+    zipCode: String,
+    deliveryCharge: {
+      type: Number,
+      "default": 80
+    },
     isDefault: {
       type: Boolean,
       "default": false
