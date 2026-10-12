@@ -48,7 +48,7 @@ export async function createOrder(orderData) {
 
     const normalizedTotal = Number(Number(totalAmount).toFixed(2));
 
-    // 1. Idempotency Check (Prevents duplicate accidental submissions)
+    // 1. Idempotency Check (Prevents duplicate accidental submissions within 30 seconds)
     const existingOrder = await Order.findOne({
       user: userId,
       totalAmount: normalizedTotal,
@@ -83,22 +83,27 @@ export async function createOrder(orderData) {
       "Valued Customer"
     ).trim();
 
-    // 3. Create the Order Document
+    // 3. Create the Order Document (Matching your MongoDB order.items schema)
     const [newOrder] = await Order.create([{
         user: userId, 
-        items: items.map(i => ({
-          product: i.productId || i.product || i._id,
-          productName: i.productName || i.name || "Unnamed Product",
-          variant: {
-            name: i.variant?.name || i.variant?.title || i.color || (typeof i.variant === 'string' ? i.variant : "Default"),
-            size: i.size || i.variant?.size || "N/A",
-            variantId: i.variantId || i.variant?._id || i.variant?.variantId || null,
-            image: i.variant?.image || i.image || null
-          },
-          quantity: Math.max(1, Number(i.quantity) || 1),
-          price: Number(i.price) || 0,
-          sku: i.sku || i.variant?.sku || "N/A"
-        })),
+        items: items.map(i => {
+          const vId = i.variant?.variantId || i.variantId || i.variant?._id || null;
+          const vName = i.variant?.name || i.variantName || i.color || (typeof i.variant === 'string' ? i.variant : "Default");
+          
+          return {
+            product: i.productId || i.product || i._id,
+            productName: i.productName || i.name || "Unnamed Product",
+            variant: {
+              name: vName,
+              size: i.size || i.variant?.size || "N/A",
+              variantId: vId ? vId.toString() : null,
+              image: i.variant?.image || i.imageUrl || i.image || null
+            },
+            quantity: Math.max(1, Number(i.quantity) || 1),
+            price: Number(i.price) || 0,
+            sku: i.sku || i.variant?.sku || "N/A"
+          };
+        }),
         shippingAddress: {
           ...shippingAddress,
           email: shippingAddress?.email || resolvedEmail
@@ -121,7 +126,7 @@ export async function createOrder(orderData) {
         isStockReduced: false
     }], { session });
 
-    // 4. Group Deductions per Product & Variant
+    // 4. Group Deductions per Product & Variant to prevent duplicate reductions on multi-item orders
     const productDeductions = items.reduce((acc, item) => {
       const rawProductId = item.productId || item.product || item._id;
       if (!rawProductId) return acc;
@@ -133,8 +138,8 @@ export async function createOrder(orderData) {
       const qty = Math.max(1, Number(item.quantity) || 1);
       acc[pId].totalQty += qty;
       
-      const vId = item.variantId || item.variant?._id || item.variant?.variantId;
-      const vName = typeof item.variant === 'string' ? item.variant : (item.variant?.name || item.color);
+      const vId = item.variant?.variantId || item.variantId || item.variant?._id;
+      const vName = typeof item.variant === 'string' ? item.variant : (item.variant?.name || item.variantName || item.color);
       const key = vId ? vId.toString() : (item.sku || vName || "default");
       
       if (!acc[pId].variants[key]) {
@@ -171,35 +176,34 @@ export async function createOrder(orderData) {
           const searchName = orderedVar.vName ? orderedVar.vName.toLowerCase().trim() : null;
           const searchSize = orderedVar.size ? orderedVar.size.toLowerCase().trim() : null;
           
-          // Enhanced multi-layer match to prevent false negatives
-          let target = product.variants.find((v) => {
-            const idMatch = searchId && v._id && v._id.toString() === searchId;
-            const skuMatch = searchSku && v.sku && v.sku.trim() === searchSku;
-            
-            // Match against actual VariantSchema fields (color and size)
-            const colorMatch = searchName && v.color && v.color.toLowerCase().trim() === searchName;
-            const sizeMatch = searchName && v.size && v.size.toLowerCase().trim() === searchName;
-            
-            // Loose fallback: check if the variant's color or size is part of the string name passed from cart
-            const looseMatch = searchName && (
-              (v.color && searchName.includes(v.color.toLowerCase().trim())) ||
-              (v.size && searchName.includes(v.size.toLowerCase().trim()))
-            );
+          let target = null;
 
-            return idMatch || skuMatch || colorMatch || sizeMatch || looseMatch;
-          });
-
-          if (!target && searchId && typeof product.variants.id === "function") {
-            try {
-              target = product.variants.id(searchId);
-            } catch (e) {
-              // Ignore invalid cast exceptions
+          // 🟢 1. Strict Match by Variant ID against product.variants._id
+          if (searchId) {
+            target = product.variants.find(v => v._id && v._id.toString() === searchId);
+            if (!target && typeof product.variants.id === "function") {
+              try {
+                target = product.variants.id(searchId);
+              } catch (e) {}
             }
           }
 
-          // Safety fallback: If product only has 1 variant option, match it directly instead of crashing
-          if (!target && product.variants.length === 1) {
-            target = product.variants[0];
+          // 🟢 2. Match by SKU
+          if (!target && searchSku) {
+            target = product.variants.find(v => v.sku && v.sku.trim() === searchSku);
+          }
+
+          // 🟢 3. Match by exact color/name and size combination
+          if (!target && searchName) {
+            target = product.variants.find(v => {
+              const vColor = (v.color || v.name || "").toLowerCase().trim();
+              const vSize = (v.size || "").toLowerCase().trim();
+              
+              const nameMatch = vColor === searchName;
+              const sizeMatch = !searchSize || searchSize === "n/a" || vSize === searchSize;
+
+              return nameMatch && sizeMatch;
+            });
           }
 
           if (!target) {
@@ -208,7 +212,8 @@ export async function createOrder(orderData) {
 
           const currentVariantStock = Number(target.stock) || 0;
           if (currentVariantStock < orderedVar.qty) {
-            throw new Error(`Insufficient stock for ${data.name} (${target.name || target.color || target.size || "Variant"}): Only ${currentVariantStock} left.`);
+            const variantDisplayName = `${target.color || ""} ${target.size || ""}`.trim() || target.name || "Variant";
+            throw new Error(`Oops! Someone just bought the last ${data.name} (${variantDisplayName}). Please lower the quantity or remove the item from your cart.`);
           }
 
           // Atomic deduction on variant stock
@@ -227,7 +232,7 @@ export async function createOrder(orderData) {
       } else {
         const currentStock = Number(product.stock) || 0;
         if (currentStock < data.totalQty) {
-          throw new Error(`Stock error: ${data.name} only has ${currentStock} units in stock.`);
+          throw new Error(`Oops! Someone just bought the last ${data.name}. Please lower the quantity or remove the item from your cart.`);
         }
 
         await Product.updateOne(
@@ -256,7 +261,7 @@ export async function createOrder(orderData) {
     // --- DISPATCH EMAIL (Non-blocking transaction-wise) ---
     if (resolvedEmail && resolvedEmail.includes("@")) {
       const formattedAddress = [
-        shippingAddress?.address,
+        shippingAddress?.street || shippingAddress?.address,
         shippingAddress?.city,
         shippingAddress?.postalCode
       ].filter(Boolean).join(", ") || "N/A";
@@ -269,7 +274,7 @@ export async function createOrder(orderData) {
         shippingAddress: formattedAddress,
         totalAmount: normalizedTotal,
         paymentMethod: paymentMethod,
-        items: newOrder.items.main ? newOrder.items : newOrder.items.map(i => ({
+        items: newOrder.items.map(i => ({
           name: i.productName,
           quantity: i.quantity,
           price: i.price,

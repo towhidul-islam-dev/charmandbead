@@ -5,7 +5,7 @@ import { useCart } from "@/Context/CartContext";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { createOrder } from "@/actions/order";
-import { getUserAddress } from "@/actions/userActions";
+import { getUserAddress, setDefaultAddress } from "@/actions/userActions";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import {
@@ -32,30 +32,48 @@ import {
   User,
   Scan,
   Maximize2,
+  Check,
+  Star,
+  Plus,
 } from "lucide-react";
 
-const DHAKA_ZONES = [
+const INSIDE_DHAKA_THANAS = [
+  "Adabor",
+  "Azimpur",
   "Badda",
   "Banani",
   "Banglamotor",
+  "Baridhara",
   "Bashundhara",
   "Cantonment",
   "Dhanmondi",
+  "Farmgate",
   "Gulshan",
+  "Hazaribagh",
   "Jatrabari",
+  "Kafrul",
+  "Kalabagan",
   "Khilgaon",
+  "Khilkhet",
+  "Kotwali",
+  "Lalbagh",
   "Mirpur",
   "Mohakhali",
-  "Savar",
   "Mohammadpur",
   "Motijheel",
   "New Market",
-  "Old Dhaka",
   "Pallabi",
+  "Paltan",
+  "Ramna",
   "Rampura",
+  "Sabujbagh",
+  "Savar",
+  "Tejgaon",
   "Uttara",
+  "Uttarkhan",
+  "Dakshinkhan",
 ];
-
+const DHAKA_SUBURBAN_THANAS = ["Dhamrai", "Keraniganj", "Nawabganj", "Dohar"];
 export default function CheckoutPage() {
   const { cart = [], deleteSelectedItems, clearCart } = useCart();
   const { data: session, status } = useSession();
@@ -64,7 +82,12 @@ export default function CheckoutPage() {
   const [checkoutItems, setCheckoutItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [userAddress, setUserAddress] = useState(null);
+
+  // 🟢 Multi-Address Management State on Checkout
+  const [addresses, setAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState(null);
+  const [settingDefaultId, setSettingDefaultId] = useState(null);
+
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("COD");
@@ -84,7 +107,6 @@ export default function CheckoutPage() {
   const [showQrModal, setShowQrModal] = useState(false);
 
   useEffect(() => {
-    // 🟢 Wait until NextAuth session status finishes loading to avoid premature redirects
     if (status === "loading") return;
 
     if (status === "unauthenticated") {
@@ -94,7 +116,6 @@ export default function CheckoutPage() {
     }
 
     async function initCheckout() {
-      // If the order has already been successfully placed, stop running cart checks/redirects
       if (showSuccessModal) return;
 
       const saved = localStorage.getItem("checkoutItems");
@@ -109,7 +130,35 @@ export default function CheckoutPage() {
         if (cart.length > 0) {
           setCheckoutItems(cart);
         } else if (!showSuccessModal) {
-          router.push("/cart");
+          router.push("/cart");function calculateShippingForAddress(addr) {
+  if (!addr) return;
+
+  // 1. If saved address already has a deliveryCharge, use it!
+  if (addr.deliveryCharge) {
+    setShippingCharge(Number(addr.deliveryCharge));
+    return;
+  }
+
+  const cityText = (addr.city || "").toLowerCase();
+  const thanaText = (addr.thana || "").toLowerCase();
+
+  // 2. Check sub-urban outer areas first (Force ৳130)
+  const isSuburban = DHAKA_SUBURBAN_THANAS.some(
+    (t) => cityText.includes(t.toLowerCase()) || thanaText.includes(t.toLowerCase())
+  );
+
+  if (isSuburban) {
+    setShippingCharge(130);
+    return;
+  }
+
+  // 3. Otherwise check inside Dhaka core / Savar (৳80)
+  const isInsideDhaka = 
+    cityText.includes("dhaka") || 
+    INSIDE_DHAKA_THANAS.some((t) => thanaText === t.toLowerCase() || cityText.includes(t.toLowerCase()));
+
+  setShippingCharge(isInsideDhaka ? 80 : 130);
+}
         }
       }
 
@@ -117,26 +166,97 @@ export default function CheckoutPage() {
         if (session.user.name) {
           setCustomerName(session.user.name);
         }
+
         const response = await getUserAddress();
-        if (response?.success && response.address) {
-          setUserAddress(response.address);
-          const initialPhone = response.address.phone || "";
+        if (
+          response?.success &&
+          response.addresses &&
+          response.addresses.length > 0
+        ) {
+          const fetchedAddresses = response.addresses;
+          setAddresses(fetchedAddresses);
+
+          const defaultAddr =
+            fetchedAddresses.find((a) => a.isDefault) || fetchedAddresses[0];
+          setSelectedAddressId(defaultAddr._id);
+
+          const initialPhone = defaultAddr.phone || "";
           setPhone(initialPhone);
           setQrSenderPhone(initialPhone);
 
-          const city = response.address.city || "";
-          const isInsideDhaka = DHAKA_ZONES.some(
-            (zone) =>
-              city.toLowerCase().includes(zone.toLowerCase()) ||
-              city.toLowerCase() === "dhaka",
-          );
-          setShippingCharge(isInsideDhaka ? 80 : 130);
+          calculateShippingForAddress(defaultAddr);
         }
       }
       setIsInitializing(false);
     }
-    initCheckout();
+
+    initCheckout(); // 🟢 Ensured proper syntax here
   }, [cart, router, status, session, showSuccessModal]);
+
+  // Helper to compute shipping charge based on selected address
+  function calculateShippingForAddress(addr) {
+  if (!addr) return;
+
+  // 1. If saved address already has a deliveryCharge, use it!
+  if (addr.deliveryCharge) {
+    setShippingCharge(Number(addr.deliveryCharge));
+    return;
+  }
+
+  const cityText = (addr.city || "").toLowerCase();
+  const thanaText = (addr.thana || "").toLowerCase();
+
+  // 2. Check sub-urban outer areas first (Force ৳130)
+  const isSuburban = DHAKA_SUBURBAN_THANAS.some(
+    (t) => cityText.includes(t.toLowerCase()) || thanaText.includes(t.toLowerCase())
+  );
+
+  if (isSuburban) {
+    setShippingCharge(130);
+    return;
+  }
+
+  // 3. Otherwise check inside Dhaka core / Savar (৳80)
+  const isInsideDhaka = 
+    cityText.includes("dhaka") || 
+    INSIDE_DHAKA_THANAS.some((t) => thanaText === t.toLowerCase() || cityText.includes(t.toLowerCase()));
+
+  setShippingCharge(isInsideDhaka ? 80 : 130);
+}
+
+  // Handle selecting a specific address card during checkout
+  const handleSelectAddress = (addr) => {
+    setSelectedAddressId(addr._id);
+    if (addr.phone) {
+      setPhone(addr.phone);
+      setQrSenderPhone(addr.phone);
+    }
+    calculateShippingForAddress(addr);
+  };
+
+  // Handle setting primary default address from checkout
+  const handleSetPrimary = async (e, id) => {
+    e.stopPropagation();
+    setSettingDefaultId(id);
+    const result = await setDefaultAddress(id);
+    if (result.success) {
+      toast.success("Primary address updated!");
+      // Update local addresses state flags
+      setAddresses((prev) =>
+        prev.map((a) => ({ ...a, isDefault: a._id === id })),
+      );
+    } else {
+      toast.error("Failed to update primary address.");
+    }
+    setSettingDefaultId(null);
+  };
+
+  // Active User Address Object for Order Payload
+  const activeAddress = useMemo(() => {
+    return (
+      addresses.find((a) => a._id === selectedAddressId) || addresses[0] || null
+    );
+  }, [addresses, selectedAddressId]);
 
   // Dynamic Calculations
   const { subtotal, totalSavings } = useMemo(() => {
@@ -189,7 +309,7 @@ export default function CheckoutPage() {
     });
   };
 
-const handlePlaceOrder = async () => {
+  const handlePlaceOrder = async () => {
     if (status === "unauthenticated") {
       toast.error("Please login to place an order");
       router.push("/login?callbackUrl=/dashboard/checkout");
@@ -201,8 +321,8 @@ const handlePlaceOrder = async () => {
       return;
     }
 
-    if (!userAddress) {
-      toast.error("Please add a shipping address");
+    if (!activeAddress) {
+      toast.error("Please select a shipping address");
       return;
     }
 
@@ -232,7 +352,7 @@ const handlePlaceOrder = async () => {
 
     try {
       const screenshotBase64 = await convertFileToBase64(paymentScreenshot);
-      const userEmail = session?.user?.email || userAddress?.email || "";
+      const userEmail = session?.user?.email || activeAddress?.email || "";
 
       const orderData = {
         userId: session?.user?.id,
@@ -274,7 +394,8 @@ const handlePlaceOrder = async () => {
         },
         paymentStatus: "Verifying",
         shippingAddress: {
-          ...userAddress,
+          ...activeAddress,
+          phone: phone,
           email: userEmail,
         },
       };
@@ -283,17 +404,14 @@ const handlePlaceOrder = async () => {
 
       if (response?.success) {
         setPlacedOrderDetails(response.order || orderData);
-        
-        // 1. Remove local storage items first
+
         localStorage.removeItem("checkoutItems");
-        
-        // 2. Clear cart context if available
+
         if (typeof deleteSelectedItems === "function") {
           const boughtIds = checkoutItems.map((i) => i._id || i.productId);
           deleteSelectedItems(boughtIds);
         }
 
-        // 3. Trigger success modal state AFTER data updates are finished
         setShowSuccessModal(true);
         toast.success("Order placed successfully!");
       } else {
@@ -303,7 +421,6 @@ const handlePlaceOrder = async () => {
       console.error("CHECKOUT_ERROR:", error);
       toast.error("Failed to initiate order. Please try again.");
     } finally {
-      // 4. Guaranteed spinner dismissal
       setLoading(false);
     }
   };
@@ -318,7 +435,7 @@ const handlePlaceOrder = async () => {
   return (
     <div className="relative grid max-w-6xl grid-cols-1 gap-12 px-4 py-10 pt-6 mx-auto lg:grid-cols-3 bg-[#FAFAFA]">
       <div className="space-y-10 lg:col-span-2">
-        {/* SECTION 01: DESTINATION */}
+        {/* SECTION 01: DESTINATION & ADDRESS SELECTOR */}
         <section className="space-y-6">
           <h2 className="flex items-center gap-3 text-2xl font-bold font-serif text-[#3E442B] uppercase italic">
             <MapPin className="text-[#EA638C]" size={28} /> Destination
@@ -354,28 +471,109 @@ const handlePlaceOrder = async () => {
             </div>
           </div>
 
-          <div className="border-2 border-[#3E442B]/10 p-8 rounded-[2.5rem] bg-white group hover:border-[#3E442B] transition-all">
-            <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
-              <div className="min-w-0">
-                <p className="text-[10px] font-black text-[#EA638C] uppercase tracking-[0.2em] mb-1">
-                  Registered Address
-                </p>
-                <p className="text-xl font-bold font-serif text-[#3E442B] truncate">
-                  {customerName || session?.user?.name}
-                </p>
-                <p className="mt-1 text-sm italic font-bold leading-relaxed text-gray-400">
-                  {userAddress
-                    ? `${userAddress.street}, ${userAddress.city}`
-                    : "Missing shipping coordinates"}
-                </p>
-              </div>
-              <Link
-                href="/dashboard/address"
-                className="shrink-0 flex items-center gap-2 text-[10px] font-black uppercase text-[#3E442B] hover:text-[#EA638C] bg-gray-50 px-6 py-3 rounded-full transition-colors"
-              >
-                Modify <ChevronRight size={14} />
+          {/* Saved Addresses Selector Cards */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-black text-[#EA638C] uppercase tracking-[0.2em]">
+                Select Delivery Address
+              </p>
+              <Link href="/dashboard/address?callbackUrl=/dashboard/checkout&autoAdd=true">
+                Add New Address
               </Link>
             </div>
+
+            {addresses.length === 0 ? (
+              <div className="p-6 text-center bg-white border border-gray-100 rounded-3xl">
+                <p className="text-xs font-bold text-gray-400">
+                  No saved addresses found.
+                </p>
+                <Link
+  href="/dashboard/address?callbackUrl=/dashboard/checkout&autoAdd=true"
+  className="inline-flex items-center gap-1 text-xs font-bold text-[#3E442B] hover:text-[#EA638C] transition-colors"
+>
+  <Plus size={14} /> Add New Address
+</Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                {addresses.map((addr) => {
+                  const isSelected = selectedAddressId === addr._id;
+
+                  return (
+                    <div
+                      key={addr._id}
+                      onClick={() => handleSelectAddress(addr)}
+                      className={`relative p-5 rounded-[2rem] border-2 transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-gradient-to-br from-[#FBB6E6]/10 to-white border-[#EA638C] shadow-md"
+                          : "bg-white border-gray-100 hover:border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-1 text-[#EA638C]">
+                            {isSelected ? (
+                              <CheckCircle2
+                                size={20}
+                                fill="#EA638C"
+                                className="text-white"
+                              />
+                            ) : (
+                              <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                            )}
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="px-3 py-0.5 bg-[#3E442B] text-white text-[10px] font-black uppercase rounded-lg">
+                                {addr.label || "Home"}
+                              </span>
+
+                              {addr.isDefault ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-[#EA638C] text-white text-[10px] font-black uppercase rounded-lg">
+                                  <Star size={10} fill="currentColor" /> Primary
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={settingDefaultId === addr._id}
+                                  onClick={(e) => handleSetPrimary(e, addr._id)}
+                                  className="text-[10px] font-bold text-gray-400 hover:text-[#EA638C] transition-colors"
+                                >
+                                  {settingDefaultId === addr._id
+                                    ? "Saving..."
+                                    : "Set as primary"}
+                                </button>
+                              )}
+                            </div>
+
+                            <p className="text-base font-bold font-serif text-[#3E442B]">
+                              {addr.fullName ||
+                                customerName ||
+                                session?.user?.name}
+                            </p>
+                            <p className="text-xs font-medium leading-relaxed text-gray-500">
+                              {addr.street}
+                            </p>
+                            <p className="text-xs font-semibold text-[#EA638C]">
+                              {addr.city} {addr.zipCode && `• ${addr.zipCode}`}
+                            </p>
+                            <p className="text-xs font-medium text-gray-400">
+                              {addr.phone}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className="inline-flex items-center gap-1 text-xs font-black text-[#3E442B] bg-gray-50 px-3 py-1.5 rounded-xl shrink-0">
+                          <Truck size={14} className="text-[#EA638C]" /> ৳
+                          {addr.deliveryCharge || 80} DC
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </section>
 
@@ -385,7 +583,7 @@ const handlePlaceOrder = async () => {
             <ShoppingBag className="text-[#EA638C]" size={28} /> 02. Purchased
             Items ({checkoutItems.length})
           </h2>
-<div className="space-y-3">
+          <div className="space-y-3">
             {checkoutItems.map((item, idx) => {
               const itemImg =
                 item.image ||
@@ -739,7 +937,6 @@ const handlePlaceOrder = async () => {
             onClick={(e) => e.stopPropagation()}
             className="bg-white w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto rounded-[2rem] sm:rounded-[2.5rem] p-4 sm:p-6 text-center shadow-2xl border-4 border-[#EA638C] relative space-y-3 sm:space-y-4"
           >
-            {/* Close Button */}
             <button
               onClick={() => setShowQrModal(false)}
               className="absolute top-3 right-3 sm:top-4 sm:right-4 p-1.5 text-gray-400 hover:text-[#EA638C] hover:bg-[#FBB6E6]/20 rounded-full transition-all cursor-pointer"
@@ -757,72 +954,45 @@ const handlePlaceOrder = async () => {
               </p>
             </div>
 
-            {/* Note Box */}
-            <div className="bg-[#EA638C]/10 border border-[#EA638C]/30 p-2.5 sm:p-3 rounded-2xl text-left flex items-start gap-2">
-              <Info size={16} className="text-[#EA638C] shrink-0 mt-0.5" />
-              <p className="text-[11px] sm:text-xs font-medium text-[#3E442B] leading-tight">
-                <strong className="text-[#EA638C]">Note:</strong> To make
-                payment open your desired payment app and then scan to pay.
-              </p>
-            </div>
-
-            {/* Responsive image container */}
-            <div className="p-2 sm:p-3 bg-white border-2 border-[#FBB6E6] rounded-2xl sm:rounded-3xl shadow-lg w-full max-w-[240px] sm:max-w-[280px] aspect-square mx-auto flex items-center justify-center">
+            <div className="relative flex items-center justify-center p-2 bg-white border border-gray-200 aspect-square rounded-2xl">
               <img
                 src="/charmsqrcode.jpg"
-                alt="Islami Bank Bangla QR Enlarged"
+                alt="Islami Bank Bangla QR Large"
                 className="object-contain w-full h-full rounded-xl"
               />
             </div>
+
+            <button
+              onClick={() => setShowQrModal(false)}
+              className="w-full py-3 bg-[#3E442B] text-white font-black text-xs uppercase tracking-wider rounded-2xl"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
 
       {/* SUCCESS MODAL */}
       {showSuccessModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 text-center shadow-2xl border-4 border-[#3E442B] relative space-y-6">
-            <div className="w-20 h-20 bg-[#3E442B]/10 text-[#3E442B] rounded-full flex items-center justify-center mx-auto mb-2 animate-bounce">
-              <CheckCircle2 size={40} className="text-[#EA638C]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="bg-white max-w-md w-full rounded-[2.5rem] p-8 text-center space-y-6 shadow-2xl border-4 border-[#EA638C] animate-in fade-in zoom-in duration-200">
+            <div className="w-20 h-20 mx-auto bg-[#FBB6E6]/30 text-[#EA638C] rounded-full flex items-center justify-center">
+              <CheckCircle2 size={42} />
             </div>
-            
             <div className="space-y-2">
               <h3 className="text-2xl font-serif font-bold text-[#3E442B] italic uppercase">
-                Order Placed Successfully!
+                Order Confirmed!
               </h3>
-              <p className="text-xs text-gray-500 font-medium leading-relaxed">
-                Thank you for your wholesale purchase. Your payment and order details have been submitted for manual verification.
+              <p className="text-xs leading-relaxed text-gray-500">
+                Thank you for your purchase. Your payment verification is in
+                progress and your order is being packed.
               </p>
             </div>
-
-            {placedOrderDetails && (
-              <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 text-left space-y-1.5 text-xs">
-                <div className="flex justify-between font-bold text-[#3E442B]">
-                  <span>Total Amount:</span>
-                  <span>৳{placedOrderDetails.totalAmount?.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-semibold text-gray-500">
-                  <span>Paid (Advance):</span>
-                  <span>৳{placedOrderDetails.paidAmount?.toLocaleString()}</span>
-                </div>
-                {placedOrderDetails.dueAmount > 0 && (
-                  <div className="flex justify-between font-semibold text-gray-500">
-                    <span>Due (COD):</span>
-                    <span>৳{placedOrderDetails.dueAmount?.toLocaleString()}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
             <button
-              onClick={() => {
-                setShowSuccessModal(false);
-                router.push("/products");
-              }}
-              className="w-full py-4 rounded-2xl bg-[#3E442B] hover:bg-[#EA638C] text-white font-black uppercase tracking-[0.2em] text-[10px] transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer"
+              onClick={() => router.push("/dashboard/orders")}
+              className="w-full py-4 bg-[#3E442B] hover:bg-[#EA638C] text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2"
             >
-              <span>View My Orders</span>
-              <ArrowRight size={16} />
+              <span>View My Orders</span> <ArrowRight size={16} />
             </button>
           </div>
         </div>

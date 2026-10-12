@@ -7,21 +7,25 @@ export default async function AddressPage() {
   await dbConnect();
   const session = await auth();
 
-  const user = await User.findOne({ email: session?.user?.email }).lean();
-
-  // Pull the first address from the array to pre-fill the form
-  const firstAddress = user?.addresses?.[0] || {};
+  // Fetch the user fresh without .lean() or ensure addresses array is explicitly mapped
+  const user = await User.findOne({ email: session?.user?.email });
 
   const initialData = {
     name: user?.name || session?.user?.name || "",
-    email: user?.email || session?.user?.email || "", // 💡 Pass email to initialData
-    address: {
-      phone: firstAddress.phone || "",
-      city: firstAddress.city || "",
-      street: firstAddress.street || "",
-      zipCode: firstAddress.zipCode || "",
-      deliveryCharge: firstAddress.deliveryCharge || 0,
-    },
+    email: user?.email || session?.user?.email || "",
+    addresses: (user?.addresses || []).map((addr) => ({
+      _id: addr._id ? addr._id.toString() : Math.random().toString(),
+      label: addr.label || "Home",
+      fullName: addr.fullName || user?.name || "",
+      phone: addr.phone || "",
+      district: addr.district || "Dhaka",
+      thana: addr.thana || "",
+      city: addr.city || "",
+      street: addr.street || "",
+      zipCode: addr.zipCode || "",
+      deliveryCharge: addr.deliveryCharge || 80,
+      isDefault: !!addr.isDefault,
+    })),
   };
 
   return (

@@ -11,7 +11,7 @@ export const CartProvider = ({ children }) => {
   const isFetchingServerCart = useRef(false); // 🟢 1. Dedicated flag to block POST syncs while fetching GET data
 
   // Helper sanitizer to guarantee basePrice, uniqueKey, and clean IDs on any raw item list
-  const sanitizeItems = (items) => {
+const sanitizeItems = (items) => {
     if (!Array.isArray(items)) return [];
     return items.map((item) => {
       const pId = (item.productId?.$oid || item.productId || "").toString();
@@ -25,6 +25,8 @@ export const CartProvider = ({ children }) => {
         uniqueKey: item.uniqueKey || `${pId}-${vId}`,
         basePrice: Number(item.basePrice || calculatedPrice),
         price: calculatedPrice,
+        // 🟢 Preserve pricingTiers during sanitization
+        pricingTiers: item.pricingTiers || [],
       };
     });
   };
@@ -218,7 +220,7 @@ export const CartProvider = ({ children }) => {
         variantName: computedVariantName,
         basePrice: Number(product.basePrice || variantOrDelta?.basePrice || calculatedPrice),
         price: calculatedPrice,
-        pricingTiers: product.pricingTiers || [],
+        pricingTiers: product.pricingTiers || variantOrDelta?.pricingTiers || [],
         imageUrl: variantOrDelta?.image || variantOrDelta?.imageUrl || product.imageUrl || "/placeholder.png",
         size: variantOrDelta?.size || product.size || "N/A",
         color: variantOrDelta?.color || product.color || "Default",
@@ -232,26 +234,32 @@ export const CartProvider = ({ children }) => {
     });
   };
 
-  const processedCart = useMemo(() => {
+const processedCart = useMemo(() => {
+    // 1. Calculate total quantity per product across all variants
     const productTotals = cart.reduce((acc, item) => {
-      acc[item.productId] = (acc[item.productId] || 0) + item.quantity;
+      const pId = (item.productId?.$oid || item.productId || "").toString();
+      acc[pId] = (acc[pId] || 0) + Number(item.quantity || 0);
       return acc;
     }, {});
 
     return cart.map((item) => {
       const pId = (item.productId?.$oid || item.productId || "").toString();
       const vId = (item.variantId?.$oid || item.variantId || "std").toString();
-      const calculatedPrice = Number(item.price || item.basePrice || 0);
+      const calculatedPrice = Number(item.basePrice || item.price || 0);
 
-      const totalQtyForThisProduct = productTotals[item.productId];
+      const totalQtyForThisProduct = productTotals[pId] || 0;
       let activePrice = calculatedPrice;
 
-      if (item.pricingTiers && item.pricingTiers.length > 0) {
+      // 2. Check if product has wholesale bulk tiers
+      if (item.pricingTiers && Array.isArray(item.pricingTiers) && item.pricingTiers.length > 0) {
+        // Sort descending by minQuantity (e.g., 50 -> 20 -> 1)
         const sortedTiers = [...item.pricingTiers].sort((a, b) => b.minQuantity - a.minQuantity);
-        const applicableTier = sortedTiers.find((tier) => totalQtyForThisProduct >= tier.minQuantity);
+        
+        // Find the highest tier the total quantity qualifies for
+        const applicableTier = sortedTiers.find((tier) => totalQtyForThisProduct >= Number(tier.minQuantity));
 
         if (applicableTier) {
-          activePrice = applicableTier.unitPrice;
+          activePrice = Number(applicableTier.unitPrice);
         }
       }
 
@@ -260,8 +268,8 @@ export const CartProvider = ({ children }) => {
         productId: pId,
         variantId: vId === "std" ? null : vId,
         uniqueKey: item.uniqueKey || `${pId}-${vId}`,
-        basePrice: Number(item.basePrice || calculatedPrice),
-        price: activePrice,
+        basePrice: calculatedPrice,
+        price: activePrice, // 🟢 Updated to the correct wholesale tier price
       };
     });
   }, [cart]);
