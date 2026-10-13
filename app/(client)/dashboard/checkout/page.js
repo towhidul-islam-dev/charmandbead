@@ -130,35 +130,42 @@ export default function CheckoutPage() {
         if (cart.length > 0) {
           setCheckoutItems(cart);
         } else if (!showSuccessModal) {
-          router.push("/cart");function calculateShippingForAddress(addr) {
-  if (!addr) return;
+          router.push("/cart");
+          function calculateShippingForAddress(addr) {
+            if (!addr) return;
 
-  // 1. If saved address already has a deliveryCharge, use it!
-  if (addr.deliveryCharge) {
-    setShippingCharge(Number(addr.deliveryCharge));
-    return;
-  }
+            // 1. If saved address already has a deliveryCharge, use it!
+            if (addr.deliveryCharge) {
+              setShippingCharge(Number(addr.deliveryCharge));
+              return;
+            }
 
-  const cityText = (addr.city || "").toLowerCase();
-  const thanaText = (addr.thana || "").toLowerCase();
+            const cityText = (addr.city || "").toLowerCase();
+            const thanaText = (addr.thana || "").toLowerCase();
 
-  // 2. Check sub-urban outer areas first (Force ৳130)
-  const isSuburban = DHAKA_SUBURBAN_THANAS.some(
-    (t) => cityText.includes(t.toLowerCase()) || thanaText.includes(t.toLowerCase())
-  );
+            // 2. Check sub-urban outer areas first (Force ৳130)
+            const isSuburban = DHAKA_SUBURBAN_THANAS.some(
+              (t) =>
+                cityText.includes(t.toLowerCase()) ||
+                thanaText.includes(t.toLowerCase()),
+            );
 
-  if (isSuburban) {
-    setShippingCharge(130);
-    return;
-  }
+            if (isSuburban) {
+              setShippingCharge(130);
+              return;
+            }
 
-  // 3. Otherwise check inside Dhaka core / Savar (৳80)
-  const isInsideDhaka = 
-    cityText.includes("dhaka") || 
-    INSIDE_DHAKA_THANAS.some((t) => thanaText === t.toLowerCase() || cityText.includes(t.toLowerCase()));
+            // 3. Otherwise check inside Dhaka core / Savar (৳80)
+            const isInsideDhaka =
+              cityText.includes("dhaka") ||
+              INSIDE_DHAKA_THANAS.some(
+                (t) =>
+                  thanaText === t.toLowerCase() ||
+                  cityText.includes(t.toLowerCase()),
+              );
 
-  setShippingCharge(isInsideDhaka ? 80 : 130);
-}
+            setShippingCharge(isInsideDhaka ? 80 : 130);
+          }
         }
       }
 
@@ -195,34 +202,39 @@ export default function CheckoutPage() {
 
   // Helper to compute shipping charge based on selected address
   function calculateShippingForAddress(addr) {
-  if (!addr) return;
+    if (!addr) return;
 
-  // 1. If saved address already has a deliveryCharge, use it!
-  if (addr.deliveryCharge) {
-    setShippingCharge(Number(addr.deliveryCharge));
-    return;
+    // 1. If saved address already has a deliveryCharge, use it!
+    if (addr.deliveryCharge) {
+      setShippingCharge(Number(addr.deliveryCharge));
+      return;
+    }
+
+    const cityText = (addr.city || "").toLowerCase();
+    const thanaText = (addr.thana || "").toLowerCase();
+
+    // 2. Check sub-urban outer areas first (Force ৳130)
+    const isSuburban = DHAKA_SUBURBAN_THANAS.some(
+      (t) =>
+        cityText.includes(t.toLowerCase()) ||
+        thanaText.includes(t.toLowerCase()),
+    );
+
+    if (isSuburban) {
+      setShippingCharge(130);
+      return;
+    }
+
+    // 3. Otherwise check inside Dhaka core / Savar (৳80)
+    const isInsideDhaka =
+      cityText.includes("dhaka") ||
+      INSIDE_DHAKA_THANAS.some(
+        (t) =>
+          thanaText === t.toLowerCase() || cityText.includes(t.toLowerCase()),
+      );
+
+    setShippingCharge(isInsideDhaka ? 80 : 130);
   }
-
-  const cityText = (addr.city || "").toLowerCase();
-  const thanaText = (addr.thana || "").toLowerCase();
-
-  // 2. Check sub-urban outer areas first (Force ৳130)
-  const isSuburban = DHAKA_SUBURBAN_THANAS.some(
-    (t) => cityText.includes(t.toLowerCase()) || thanaText.includes(t.toLowerCase())
-  );
-
-  if (isSuburban) {
-    setShippingCharge(130);
-    return;
-  }
-
-  // 3. Otherwise check inside Dhaka core / Savar (৳80)
-  const isInsideDhaka = 
-    cityText.includes("dhaka") || 
-    INSIDE_DHAKA_THANAS.some((t) => thanaText === t.toLowerCase() || cityText.includes(t.toLowerCase()));
-
-  setShippingCharge(isInsideDhaka ? 80 : 130);
-}
 
   // Handle selecting a specific address card during checkout
   const handleSelectAddress = (addr) => {
@@ -488,11 +500,11 @@ export default function CheckoutPage() {
                   No saved addresses found.
                 </p>
                 <Link
-  href="/dashboard/address?callbackUrl=/dashboard/checkout&autoAdd=true"
-  className="inline-flex items-center gap-1 text-xs font-bold text-[#3E442B] hover:text-[#EA638C] transition-colors"
->
-  <Plus size={14} /> Add New Address
-</Link>
+                  href="/dashboard/address?callbackUrl=/dashboard/checkout&autoAdd=true"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-[#3E442B] hover:text-[#EA638C] transition-colors"
+                >
+                  <Plus size={14} /> Add New Address
+                </Link>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3">
@@ -974,29 +986,70 @@ export default function CheckoutPage() {
 
       {/* SUCCESS MODAL */}
       {showSuccessModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-          <div className="bg-white max-w-md w-full rounded-[2.5rem] p-8 text-center space-y-6 shadow-2xl border-4 border-[#EA638C] animate-in fade-in zoom-in duration-200">
-            <div className="w-20 h-20 mx-auto bg-[#FBB6E6]/30 text-[#EA638C] rounded-full flex items-center justify-center">
-              <CheckCircle2 size={42} />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-2xl font-serif font-bold text-[#3E442B] italic uppercase">
-                Order Confirmed!
-              </h3>
-              <p className="text-xs leading-relaxed text-gray-500">
-                Thank you for your purchase. Your payment verification is in
-                progress and your order is being packed.
-              </p>
-            </div>
-            <button
-              onClick={() => router.push("/dashboard/orders")}
-              className="w-full py-4 bg-[#3E442B] hover:bg-[#EA638C] text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2"
-            >
-              <span>View My Orders</span> <ArrowRight size={16} />
-            </button>
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+    <div className="bg-white max-w-md w-full rounded-[2.5rem] p-8 text-center space-y-6 shadow-2xl border-4 border-[#EA638C] animate-in fade-in zoom-in duration-200">
+      <div className="w-20 h-20 mx-auto bg-[#FBB6E6]/30 text-[#EA638C] rounded-full flex items-center justify-center">
+        <CheckCircle2 size={42} />
+      </div>
+      <div className="space-y-2">
+        <h3 className="text-2xl font-serif font-bold text-[#3E442B] italic uppercase">
+          Order Confirmed!
+        </h3>
+        <p className="text-xs leading-relaxed text-gray-500">
+          Thank you for your purchase. Your payment verification is in
+          progress and your order is being packed.
+        </p>
+      </div>
+
+      {/* Estimated Delivery Time Range Badge */}
+      {(() => {
+        const cityText = (activeAddress?.city || "").toLowerCase();
+        const thanaText = (activeAddress?.thana || "").toLowerCase();
+
+        const isSuburban = DHAKA_SUBURBAN_THANAS?.some(
+          (t) => cityText.includes(t.toLowerCase()) || thanaText.includes(t.toLowerCase())
+        );
+
+        const isInsideDhakaOrSavar = 
+          !isSuburban && (
+            cityText.includes("dhaka") || 
+            cityText.includes("savar") ||
+            thanaText.includes("savar") ||
+            INSIDE_DHAKA_THANAS?.some((t) => thanaText === t.toLowerCase() || cityText.includes(t.toLowerCase()))
+          );
+
+        // Inside Dhaka/Savar: 3 to 5 days | Outer Districts & Suburban: 4 to 6 days
+        const minDays = isInsideDhakaOrSavar ? 3 : 4;
+        const maxDays = isInsideDhakaOrSavar ? 5 : 6;
+
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() + minDays);
+
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + maxDays);
+
+        const formattedStart = startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const formattedEnd = endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+        return (
+          <div className="p-4 rounded-2xl bg-[#FBB6E6]/20 border border-[#FBB6E6] text-[#3E442B] text-xs flex flex-col items-center justify-center gap-1">
+            <span className="font-bold uppercase tracking-wider text-[10px] text-[#EA638C]">Estimated Delivery</span>
+            <span className="font-semibold">
+              Expected between <strong>{formattedStart}</strong> and <strong>{formattedEnd}</strong> ({minDays}–{maxDays} days)
+            </span>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
+      <button
+        onClick={() => router.push("/dashboard/orders")}
+        className="w-full py-4 bg-[#3E442B] hover:bg-[#EA638C] text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+      >
+        <span>View My Orders</span> <ArrowRight size={16} />
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 }
