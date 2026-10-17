@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { createOrder } from "@/actions/order";
 import { getUserAddress, setDefaultAddress } from "@/actions/userActions";
+import { sanitizeBDPhone, isValidBDPhone } from "@/lib/phoneUtils";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import {
@@ -338,18 +339,20 @@ export default function CheckoutPage() {
       return;
     }
 
-    const bdPhoneRegex = /^(?:\+88|88)?(01[3-9]\d{8})$/;
-    if (!phone || !bdPhoneRegex.test(phone)) {
-      toast.error("Valid BD phone number is required for shipping updates");
-      return;
-    }
+    if (!phone || !isValidBDPhone(phone)) {
+  toast.error(
+    "Valid BD phone number is required (e.g. 01725-101880, 01725101880, or +8801725101880)"
+  );
+  return;
+}
 
-    if (!qrSenderPhone || !bdPhoneRegex.test(qrSenderPhone)) {
-      toast.error(
-        "Valid sender account/phone number is required for payment confirmation",
-      );
-      return;
-    }
+// Check sender account/phone number
+if (!qrSenderPhone || !isValidBDPhone(qrSenderPhone)) {
+  toast.error(
+    "Valid sender account/phone number is required (e.g. 01725-101880 or 01725101880)"
+  );
+  return;
+}
     if (!qrTxnId.trim()) {
       toast.error("Transaction ID (TxnID) is required");
       return;
@@ -365,6 +368,8 @@ export default function CheckoutPage() {
     try {
       const screenshotBase64 = await convertFileToBase64(paymentScreenshot);
       const userEmail = session?.user?.email || activeAddress?.email || "";
+const cleanedDeliveryPhone = sanitizeBDPhone(phone);
+const cleanedSenderPhone = sanitizeBDPhone(qrSenderPhone);
 
       const orderData = {
         userId: session?.user?.id,
@@ -397,9 +402,9 @@ export default function CheckoutPage() {
             ? "Partial_COD_BanglaQR"
             : "Full_PrePay_BanglaQR",
         mobileBankingFee: Number(mobileBankingFee.toFixed(2)),
-        phone: phone,
+        phone: cleanedDeliveryPhone,
         paymentDetails: {
-          sourcePhone: qrSenderPhone,
+          sourcePhone: cleanedSenderPhone,
           transactionId: qrTxnId.trim(),
           screenshot: screenshotBase64,
           gatewayStatus: "MANUAL_VERIFICATION",
@@ -407,7 +412,7 @@ export default function CheckoutPage() {
         paymentStatus: "Verifying",
         shippingAddress: {
           ...activeAddress,
-          phone: phone,
+          phone: cleanedDeliveryPhone,
           email: userEmail,
         },
       };
