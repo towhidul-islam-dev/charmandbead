@@ -400,7 +400,8 @@ export default function ProductDetailsContent({ product }) {
               </div>
             )}
           </div>
-          <h1 className="text-4xl md:text-6xl italic font-black leading-[1.1] tracking-tighter text-[#3E442B] uppercase">
+          {/* Decreased text size to a normal, balanced look */}
+          <h1 className="text-2xl md:text-3xl italic font-black leading-tight tracking-tight text-[#3E442B] uppercase">
             {product.name}
           </h1>
         </div>
