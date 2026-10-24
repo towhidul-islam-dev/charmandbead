@@ -9,9 +9,6 @@ export default function BilingualSlider({ slides = [] }) {
   const [expandedCards, setExpandedCards] = useState({});
 
   const sliderRef = useRef(null);
-  const [isDown, setIsDown] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
 
   useEffect(() => {
     setIsMounted(true);
@@ -44,19 +41,19 @@ export default function BilingualSlider({ slides = [] }) {
     }
   }, []);
 
-  // Automatic interval timer to loop slides forward smoothly (paused if any card is expanded or being dragged)
+  // Automatic interval timer to loop slides forward smoothly (paused if any card is expanded)
   useEffect(() => {
     const hasExpanded = Object.values(expandedCards).some(Boolean);
     if (hasExpanded) return;
 
     const interval = setInterval(() => {
-      if (!sliderRef.current || isDown) return;
-      const cardWidth = 420; // card width + gap step
+      if (!sliderRef.current) return;
+      const cardWidth = 440; // card width + gap step
       sliderRef.current.scrollBy({ left: cardWidth, behavior: "smooth" });
     }, 4500);
 
     return () => clearInterval(interval);
-  }, [isDown, expandedCards]);
+  }, [expandedCards]);
 
   const toggleExpand = (index, e) => {
     e.stopPropagation();
@@ -66,28 +63,9 @@ export default function BilingualSlider({ slides = [] }) {
     }));
   };
 
-  const handleTouchStart = (e) => {
-    if (!sliderRef.current) return;
-    setIsDown(true);
-    setStartX(e.touches ? e.touches[0].pageX - sliderRef.current.offsetLeft : e.pageX - sliderRef.current.offsetLeft);
-    setScrollLeft(sliderRef.current.scrollLeft);
-  };
-
-  const handleTouchEnd = () => {
-    setIsDown(false);
-  };
-
-  const handleTouchMove = (e) => {
-    if (!isDown || !sliderRef.current) return;
-    e.preventDefault();
-    const x = e.touches ? e.touches[0].pageX - sliderRef.current.offsetLeft : e.pageX - sliderRef.current.offsetLeft;
-    const walk = (x - startX) * 2;
-    sliderRef.current.scrollLeft = scrollLeft - walk;
-  };
-
   const scrollByAmount = (direction) => {
     if (!sliderRef.current) return;
-    const scrollAmount = 420;
+    const scrollAmount = 440;
     sliderRef.current.scrollBy({
       left: direction === "left" ? -scrollAmount : scrollAmount,
       behavior: "smooth",
@@ -154,19 +132,12 @@ export default function BilingualSlider({ slides = [] }) {
         </div>
       </div>
 
-      {/* Slider Track */}
+      {/* Slider Track with Native Smooth Momentum & Snapping */}
       <div
         ref={sliderRef}
         onScroll={handleScroll}
-        onMouseDown={handleTouchStart}
-        onMouseLeave={handleTouchEnd}
-        onMouseUp={handleTouchEnd}
-        onMouseMove={handleTouchMove}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onTouchMove={handleTouchMove}
-        className="flex gap-5 overflow-x-auto no-scrollbar scroll-smooth cursor-grab active:cursor-grabbing pb-6 pt-2 items-start"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        className="flex gap-5 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-6 pt-2 items-start"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}
       >
         {loopSlides.map((item, index) => {
           const isExpanded = !!expandedCards[index];
@@ -179,8 +150,7 @@ export default function BilingualSlider({ slides = [] }) {
             <div
               key={`${item._id || index}-${index}`}
               onMouseLeave={() => setExpandedCards((prev) => ({ ...prev, [index]: false }))}
-              // 🟢 Narrower, more compact height (h-[160px])
-              className={`w-[88vw] sm:w-[450px] md:w-[500px] lg:w-[550px] max-w-[550px] flex-shrink-0 relative overflow-hidden bg-gradient-to-br from-white via-white to-[#FBB6E6]/15 border border-gray-100/80 p-5 sm:p-6 rounded-[2rem] shadow-xl shadow-gray-100/60 hover:shadow-2xl hover:shadow-[#EA638C]/10 hover:border-[#EA638C]/40 transition-all duration-300 flex flex-col justify-between select-none group ${
+              className={`snap-start w-[88vw] sm:w-[450px] md:w-[500px] lg:w-[550px] max-w-[550px] flex-shrink-0 relative overflow-hidden bg-gradient-to-br from-white via-white to-[#FBB6E6]/15 border border-gray-100/80 p-5 sm:p-6 rounded-[2rem] shadow-xl shadow-gray-100/60 hover:shadow-2xl hover:shadow-[#EA638C]/10 hover:border-[#EA638C]/40 transition-all duration-300 flex flex-col justify-between select-none group ${
                 isExpanded ? "h-auto z-30 bg-white shadow-2xl ring-2 ring-[#EA638C]/40" : "h-[160px]"
               }`}
             >
@@ -198,7 +168,6 @@ export default function BilingualSlider({ slides = [] }) {
                     </div>
                   ) : <div />}
 
-                  {/* 🟢 Shifted Explore Feature indicator to top-right corner */}
                   <div className="flex items-center gap-1 text-[9px] font-black text-[#EA638C] uppercase tracking-wider opacity-60 group-hover:opacity-100 transition-opacity">
                     <span>{isMounted && lang === "bn" ? "বিস্তারিত" : "Explore"}</span>
                     <ArrowUpRight size={11} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />

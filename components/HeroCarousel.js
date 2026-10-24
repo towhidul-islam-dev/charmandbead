@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
@@ -9,9 +9,12 @@ const HeroCarousel = () => {
   const [current, setCurrent] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Touch / Swipe Gesture Tracking Refs
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+
   const fetchSlides = useCallback(async () => {
     try {
-      // 🟢 Added a cache-busting timestamp to ensure you see fresh data
       const res = await fetch(`/api/hero-slides?t=${Date.now()}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
@@ -45,27 +48,52 @@ const HeroCarousel = () => {
     }
   }, [nextSlide, slides.length]);
 
+  // Touch Gesture Handlers for Mobile Swipe
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX.current || !touchEndX.current) return;
+    
+    const distance = touchStartX.current - touchEndX.current;
+    const minSwipeDistance = 50;
+
+    if (distance > minSwipeDistance) {
+      nextSlide();
+    } else if (distance < -minSwipeDistance) {
+      prevSlide();
+    }
+
+    touchStartX.current = 0;
+    touchEndX.current = 0;
+  };
+
   if (loading) {
     return (
-      <div className="w-full aspect-[21/9] md:aspect-[3/1] bg-gray-50 flex items-center justify-center">
+      <div className="w-full h-[220px] sm:h-[320px] md:h-[420px] lg:h-[520px] bg-gray-50 flex items-center justify-center">
         <Loader2 className="animate-spin text-[#EA638C]" size={32} />
       </div>
     );
   }
 
-  // If no slides are found after loading, the section won't render at all
   if (slides.length === 0) return null;
 
   return (
     <section 
-      className="relative w-full mt-2 overflow-hidden bg-gray-100 aspect-[21/9] md:aspect-[3/1] lg:aspect-[3.5/1]" 
-      style={{ minHeight: '220px' }}
+      className="relative w-full overflow-hidden bg-gray-100 h-[220px] sm:h-[320px] md:h-[420px] lg:h-[500px] xl:h-[580px]" 
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       <div className="relative w-full h-full">
         {slides.map((slide, index) => {
           const isActive = index === current;
           
-          // Improved check for PDF/SVG
           const imageUrl = slide.image || "";
           const isPdf = imageUrl.toLowerCase().endsWith('.pdf') || slide.format === 'pdf';
           const isSvg = imageUrl.toLowerCase().endsWith('.svg') || slide.format === 'svg';
@@ -73,7 +101,7 @@ const HeroCarousel = () => {
           return (
             <div
               key={slide._id || index}
-              className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+              className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out ${
                 isActive ? "opacity-100 z-10" : "opacity-0 z-0"
               }`}
             >
@@ -94,10 +122,10 @@ const HeroCarousel = () => {
                     fill
                     priority={index === 0}
                     unoptimized={isSvg}
-                    className="object-cover object-center"
+                    className="object-cover object-top md:object-center w-full h-full"
                     sizes="100vw"
                   />
-                  <div className="absolute inset-0 bg-black/5" />
+                  <div className="absolute inset-0 bg-black/5 pointer-events-none" />
                 </Link>
               )}
             </div>
@@ -110,19 +138,19 @@ const HeroCarousel = () => {
           <div className="absolute inset-0 z-30 flex items-center justify-between px-3 pointer-events-none md:px-6">
             <button 
               onClick={(e) => { e.preventDefault(); prevSlide(); }}
-              className="p-1.5 md:p-2 transition-all rounded-full pointer-events-auto bg-white/40 backdrop-blur-md text-[#3E442B] hover:bg-white active:scale-95 shadow-sm"
+              className="p-1.5 md:p-2 transition-all rounded-full pointer-events-auto bg-white/70 backdrop-blur-md text-[#3E442B] hover:bg-white active:scale-95 shadow-sm"
             >
               <ChevronLeft size={20} className="md:w-6 md:h-6" />
             </button>
             <button 
               onClick={(e) => { e.preventDefault(); nextSlide(); }}
-              className="p-1.5 md:p-2 transition-all rounded-full pointer-events-auto bg-white/40 backdrop-blur-md text-[#3E442B] hover:bg-white active:scale-95 shadow-sm"
+              className="p-1.5 md:p-2 transition-all rounded-full pointer-events-auto bg-white/70 backdrop-blur-md text-[#3E442B] hover:bg-white active:scale-95 shadow-sm"
             >
               <ChevronRight size={20} className="md:w-6 md:h-6" />
             </button>
           </div>
 
-          <div className="absolute z-30 flex gap-1.5 -translate-x-1/2 bottom-4 left-1/2">
+          <div className="absolute z-30 flex gap-1.5 -translate-x-1/2 bottom-3 left-1/2">
             {slides.map((_, i) => (
               <button
                 key={i}
