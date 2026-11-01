@@ -9,7 +9,7 @@ import EmailCopy from "@/components/admin/EmailCopy";
 import Surprise from "@/models/Surprise";
 import RewardHistory from "@/models/RewardHistory";
 import dbConnect from "@/lib/mongodb";
-import { ShieldCheck, Users, Zap, SearchX, ChevronLeft, ChevronRight, Calendar, UserCheck, ShoppingBag } from "lucide-react"; 
+import { ShieldCheck, Users, Zap, SearchX, ChevronLeft, ChevronRight, Calendar, UserCheck, ShoppingBag, Trophy, Crown, Sparkles, Medal } from "lucide-react"; 
 import Link from "next/link";
 import Image from "next/image";
 
@@ -21,25 +21,29 @@ export default async function AdminUsersPage({ searchParams }) {
   const activeFilter = resolvedSearchParams?.filter || "all";
   const query = resolvedSearchParams?.query || "";
   const currentPage = Number(resolvedSearchParams?.page) || 1;
+  const spenderDuration = resolvedSearchParams?.duration || "this_month";
   const itemsPerPage = 20;
   
   await dbConnect();
-  const { users: rawUsers, success, error } = await getUsers();
   
-  const rawGifts = await Surprise.find({ isActive: true }).lean();
-  const availableGifts = JSON.parse(JSON.stringify(rawGifts));
-
-  const latestRewards = await RewardHistory.aggregate([
-    { $sort: { createdAt: -1 } },
-    {
-      $group: {
-        _id: "$userId",
-        lastGiftAt: { $first: "$createdAt" },
-        lastGiftTitle: { $first: "$title" },
-        lastGiftCode: { $first: "$code" },
+  const [userResult, rawGifts, latestRewards] = await Promise.all([
+    getUsers(),
+    Surprise.find({ isActive: true }).select("title code isActive").lean(),
+    RewardHistory.aggregate([
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: "$userId",
+          lastGiftAt: { $first: "$createdAt" },
+          lastGiftTitle: { $first: "$title" },
+          lastGiftCode: { $first: "$code" },
+        },
       },
-    },
+    ]).catch(() => [])
   ]);
+
+  const { users: rawUsers, success, error } = userResult;
+  const availableGifts = JSON.parse(JSON.stringify(rawGifts || []));
 
   if (!success) {
     return (
@@ -53,8 +57,28 @@ export default async function AdminUsersPage({ searchParams }) {
     );
   }
 
-  const users = JSON.parse(JSON.stringify(rawUsers)).map(user => {
-    const reward = latestRewards.find(r => r._id.toString() === user._id.toString());
+  const getProfileImage = (user) => {
+    if (user.image) {
+      if (user.image.startsWith('http')) return user.image;
+      return `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'diabqgzyo'}/image/upload/${user.image}`;
+    }
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=EA638C&color=fff&bold=true`;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const now = new Date();
+  const rewardMap = new Map((latestRewards || []).map(r => [r._id?.toString(), r]));
+
+  const users = JSON.parse(JSON.stringify(rawUsers || [])).map(user => {
+    const reward = rewardMap.get(user._id?.toString());
     let extractedPercent = null;
     if (reward?.lastGiftCode) {
         const match = reward.lastGiftCode.match(/\d+/);
@@ -62,23 +86,56 @@ export default async function AdminUsersPage({ searchParams }) {
     }
 
     const orderList = user.orders || [];
-    const totalOrders = orderList.length;
+    let periodSpent = 0;
+    
+    orderList.forEach(order => {
+      const orderDate = new Date(order.createdAt || order.date || Date.now());
+      let includeOrder = false;
+
+      if (spenderDuration === "this_month") {
+        if (orderDate.getFullYear() === now.getFullYear() && orderDate.getMonth() === now.getMonth()) {
+          includeOrder = true;
+        }
+      } else if (spenderDuration === "last_month") {
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        if (orderDate.getFullYear() === lastMonth.getFullYear() && orderDate.getMonth() === lastMonth.getMonth()) {
+          includeOrder = true;
+        }
+      } else if (spenderDuration === "last_7d") {
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        if (orderDate >= sevenDaysAgo) {
+          includeOrder = true;
+        }
+      } else {
+        includeOrder = true;
+      }
+
+      if (includeOrder) {
+        periodSpent += (order.totalAmount || order.total || order.totalPrice || 0);
+      }
+    });
+
+    const finalPeriodSpent = (spenderDuration === "all_time" || periodSpent === 0) ? (user.totalSpent || periodSpent) : periodSpent;
 
     return {
       ...user,
-      totalOrders,
+      totalOrders: orderList.length || user.orderCount || 0,
+      periodSpent: finalPeriodSpent,
       lastGiftAt: reward ? reward.lastGiftAt : null,
       lastGiftTitle: reward ? reward.lastGiftTitle : null,
       lastGiftValue: extractedPercent 
     };
   });
 
-  // Calculate totals for User Count section
+  const topSpenders = [...users]
+    .filter(u => u.periodSpent > 0)
+    .sort((a, b) => b.periodSpent - a.periodSpent)
+    .slice(0, 5);
+
   const totalMemberCount = users.length;
   const totalVipCount = users.filter(u => u.isVIP || u.totalSpent >= VIP_THRESHOLD).length;
 
   const filteredUsers = users.filter((user) => {
-    // 1. Tier filter logic
     const matchesTier =
       activeFilter === "all" ||
       (activeFilter === "vip" && (user.isVIP || user.totalSpent >= VIP_THRESHOLD)) ||
@@ -86,45 +143,35 @@ export default async function AdminUsersPage({ searchParams }) {
 
     if (!matchesTier) return false;
 
-    // 2. Search query normalization
     const cleanQuery = query.trim().toLowerCase();
     if (!cleanQuery) return true;
 
-    // Direct Name & Email Matches
     const matchesName = (user.name?.toLowerCase() || "").includes(cleanQuery);
     const matchesEmail = (user.email?.toLowerCase() || "").includes(cleanQuery);
 
-    // 3. Phone Search Logic across primary and address phone fields
     const primaryPhone = user.phone || user.phoneNumber || user.mobile || "";
     const addressPhones = Array.isArray(user.addresses)
       ? user.addresses.map((a) => a.phone).filter(Boolean)
       : [user.shippingAddress?.phone].filter(Boolean);
 
     const allPhones = [primaryPhone, ...addressPhones].map((p) => String(p).trim().toLowerCase());
-
     const queryDigits = cleanQuery.replace(/\D/g, "");
     const normalizedQueryDigits = queryDigits.startsWith("880") ? queryDigits.slice(2) : queryDigits;
 
     const matchesPhone = allPhones.some((rawPhone) => {
       if (rawPhone.includes(cleanQuery)) return true;
-
       const phoneDigits = rawPhone.replace(/\D/g, "");
       const normalizedPhoneDigits = phoneDigits.startsWith("880") ? phoneDigits.slice(2) : phoneDigits;
-
       if (queryDigits.length > 0 && phoneDigits.includes(queryDigits)) return true;
       if (normalizedQueryDigits.length > 0 && normalizedPhoneDigits.includes(normalizedQueryDigits)) return true;
-
       return false;
     });
 
     return matchesName || matchesEmail || matchesPhone;
   });
 
-  // --- PAGINATION LOGIC WITH SAFE PAGE FALLBACK ---
   const totalUsers = filteredUsers.length;
   const totalPages = Math.ceil(totalUsers / itemsPerPage) || 1;
-
-  // Fallback to Page 1 if search query reduces results below current page index
   const safeCurrentPage = currentPage > totalPages ? 1 : currentPage;
 
   const paginatedUsers = filteredUsers.slice(
@@ -145,27 +192,176 @@ export default async function AdminUsersPage({ searchParams }) {
     return pages;
   };
 
-  const getProfileImage = (user) => {
-    if (user.image) {
-      if (user.image.startsWith('http')) return user.image;
-      return `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'diabqgzyo'}/image/upload/${user.image}`;
-    }
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=EA638C&color=fff&bold=true`;
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
   return (
     <div className="p-4 mx-auto duration-500 md:p-6 max-w-7xl animate-in fade-in overflow-x-hidden">
-      
-      {/* --- HEADER UI --- */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes marquee {
+          0% { transform: translateX(0%); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+          display: flex;
+          width: max-content;
+          animation: marquee 30s linear infinite;
+        }
+        .animate-marquee:hover {
+          animation-play-state: paused;
+        }
+      `}} />
+
+      {/* TOP SPENDERS LEADERBOARD WITH UNIQUE METALLIC THEMES & TROPHIES */}
+      <div className="mb-10 bg-[#3E442B] p-6 md:p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden border border-white/10">
+        <div className="absolute -right-12 -bottom-12 text-white/5 opacity-10 pointer-events-none rotate-12">
+          <Trophy size={260} />
+        </div>
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-[#EA638C] text-white rounded-2xl shadow-lg shadow-[#EA638C]/40">
+              <Trophy size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg md:text-xl font-black uppercase italic tracking-tight text-white">Top Spenders Leaderboard</h3>
+                <Sparkles size={16} className="text-[#FBB6E6]" />
+              </div>
+              <p className="text-[9.5px] font-bold text-gray-200 uppercase tracking-widest">Highest contributing store members</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 bg-black/20 p-1.5 rounded-2xl border border-white/15">
+            {[
+              { id: "this_month", label: "This Month" },
+              { id: "last_month", label: "Last Month" },
+              { id: "last_7d", label: "Last 7 Days" },
+              { id: "all_time", label: "All-Time" }
+            ].map((tab) => (
+              <Link
+                key={tab.id}
+                href={`?duration=${tab.id}&filter=${activeFilter}&query=${query}&page=1`}
+                className={`px-3.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all ${
+                  spenderDuration === tab.id 
+                    ? 'bg-[#EA638C] text-white shadow-md' 
+                    : 'text-gray-200 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                {tab.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {topSpenders.length === 0 ? (
+          <div className="py-10 text-center text-gray-300 uppercase text-xs font-black tracking-widest bg-black/20 rounded-2xl border border-white/5">
+            No spending records found for this timeframe.
+          </div>
+        ) : (
+          <div className="relative w-full overflow-hidden rounded-2xl">
+            <div className="animate-marquee flex gap-4 py-2">
+              {[...topSpenders, ...topSpenders].map((spender, idx) => {
+                const rank = (idx % topSpenders.length) + 1;
+                
+                // 🎨 Unique Color Themes and Rank Trophies/Badges
+                let cardTheme = "";
+                let badgeTheme = "";
+                let TrophyIcon = Trophy;
+                let textColor = "text-[#3E442B]";
+                let subText = "text-gray-700";
+                let priceColor = "text-[#3E442B]";
+                let orderBadge = "bg-[#3E442B]/10 text-[#3E442B] border-[#3E442B]/20";
+
+                if (rank === 1) {
+                  // 🏆 #1 Gold Theme
+                  TrophyIcon = Crown;
+                  cardTheme = "bg-gradient-to-br from-amber-100 via-yellow-200 to-amber-300 border-yellow-400";
+                  badgeTheme = "bg-yellow-500 text-white border-yellow-300 shadow-yellow-500/50";
+                  textColor = "text-[#3E442B]";
+                  subText = "text-amber-950 font-extrabold";
+                  priceColor = "text-[#3E442B]";
+                  orderBadge = "bg-amber-950/15 text-[#3E442B] border-amber-950/30 font-black";
+                } else if (rank === 2) {
+                  // 🥈 #2 Sterling Silver Theme
+                  TrophyIcon = Medal;
+                  cardTheme = "bg-gradient-to-br from-slate-100 via-slate-200 to-zinc-300 border-slate-300";
+                  badgeTheme = "bg-slate-600 text-white border-slate-400 shadow-slate-500/50";
+                  textColor = "text-slate-900";
+                  subText = "text-slate-800 font-extrabold";
+                  priceColor = "text-slate-950";
+                  orderBadge = "bg-slate-950/15 text-slate-900 border-slate-950/30 font-black";
+                } else if (rank === 3) {
+                  // 🥉 #3 Bronze / Copper Theme
+                  TrophyIcon = Medal;
+                  cardTheme = "bg-gradient-to-br from-amber-900 via-amber-800 to-amber-950 border-amber-600";
+                  badgeTheme = "bg-amber-600 text-white border-amber-400 shadow-amber-900/50";
+                  textColor = "text-white";
+                  subText = "text-amber-200 font-bold";
+                  priceColor = "text-yellow-300";
+                  orderBadge = "bg-white/20 text-white border-white/30 font-black";
+                } else if (rank === 4) {
+                  // 🌸 #4 Rose Gold Theme
+                  TrophyIcon = Sparkles;
+                  cardTheme = "bg-gradient-to-br from-pink-100 via-rose-200 to-pink-300 border-rose-300";
+                  badgeTheme = "bg-[#EA638C] text-white border-pink-400 shadow-pink-500/50";
+                  textColor = "text-[#3E442B]";
+                  subText = "text-rose-950 font-extrabold";
+                  priceColor = "text-[#EA638C]";
+                  orderBadge = "bg-[#3E442B]/15 text-[#3E442B] border-[#3E442B]/30 font-black";
+                } else {
+                  // 💎 #5 Platinum / Pearl Theme
+                  TrophyIcon = Zap;
+                  cardTheme = "bg-gradient-to-br from-indigo-100 via-purple-200 to-blue-200 border-indigo-300";
+                  badgeTheme = "bg-indigo-600 text-white border-indigo-400 shadow-indigo-500/50";
+                  textColor = "text-indigo-950";
+                  subText = "text-indigo-900 font-extrabold";
+                  priceColor = "text-indigo-950";
+                  orderBadge = "bg-indigo-950/15 text-indigo-950 border-indigo-950/30 font-black";
+                }
+
+                return (
+                  <div 
+                    key={`${spender._id}-${idx}`}
+                    className={`w-80 backdrop-blur-md border p-4 rounded-3xl flex items-center gap-4 shrink-0 shadow-2xl transition-all duration-300 hover:scale-[1.02] relative ${cardTheme}`}
+                  >
+                    {/* TROPHY & AVATAR WRAPPER */}
+                    <div className="relative shrink-0">
+                      <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-white/80 bg-white/50 relative shadow-md">
+                        <Image src={getProfileImage(spender)} alt={spender.name} fill className="object-cover" unoptimized />
+                      </div>
+
+                      {/* RANK BADGE WITH TROPHY ICON */}
+                      <div className={`absolute -top-2.5 -left-2.5 px-1.5 py-0.5 rounded-full flex items-center gap-0.5 text-[9px] font-black shadow-lg border ${badgeTheme}`}>
+                        <TrophyIcon size={11} />
+                        <span>#{rank}</span>
+                      </div>
+                    </div>
+                    
+                    {/* SPENDER DETAILS WITH HIGH READABILITY */}
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-xs font-black uppercase tracking-tight truncate drop-shadow-2xs ${textColor}`}>
+                        {spender.name}
+                      </p>
+                      <p className={`text-[9.5px] truncate mt-0.5 ${subText}`}>
+                        {spender.email}
+                      </p>
+                      
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-black/15">
+                        <span className={`text-[8px] uppercase tracking-widest px-2 py-0.5 rounded-md border ${orderBadge}`}>
+                          {spender.totalOrders} Orders
+                        </span>
+                        <span className={`text-sm font-black drop-shadow-2xs ${priceColor}`}>
+                          ৳{spender.periodSpent.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* HEADER CONTROLS */}
       <div className="flex flex-col justify-between gap-6 mb-8 lg:flex-row lg:items-end">
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -187,14 +383,14 @@ export default async function AdminUsersPage({ searchParams }) {
           <div className="flex items-center justify-between w-full gap-2 md:w-auto">
             <ExportUsers data={filteredUsers} fileName={`members-${activeFilter}`} />
             <div className="flex items-center gap-1 bg-[#F3F4F6] p-1.5 rounded-2xl border border-gray-200 shadow-sm">
-              <Link href="/admin/users?filter=all" className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeFilter === 'all' ? 'bg-[#3E442B] text-white shadow-md' : 'text-gray-400'}`}>All</Link>
-              <Link href="/admin/users?filter=vip" className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${activeFilter === 'vip' ? 'bg-yellow-400 text-black shadow-md' : 'text-gray-400'}`}><Zap size={12} /> VIP</Link>
+              <Link href={`/admin/users?filter=all&duration=${spenderDuration}`} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeFilter === 'all' ? 'bg-[#3E442B] text-white shadow-md' : 'text-gray-400'}`}>All</Link>
+              <Link href={`/admin/users?filter=vip&duration=${spenderDuration}`} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${activeFilter === 'vip' ? 'bg-yellow-400 text-black shadow-md' : 'text-gray-400'}`}><Zap size={12} /> VIP</Link>
             </div>
           </div>
         </div>
       </div>
 
-      {/* --- USER COUNT SUMMARY CARDS --- */}
+      {/* STAT CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
         <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-[#3E442B]/10 text-[#3E442B] flex items-center justify-center">
@@ -234,7 +430,7 @@ export default async function AdminUsersPage({ searchParams }) {
         </div>
       ) : (
         <>
-          {/* --- MOBILE CARD LAYOUT --- */}
+          {/* MOBILE CARDS */}
           <div className="grid grid-cols-1 gap-6 md:hidden pb-10">
             {paginatedUsers.map((user, index) => {
               const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(user.email);
@@ -251,15 +447,8 @@ export default async function AdminUsersPage({ searchParams }) {
                         <h4 className="text-xs font-black text-[#3E442B] uppercase italic truncate max-w-[130px] leading-tight">{user.name}</h4>
                         <EmailCopy email={user.email} />
                       </div>
-
-                      {/* Created At Hover Tooltip for Mobile */}
-                      <div className="absolute left-0 bottom-full mb-2 hidden group-hover/mobile-profile:flex items-center gap-1.5 bg-[#3E442B] text-white text-[9px] font-bold px-3 py-1.5 rounded-xl shadow-xl border border-white/20 whitespace-nowrap z-50 animate-in fade-in">
-                        <Calendar size={11} className="text-[#FBB6E6]" />
-                        <span>Joined: {formatDate(user.createdAt)}</span>
-                      </div>
                     </div>
 
-                    {/* Mobile Orders & Spent Info */}
                     <div className="text-right flex flex-col items-end gap-1">
                       <span className="text-[9px] font-black text-[#EA638C] bg-[#EA638C]/10 px-2.5 py-0.5 rounded-lg flex items-center gap-1 w-fit border border-[#EA638C]/20">
                         <ShoppingBag size={10} /> {user.totalOrders} {user.totalOrders === 1 ? 'Order' : 'Orders'}
@@ -301,7 +490,7 @@ export default async function AdminUsersPage({ searchParams }) {
             })}
           </div>
 
-          {/* --- DESKTOP TABLE LAYOUT --- */}
+          {/* DESKTOP TABLE */}
           <div className="hidden md:block bg-white rounded-[2.5rem] shadow-2xl shadow-gray-200/50 border border-gray-100 overflow-visible">
             <table className="min-w-full border-separate divide-y divide-gray-100 table-auto border-spacing-0 overflow-visible">
               <thead className="bg-gray-50/50">
@@ -329,12 +518,6 @@ export default async function AdminUsersPage({ searchParams }) {
                             <p className="text-[12px] italic font-black text-[#3E442B] uppercase leading-tight truncate max-w-[150px]">{user.name}</p>
                             <EmailCopy email={user.email} />
                           </div>
-
-                          {/* Created At Hover Tooltip for Desktop */}
-                          <div className="absolute left-0 bottom-full mb-1 hidden group-hover/profile:flex items-center gap-2 bg-[#3E442B] text-white text-[9px] font-bold px-3 py-1.5 rounded-xl shadow-xl border border-white/20 whitespace-nowrap z-50 animate-in fade-in">
-                            <Calendar size={12} className="text-[#FBB6E6]" />
-                            <span>Joined: {formatDate(user.createdAt)}</span>
-                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-4 overflow-visible">
@@ -355,7 +538,6 @@ export default async function AdminUsersPage({ searchParams }) {
                         </div>
                       </td>
                       
-                      {/* --- ORDERS & SPENT DISPLAY --- */}
                       <td className="px-4 py-4">
                         <div className="flex flex-col gap-1 items-start">
                           <span className="text-[9px] font-black text-[#EA638C] bg-[#EA638C]/10 px-2.5 py-0.5 rounded-lg flex items-center gap-1 border border-[#EA638C]/20">
@@ -380,12 +562,12 @@ export default async function AdminUsersPage({ searchParams }) {
             </table>
           </div>
 
-          {/* --- BRANDED PAGINATION --- */}
+          {/* PAGINATION */}
           {totalPages > 1 && (
             <div className="flex flex-col items-center justify-center gap-6 mt-16 pb-10">
               <div className="flex items-center gap-2 p-1.5 bg-white shadow-xl rounded-full border border-gray-50">
                 <Link
-                  href={`?page=${Math.max(1, safeCurrentPage - 1)}&filter=${activeFilter}&query=${query}`}
+                  href={`?page=${Math.max(1, safeCurrentPage - 1)}&filter=${activeFilter}&query=${query}&duration=${spenderDuration}`}
                   className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${safeCurrentPage === 1 ? 'opacity-20 pointer-events-none' : 'bg-gray-50 text-[#3E442B] hover:text-[#EA638C]'}`}
                 >
                   <ChevronLeft size={18} />
@@ -398,7 +580,7 @@ export default async function AdminUsersPage({ searchParams }) {
                     ) : (
                       <Link
                         key={p}
-                        href={`?page=${p}&filter=${activeFilter}&query=${query}`}
+                        href={`?page=${p}&filter=${activeFilter}&query=${query}&duration=${spenderDuration}`}
                         className={`w-11 h-11 flex flex-col items-center justify-center rounded-full text-[10px] font-black transition-all ${
                           safeCurrentPage === p ? 'bg-[#3E442B] text-white shadow-lg' : 'text-gray-400 hover:text-[#EA638C]'
                         }`}
@@ -411,7 +593,7 @@ export default async function AdminUsersPage({ searchParams }) {
                 </div>
 
                 <Link
-                  href={`?page=${Math.min(totalPages, safeCurrentPage + 1)}&filter=${activeFilter}&query=${query}`}
+                  href={`?page=${Math.min(totalPages, safeCurrentPage + 1)}&filter=${activeFilter}&query=${query}&duration=${spenderDuration}`}
                   className={`flex items-center justify-center w-11 h-11 rounded-full transition-all ${safeCurrentPage === totalPages ? 'opacity-20 pointer-events-none' : 'bg-[#3E442B] text-white hover:bg-[#EA638C] shadow-lg'}`}
                 >
                   <ChevronRight size={18} />

@@ -101,7 +101,8 @@ export async function createOrder(orderData) {
             },
             quantity: Math.max(1, Number(i.quantity) || 1),
             price: Number(i.price) || 0,
-            sku: i.sku || i.variant?.sku || "N/A"
+            sku: i.sku || i.variant?.sku || "N/A",
+            note: i.note || "" // Maps the customer item note directly into the DB document
           };
         }),
         shippingAddress: {
@@ -178,7 +179,7 @@ export async function createOrder(orderData) {
           
           let target = null;
 
-          // 🟢 1. Strict Match by Variant ID against product.variants._id
+          // 1. Strict Match by Variant ID against product.variants._id
           if (searchId) {
             target = product.variants.find(v => v._id && v._id.toString() === searchId);
             if (!target && typeof product.variants.id === "function") {
@@ -188,12 +189,12 @@ export async function createOrder(orderData) {
             }
           }
 
-          // 🟢 2. Match by SKU
+          // 2. Match by SKU
           if (!target && searchSku) {
             target = product.variants.find(v => v.sku && v.sku.trim() === searchSku);
           }
 
-          // 🟢 3. Match by exact color/name and size combination
+          // 3. Match by exact color/name and size combination
           if (!target && searchName) {
             target = product.variants.find(v => {
               const vColor = (v.color || v.name || "").toLowerCase().trim();
@@ -274,13 +275,22 @@ export async function createOrder(orderData) {
         shippingAddress: formattedAddress,
         totalAmount: normalizedTotal,
         paymentMethod: paymentMethod,
-        items: newOrder.items.map(i => ({
+        items: newOrder.items.log ? newOrder.items.map(i => ({
           name: i.productName,
           quantity: i.quantity,
           price: i.price,
           variantName: i.variant?.name !== "Default" ? i.variant?.name : null,
           size: i.variant?.size !== "N/A" ? i.variant?.size : null,
-          image: i.variant?.image || null
+          image: i.variant?.image || null,
+          note: i.note || null
+        })) : items.map(i => ({
+          name: i.productName || i.name,
+          quantity: i.quantity,
+          price: i.price,
+          variantName: i.variant?.name || i.color || null,
+          size: i.variant?.size || i.size || null,
+          image: i.variant?.image || i.imageUrl || i.image || null,
+          note: i.note || null
         })),
         isStatusUpdate: false
       };

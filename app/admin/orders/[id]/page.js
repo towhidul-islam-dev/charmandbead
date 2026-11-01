@@ -478,5 +478,5 @@ const finalY = doc.lastAutoTable.finalY + 10;
         </div>
       </div>
     </div>
-  );A
+  );
 }

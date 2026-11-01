@@ -21,6 +21,7 @@ const OrderSchema = new mongoose.Schema(
         quantity: { type: Number, required: true },
         price: { type: Number, required: true },
         sku: String,
+        note: { type: String, default: "" }, // <-- Added customer item note support
       },
     ],
     totalAmount: Number,

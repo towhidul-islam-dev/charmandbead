@@ -12,7 +12,9 @@ import {
   ShoppingBagIcon,
   PlusIcon as PlusSmallIcon,
   CheckBadgeIcon,
-  CheckIcon
+  CheckIcon,
+  PencilSquareIcon,
+  XMarkIcon
 } from "@heroicons/react/24/outline";
 
 export default function CartPage({ initialItems = [], isAdminPreview = false, user = null }) {
@@ -25,12 +27,18 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
     clearCart,
   } = useCart();
 
+  // Local state to track item notes: { [uniqueKey]: "note content" }
+  const [itemNotes, setItemNotes] = useState({});
+  // Track which variant item's note drawer is currently open
+  const [activeNoteKey, setActiveNoteKey] = useState(null);
+  const [tempNoteText, setTempNoteText] = useState("");
+
   // Prioritize globalCart from Context
   const rawCart = useMemo(() => {
     return globalCart.length > 0 ? globalCart : initialItems;
   }, [globalCart, initialItems]);
 
-  // Ensure every item has a reliable uniqueKey, basePrice, and variantId
+  // Ensure every item has a reliable uniqueKey, basePrice, variantId, and attached note
   const cart = useMemo(() => {
     return rawCart.map((item) => {
       const pId = item.productId || item._id;
@@ -44,9 +52,10 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
         variantId: item.variantId || item.variant?._id || null,
         uniqueKey: generatedKey,
         basePrice: Number(item.basePrice) || itemPrice,
+        note: itemNotes[generatedKey] !== undefined ? itemNotes[generatedKey] : (item.note || ""),
       };
     });
-  }, [rawCart]);
+  }, [rawCart, itemNotes]);
 
   // Items are UNSELECTED initially by default
   const [selectedItems, setSelectedItems] = useState([]);
@@ -149,6 +158,34 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
   const handleDeleteItem = (uniqueKey) => {
     deleteSelectedItems([uniqueKey]);
     setSelectedItems((prev) => prev.filter((id) => id !== uniqueKey));
+    setItemNotes((prev) => {
+      const copy = { ...prev };
+      delete copy[uniqueKey];
+      return copy;
+    });
+  };
+
+  // Note Handlers
+  const handleOpenNote = (variant) => {
+    setActiveNoteKey(variant.uniqueKey);
+    setTempNoteText(variant.note || "");
+  };
+
+  const handleSaveNote = (uniqueKey) => {
+    setItemNotes((prev) => ({
+      ...prev,
+      [uniqueKey]: tempNoteText,
+    }));
+    setActiveNoteKey(null);
+    toast.success("Note saved for this item!", {
+      style: {
+        borderRadius: "12px",
+        background: "#3E442B",
+        color: "#FFFFFF",
+        fontSize: "12px",
+        fontWeight: "700"
+      }
+    });
   };
 
   const handleCheckout = () => {
@@ -160,7 +197,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
         .map((item) => {
           const img = item.imageUrl || item.image || item.variant?.image || null;
           
-          // Enhanced resolution to fallback reliably across variant id fields
           const resolvedVariantId = 
             item.variantId || 
             item.variant?._id || 
@@ -182,6 +218,7 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
             quantity: Number(item.quantity) || 1,
             price: itemPrice,
             basePrice: resolvedBasePrice,
+            note: item.note || "", // Passes customer item note forward to checkout
             variantImage: img,
             image: img,
             variant: {
@@ -195,7 +232,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
           };
         });
 
-      // Save checkout items and selected keys for CartContext synchronization
       localStorage.setItem("checkoutItems", JSON.stringify(itemsToPurchase));
       localStorage.setItem("purchasedKeys", JSON.stringify(selectedItems));
       
@@ -231,7 +267,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
           <div className="space-y-1">
             <div className="flex items-center gap-3">
               <h1 className="text-4xl italic font-bold font-serif tracking-tighter text-[#3E442B] uppercase">My Bag</h1>
-              {/* Product Counter Badge */}
               <span className="bg-[#FBB6E6] text-[#3E442B] text-xs font-black px-3 py-1 rounded-full shadow-sm">
                 {totalCartItemCount} {totalCartItemCount === 1 ? 'Product' : 'Products'}
               </span>
@@ -294,6 +329,7 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                     const isMaxed = variant.quantity >= totalStock;
                     const isLowStock = totalStock - variant.quantity <= moq && !isMaxed;
                     const isDiscounted = variant.price < (variant.basePrice || variant.price);
+                    const isEditingNote = activeNoteKey === variant.uniqueKey;
 
                     return (
                       <div key={variant.uniqueKey} className={`p-4 md:p-6 md:px-8 transition-all duration-500 ${isSelected ? 'bg-[#EA638C]/5' : ''}`}>
@@ -386,6 +422,60 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
                           </div>
 
                         </div>
+
+                        {/* --- ADD NOTE BUTTON & DRAWER SECTION --- */}
+                        <div className="mt-4 pt-3 border-t border-gray-100/80 flex flex-col gap-2">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleOpenNote(variant)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black tracking-wider uppercase bg-white border border-[#3E442B]/15 text-[#3E442B] rounded-xl hover:border-[#EA638C] hover:text-[#EA638C] transition-all shadow-sm"
+                            >
+                              <PencilSquareIcon className="w-3.5 h-3.5 text-[#EA638C]" />
+                              <span>{variant.note ? "Edit Note" : "+ Add Note"}</span>
+                            </button>
+
+                            {variant.note && !isEditingNote && (
+                              <span className="text-[11px] font-medium text-[#3E442B] bg-[#FBB6E6]/30 px-3 py-1 rounded-xl border border-[#FBB6E6]/60 truncate max-w-xs">
+                                Note: {variant.note}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Note Input Drawer */}
+                          {isEditingNote && (
+                            <div className="p-3 bg-gray-50/90 rounded-2xl border border-[#FBB6E6] flex flex-col gap-2 mt-2 shadow-inner">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-[#3E442B]">Special Instructions for this Item</span>
+                                <button onClick={() => setActiveNoteKey(null)} className="text-gray-400 hover:text-gray-600">
+                                  <XMarkIcon className="w-4 h-4" />
+                                </button>
+                              </div>
+                              <textarea
+                                value={tempNoteText}
+                                onChange={(e) => setTempNoteText(e.target.value)}
+                                placeholder="E.g., Custom engraving name, specific wire thickness, or gift wrapping..."
+                                rows={2}
+                                className="w-full text-xs p-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#EA638C] resize-none"
+                              />
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => setActiveNoteKey(null)}
+                                  className="px-3 py-1.5 text-[9px] font-black uppercase text-gray-500 hover:bg-gray-200 rounded-lg transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => handleSaveNote(variant.uniqueKey)}
+                                  className="px-4 py-1.5 text-[9px] font-black uppercase bg-[#3E442B] text-white rounded-lg hover:bg-[#EA638C] transition-colors shadow-sm"
+                                >
+                                  Save Note
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {/* ------------------------------------------- */}
+
                       </div>
                     );
                   })}
