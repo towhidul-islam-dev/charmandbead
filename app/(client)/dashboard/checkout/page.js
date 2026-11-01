@@ -371,7 +371,7 @@ if (!qrSenderPhone || !isValidBDPhone(qrSenderPhone)) {
 const cleanedDeliveryPhone = sanitizeBDPhone(phone);
 const cleanedSenderPhone = sanitizeBDPhone(qrSenderPhone);
 
-      const orderData = {
+const orderData = {
         userId: session?.user?.id,
         email: userEmail,
         customerName: customerName.trim(),
@@ -391,6 +391,7 @@ const cleanedSenderPhone = sanitizeBDPhone(qrSenderPhone);
             image: item.image || item.thumbnail || "/placeholder.png",
             variant: variantName,
             size: item.size || "N/A",
+            note: item.note || "", // 🟢 Captures the item note and passes it to createOrder
           };
         }),
         totalAmount: Number((finalTotal + mobileBankingFee).toFixed(2)),

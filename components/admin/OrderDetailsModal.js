@@ -18,7 +18,8 @@ import {
   RefreshCw,
   PhoneCall,
   User,
-  ZoomIn
+  ZoomIn,
+  Quote
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -34,6 +35,9 @@ export default function OrderDetailsModal({ order, onClose }) {
   
   // State for Image Popup
   const [selectedImage, setSelectedImage] = useState(null);
+
+  // State for Note Popup Modal
+  const [activeNoteModal, setActiveNoteModal] = useState(null);
 
   // Packing Checklist State (tracks item index -> boolean)
   const [packedItems, setPackedItems] = useState({});
@@ -216,7 +220,7 @@ export default function OrderDetailsModal({ order, onClose }) {
                 {order.paymentStatus || (!isPartial ? "Paid" : "Pending")}
               </span>
             </div>
-            <button onClick={onClose} className="text-white/70 hover:text-[#EA638C] transition-all p-1">
+            <button onClick={onClose} className="text-white/70 hover:text-[#EA638C] transition-all p-1 cursor-pointer">
               <X size={18}/>
             </button>
           </div>
@@ -232,7 +236,7 @@ export default function OrderDetailsModal({ order, onClose }) {
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[8px] sm:text-[8.5px] font-bold text-gray-400 truncate">{order.shippingAddress?.phone || "N/A"}</span>
                   {order.shippingAddress?.phone && (
-                    <button onClick={handleWhatsApp} className="text-green-600 transition-transform hover:scale-110 shrink-0 p-0.5">
+                    <button onClick={handleWhatsApp} className="text-green-600 transition-transform hover:scale-110 shrink-0 p-0.5 cursor-pointer">
                       <MessageSquare size={12} />
                     </button>
                   )}
@@ -242,13 +246,13 @@ export default function OrderDetailsModal({ order, onClose }) {
              <div className="flex p-0.5 bg-white border border-gray-200 rounded-lg h-fit shrink-0 shadow-sm">
                 <button 
                   onClick={() => setIncludePrice(true)} 
-                  className={`px-3 py-1 sm:py-1.5 rounded-md text-[7.5px] sm:text-[8px] font-black uppercase transition-all ${includePrice ? 'bg-[#3E442B] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                  className={`px-3 py-1 sm:py-1.5 rounded-md text-[7.5px] sm:text-[8px] font-black uppercase transition-all cursor-pointer ${includePrice ? 'bg-[#3E442B] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                   Invoice
                 </button>
                 <button 
                   onClick={() => setIncludePrice(false)} 
-                  className={`px-3 py-1 sm:py-1.5 rounded-md text-[7.5px] sm:text-[8px] font-black uppercase transition-all ${!includePrice ? 'bg-[#3E442B] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                  className={`px-3 py-1 sm:py-1.5 rounded-md text-[7.5px] sm:text-[8px] font-black uppercase transition-all cursor-pointer ${!includePrice ? 'bg-[#3E442B] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                   Pack
                 </button>
@@ -316,7 +320,7 @@ export default function OrderDetailsModal({ order, onClose }) {
                     </p>
                   </div>
                 </div>
-                <button onClick={fetchPathaoStatus} className="p-1.5 text-gray-400 hover:text-[#3E442B] transition-colors shrink-0">
+                <button onClick={fetchPathaoStatus} className="p-1.5 text-gray-400 hover:text-[#3E442B] transition-colors shrink-0 cursor-pointer">
                   <RefreshCw size={12} className={loadingPathao ? "animate-spin" : ""} />
                 </button>
               </div>
@@ -330,7 +334,7 @@ export default function OrderDetailsModal({ order, onClose }) {
             </span>
             <button 
               onClick={handleCopyAddress}
-              className="flex items-center gap-1.5 text-[8px] font-black uppercase hover:text-[#EA638C] transition-all text-[#3E442B]/70 py-0.5"
+              className="flex items-center gap-1.5 text-[8px] font-black uppercase hover:text-[#EA638C] transition-all text-[#3E442B]/70 py-0.5 cursor-pointer"
             >
               {copied ? <Check size={10} className="text-green-500" /> : <Copy size={10} />}
               {copied ? "Copied" : "Copy for Courier"}
@@ -386,6 +390,16 @@ export default function OrderDetailsModal({ order, onClose }) {
                              Qty: {item.quantity}
                            </span>
                          </div>
+
+                         {/* --- CUSTOMER ITEM NOTE BUTTON --- */}
+                         {item.note && item.note.trim() !== "" && (
+                           <button
+                             onClick={() => setActiveNoteModal(item)}
+                             className="mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 bg-[#FBB6E6]/20 hover:bg-[#FBB6E6]/40 text-[#EA638C] border border-[#FBB6E6] rounded-lg text-[7px] sm:text-[7.5px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs"
+                           >
+                             <MessageSquare size={10} /> Show Note
+                           </button>
+                         )}
                        </div>
                      </div>
 
@@ -463,7 +477,7 @@ export default function OrderDetailsModal({ order, onClose }) {
                 </div>
                 <div className="flex justify-between text-[8px] sm:text-[9px] font-bold uppercase text-green-600">
                   <span className="flex items-center gap-1"><Wallet size={10}/> Paid Amount</span>
-                  <span>- ৳{paidAmount.toLocaleString()}</span>
+                  <span>৳{paidAmount.toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -491,8 +505,8 @@ export default function OrderDetailsModal({ order, onClose }) {
                           <User size={10} /> Full Delivery Profile
                         </span>
                         <button 
-                          onClick={handleCopyAddress}
-                          className="flex items-center gap-1 px-2 py-0.5 bg-[#EA638C] hover:bg-[#EA638C]/80 text-white text-[7px] font-black uppercase rounded-md transition-all active:scale-95 shadow-sm"
+                          onClick={handleCopyAddress} 
+                          className="flex items-center gap-1 px-2 py-0.5 bg-[#EA638C] hover:bg-[#EA638C]/80 text-white text-[7px] font-black uppercase rounded-md transition-all active:scale-95 shadow-sm cursor-pointer"
                         >
                           {copiedPopupAddress ? <Check size={8} /> : <Copy size={8} />}
                           <span>{copiedPopupAddress ? "Copied" : "Copy Addr"}</span>
@@ -531,7 +545,7 @@ export default function OrderDetailsModal({ order, onClose }) {
                       <button 
                         onClick={handleCopyAddress} 
                         title="Copy Address"
-                        className="text-gray-400 hover:text-[#EA638C] transition-colors p-0.5"
+                        className="text-gray-400 hover:text-[#EA638C] transition-colors p-0.5 cursor-pointer"
                       >
                         {copied ? <Check size={10} className="text-green-500" /> : <Copy size={9} />}
                       </button>
@@ -561,10 +575,10 @@ export default function OrderDetailsModal({ order, onClose }) {
 
         {/* PINNED BOTTOM ACTIONS BAR */}
         <div className="sticky bottom-0 z-20 flex flex-row shrink-0 gap-2 p-3 sm:p-4 border-t bg-gray-50 print:hidden shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-          <button onClick={() => window.print()} className="flex-1 bg-[#EA638C] text-white py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-[#3E442B] transition-all active:scale-95 shadow-md">
+          <button onClick={() => window.print()} className="flex-1 bg-[#EA638C] text-white py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-[#3E442B] transition-all active:scale-95 shadow-md cursor-pointer">
             <Printer size={14} /> Print {includePrice ? "Invoice" : "Packing Slip"}
           </button>
-          <button onClick={onClose} className="px-4 sm:px-6 py-2.5 sm:py-3 bg-white border border-gray-200 text-[#3E442B] rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase hover:bg-gray-100 transition-all active:scale-95">Close</button>
+          <button onClick={onClose} className="px-4 sm:px-6 py-2.5 sm:py-3 bg-white border border-gray-200 text-[#3E442B] rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase hover:bg-gray-100 transition-all active:scale-95 cursor-pointer">Close</button>
         </div>
 
       </div>
@@ -581,7 +595,7 @@ export default function OrderDetailsModal({ order, onClose }) {
           >
             <button 
               onClick={() => setSelectedImage(null)}
-              className="absolute top-4 right-4 z-10 p-2 bg-[#3E442B]/80 hover:bg-[#EA638C] text-white rounded-full transition-all active:scale-90 shadow-md backdrop-blur-md"
+              className="absolute top-4 right-4 z-10 p-2 bg-[#3E442B]/80 hover:bg-[#EA638C] text-white rounded-full transition-all active:scale-90 shadow-md backdrop-blur-md cursor-pointer"
             >
               <X size={18} />
             </button>
@@ -594,6 +608,87 @@ export default function OrderDetailsModal({ order, onClose }) {
                 onError={(e) => { e.target.src = "/placeholder.png"; }}
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 💬 FANCY & ELEVATED CUSTOMER NOTE POPUP MODAL */}
+      {activeNoteModal && (
+        <div 
+          onClick={() => setActiveNoteModal(null)}
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-[#3E442B]/50 backdrop-blur-md transition-all duration-300 animate-in fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-[2.5rem] max-w-sm w-full p-6 sm:p-7 shadow-[0_25px_60px_-15px_rgba(62,68,43,0.3)] border border-[#EA638C]/20 relative overflow-hidden animate-in zoom-in-95 duration-200"
+          >
+            {/* AMBIENT BACKGROUND GLOW */}
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-[#FBB6E6]/40 rounded-full blur-2xl pointer-events-none" />
+            <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-[#EA638C]/10 rounded-full blur-2xl pointer-events-none" />
+
+            {/* OFF / CLOSE BUTTON */}
+            <button
+              onClick={() => setActiveNoteModal(null)}
+              className="absolute top-5 right-5 p-2 bg-gray-50 hover:bg-[#EA638C] text-gray-400 hover:text-white rounded-full transition-all duration-300 cursor-pointer shadow-sm z-10 active:scale-90"
+              title="Close Note"
+            >
+              <X size={15} />
+            </button>
+
+            {/* TOP PILL BADGE */}
+            <div className="flex items-center gap-2 mb-5">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#FBB6E6]/30 border border-[#FBB6E6] rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#EA638C] animate-pulse" />
+                <span className="text-[8px] font-black text-[#EA638C] uppercase tracking-widest flex items-center gap-1">
+                  <MessageSquare size={10} /> Item Specification
+                </span>
+              </div>
+            </div>
+
+            {/* PRODUCT / VARIANT CARD HEADER */}
+            <div className="flex items-center gap-3.5 p-3.5 bg-gray-50/80 rounded-2xl border border-gray-100 shadow-xs mb-5">
+              <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-white border border-gray-200 shrink-0 shadow-sm ring-2 ring-[#EA638C]/10">
+                <img 
+                  src={getItemImage(activeNoteModal)} 
+                  alt={activeNoteModal.productName || activeNoteModal.product?.name || activeNoteModal.name || "Variant"} 
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.target.src = "/placeholder.png"; }}
+                />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <h4 className="text-[11px] font-black uppercase text-[#3E442B] tracking-tight truncate leading-snug">
+                  {activeNoteModal.productName || activeNoteModal.product?.name || activeNoteModal.name}
+                </h4>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="px-2 py-0.5 bg-white border border-gray-200 text-[#EA638C] text-[7.5px] font-black uppercase rounded-md shadow-2xs truncate">
+                    {getItemVariantName(activeNoteModal)}
+                  </span>
+                  <span className="text-[8px] font-bold text-gray-400 uppercase">
+                    Qty: {activeNoteModal.quantity}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* FANCY QUOTATION BOX */}
+            <div className="relative p-5 bg-gradient-to-br from-[#FBB6E6]/10 via-[#FAFAFA] to-gray-50/80 border border-[#EA638C]/15 rounded-2xl shadow-inner mb-6">
+              <Quote size={24} className="absolute top-3 right-3 text-[#EA638C]/15 rotate-180" />
+              <p className="text-[7.5px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
+                Instruction / Note:
+              </p>
+              <p className="text-xs font-semibold text-[#3E442B] italic leading-relaxed relative z-10 pl-2 border-l-2 border-[#EA638C]">
+                &ldquo;{activeNoteModal.note}&rdquo;
+              </p>
+            </div>
+
+            {/* ACTION RETURN BUTTON */}
+            <button
+              onClick={() => setActiveNoteModal(null)}
+              className="w-full py-3 bg-[#3E442B] hover:bg-[#EA638C] text-white text-[9.5px] font-black uppercase tracking-[0.2em] rounded-xl transition-all duration-300 cursor-pointer shadow-md active:scale-98"
+            >
+              Off & Return
+            </button>
           </div>
         </div>
       )}
