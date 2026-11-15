@@ -19,9 +19,10 @@ import {
   PhoneCall,
   User,
   ZoomIn,
-  Quote
+  ExternalLink
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { updateOrderTracking } from "@/actions/order";
 
 // Brand Colors: Green: #3E442B | Pink: #EA638C | lightPink: #FBB6E6
 
@@ -48,6 +49,11 @@ export default function OrderDetailsModal({ order, onClose }) {
   // Pathao Tracking State
   const [pathaoData, setPathaoData] = useState(null);
   const [loadingPathao, setLoadingPathao] = useState(false);
+
+  // Pathao Tracking Input State for Admin
+  const [trackingInput, setTrackingInput] = useState(order?.trackingNumber || "");
+  const [markShipped, setMarkShipped] = useState(order?.status !== "Shipped");
+  const [savingTracking, setSavingTracking] = useState(false);
 
   // Toggle handler for individual item packing status
   const togglePackItem = (index) => {
@@ -118,8 +124,38 @@ export default function OrderDetailsModal({ order, onClose }) {
     }
   };
 
+  const handleSaveTracking = async (e) => {
+    e.preventDefault();
+    if (!trackingInput.trim()) {
+      toast.error("Please paste a Pathao tracking link or consignment ID");
+      return;
+    }
+
+    setSavingTracking(true);
+    try {
+      const res = await updateOrderTracking(order._id, trackingInput, markShipped);
+      if (res.success) {
+        toast.success(res.message);
+        setTrackingInput(res.trackingNumber);
+        order.trackingNumber = res.trackingNumber;
+        if (res.status) order.status = res.status;
+        fetchPathaoStatus();
+      } else {
+        toast.error(res.message || "Failed to save tracking info");
+      }
+    } catch (err) {
+      console.error("Save Tracking Error:", err);
+      toast.error("Something went wrong");
+    } finally {
+      setSavingTracking(false);
+    }
+  };
+
   useEffect(() => {
-    fetchPathaoStatus();
+    if (order?.trackingNumber) {
+      setTrackingInput(order.trackingNumber);
+      fetchPathaoStatus();
+    }
   }, [order?.trackingNumber]);
 
   if (!order) return null;
@@ -305,27 +341,76 @@ export default function OrderDetailsModal({ order, onClose }) {
             )}
           </div>
 
-          {/* PATHAO TRACKING INTELLIGENCE */}
-          {order.trackingNumber && (
-            <div className="px-4 sm:px-6 py-2 bg-white border-b border-gray-50">
-              <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl sm:rounded-2xl border border-gray-100">
-                <div className="flex items-center gap-2.5 sm:gap-3">
-                  <div className="p-1.5 sm:p-2 bg-[#EA638C]/10 text-[#EA638C] rounded-lg shrink-0">
-                    <Truck size={12} />
-                  </div>
-                  <div>
-                    <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest">Live Courier Status</p>
-                    <p className="text-[8px] sm:text-[9px] font-black text-[#3E442B] uppercase flex items-center gap-2">
-                      {loadingPathao ? <Loader2 size={10} className="animate-spin" /> : (pathaoData?.order_status || "Checking...")}
-                    </p>
-                  </div>
+          {/* PATHAO TRACKING INTELLIGENCE & ASSIGNMENT SECTION */}
+          <div className="px-4 sm:px-6 py-2.5 bg-white border-b border-gray-100 space-y-2">
+            <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl sm:rounded-2xl border border-gray-100">
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-[#EA638C]/10 text-[#EA638C] rounded-lg shrink-0">
+                  <Truck size={12} />
                 </div>
-                <button onClick={fetchPathaoStatus} className="p-1.5 text-gray-400 hover:text-[#3E442B] transition-colors shrink-0 cursor-pointer">
-                  <RefreshCw size={12} className={loadingPathao ? "animate-spin" : ""} />
-                </button>
+                <div>
+                  <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest">Live Courier Status</p>
+                  <p className="text-[8px] sm:text-[9px] font-black text-[#3E442B] uppercase flex items-center gap-2">
+                    {loadingPathao ? <Loader2 size={10} className="animate-spin" /> : (pathaoData?.order_status || (order.trackingNumber ? "Tracking Assigned" : "Not Shipped Yet"))}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                {order.trackingNumber && (
+                  <a
+                    href={`https://merchant.pathao.com/public-tracking?consignment_id=${order.trackingNumber}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 text-[#EA638C] hover:bg-[#EA638C]/10 rounded-lg transition-all shrink-0"
+                    title="Open Pathao Public Tracking"
+                  >
+                    <ExternalLink size={12} />
+                  </a>
+                )}
+                {order.trackingNumber && (
+                  <button onClick={fetchPathaoStatus} className="p-1.5 text-gray-400 hover:text-[#3E442B] transition-colors shrink-0 cursor-pointer" title="Refresh Status">
+                    <RefreshCw size={12} className={loadingPathao ? "animate-spin" : ""} />
+                  </button>
+                )}
               </div>
             </div>
-          )}
+
+            {/* Pathao Link / Consignment ID Input Form */}
+            <form onSubmit={handleSaveTracking} className="space-y-2 pt-1">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Paste Pathao tracking link or Consignment ID..."
+                  value={trackingInput}
+                  onChange={(e) => setTrackingInput(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-gray-50 rounded-xl border-none text-[9px] sm:text-[10px] font-mono outline-none ring-1 ring-gray-200 focus:ring-2 focus:ring-[#EA638C]/20"
+                />
+                <button
+                  type="submit"
+                  disabled={savingTracking}
+                  className="px-4 py-2 bg-[#3E442B] text-white text-[8px] sm:text-[9px] font-black uppercase rounded-xl hover:bg-[#EA638C] transition-all shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1 shrink-0"
+                >
+                  <Check size={12} />
+                  {savingTracking ? "Saving..." : "Save Link"}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between px-1">
+                <label className="flex items-center gap-1.5 text-[8px] font-bold text-gray-500 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={markShipped}
+                    onChange={(e) => setMarkShipped(e.target.checked)}
+                    className="accent-[#EA638C] rounded cursor-pointer"
+                  />
+                  Mark order status as <span className="text-[#3E442B] font-black uppercase">Shipped</span>
+                </label>
+                {order.trackingNumber && (
+                  <span className="text-[7.5px] font-mono text-gray-400">ID: {order.trackingNumber}</span>
+                )}
+              </div>
+            </form>
+          </div>
 
           {/* CHECKLIST BAR */}
           <div className="flex justify-between items-center px-4 sm:px-6 py-1.5 bg-white border-b border-gray-50">
@@ -626,73 +711,44 @@ export default function OrderDetailsModal({ order, onClose }) {
             <div className="absolute -top-12 -right-12 w-32 h-32 bg-[#FBB6E6]/40 rounded-full blur-2xl pointer-events-none" />
             <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-[#EA638C]/10 rounded-full blur-2xl pointer-events-none" />
 
-            {/* OFF / CLOSE BUTTON */}
-            <button
-              onClick={() => setActiveNoteModal(null)}
-              className="absolute top-5 right-5 p-2 bg-gray-50 hover:bg-[#EA638C] text-gray-400 hover:text-white rounded-full transition-all duration-300 cursor-pointer shadow-sm z-10 active:scale-90"
-              title="Close Note"
-            >
-              <X size={15} />
-            </button>
-
-            {/* TOP PILL BADGE */}
-            <div className="flex items-center gap-2 mb-5">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#FBB6E6]/30 border border-[#FBB6E6] rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#EA638C] animate-pulse" />
-                <span className="text-[8px] font-black text-[#EA638C] uppercase tracking-widest flex items-center gap-1">
-                  <MessageSquare size={10} /> Item Specification
-                </span>
-              </div>
-            </div>
-
-            {/* PRODUCT / VARIANT CARD HEADER */}
-            <div className="flex items-center gap-3.5 p-3.5 bg-gray-50/80 rounded-2xl border border-gray-100 shadow-xs mb-5">
-              <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-white border border-gray-200 shrink-0 shadow-sm ring-2 ring-[#EA638C]/10">
-                <img 
-                  src={getItemImage(activeNoteModal)} 
-                  alt={activeNoteModal.productName || activeNoteModal.product?.name || activeNoteModal.name || "Variant"} 
-                  className="w-full h-full object-cover"
-                  onError={(e) => { e.target.src = "/placeholder.png"; }}
-                />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <h4 className="text-[11px] font-black uppercase text-[#3E442B] tracking-tight truncate leading-snug">
-                  {activeNoteModal.productName || activeNoteModal.product?.name || activeNoteModal.name}
-                </h4>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className="px-2 py-0.5 bg-white border border-gray-200 text-[#EA638C] text-[7.5px] font-black uppercase rounded-md shadow-2xs truncate">
-                    {getItemVariantName(activeNoteModal)}
-                  </span>
-                  <span className="text-[8px] font-bold text-gray-400 uppercase">
-                    Qty: {activeNoteModal.quantity}
-                  </span>
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100 relative z-10">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-[#EA638C]/10 text-[#EA638C] rounded-xl">
+                  <MessageSquare size={16} />
                 </div>
+                <h3 className="text-xs font-black text-[#3E442B] uppercase tracking-wider">Customer Item Note</h3>
+              </div>
+              <button 
+                onClick={() => setActiveNoteModal(null)} 
+                className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-[#3E442B] transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3 relative z-10">
+              <div className="p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                <p className="text-[9px] font-black uppercase text-gray-400 mb-1">Product</p>
+                <p className="text-[11px] font-black text-[#3E442B] uppercase">{activeNoteModal.productName || activeNoteModal.name}</p>
+              </div>
+
+              <div className="p-4 bg-[#F3FDF5] rounded-2xl border border-green-100 space-y-1">
+                <p className="text-[9px] font-black uppercase text-green-700 tracking-wider">Note:</p>
+                <p className="text-xs font-medium text-gray-700 leading-relaxed italic">&ldquo;{activeNoteModal.note}&rdquo;</p>
               </div>
             </div>
 
-            {/* FANCY QUOTATION BOX */}
-            <div className="relative p-5 bg-gradient-to-br from-[#FBB6E6]/10 via-[#FAFAFA] to-gray-50/80 border border-[#EA638C]/15 rounded-2xl shadow-inner mb-6">
-              <Quote size={24} className="absolute top-3 right-3 text-[#EA638C]/15 rotate-180" />
-              <p className="text-[7.5px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
-                Instruction / Note:
-              </p>
-              <p className="text-xs font-semibold text-[#3E442B] italic leading-relaxed relative z-10 pl-2 border-l-2 border-[#EA638C]">
-                &ldquo;{activeNoteModal.note}&rdquo;
-              </p>
+            <div className="mt-6 flex justify-end relative z-10">
+              <button
+                onClick={() => setActiveNoteModal(null)}
+                className="w-full py-3 bg-[#3E442B] hover:bg-[#EA638C] text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-md cursor-pointer"
+              >
+                Got It
+              </button>
             </div>
-
-            {/* ACTION RETURN BUTTON */}
-            <button
-              onClick={() => setActiveNoteModal(null)}
-              className="w-full py-3 bg-[#3E442B] hover:bg-[#EA638C] text-white text-[9.5px] font-black uppercase tracking-[0.2em] rounded-xl transition-all duration-300 cursor-pointer shadow-md active:scale-98"
-            >
-              Off & Return
-            </button>
           </div>
         </div>
       )}
-
     </div>
   );
 }

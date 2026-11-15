@@ -25,13 +25,16 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 // 🟢 NEW: Pathao Tracking Component for Order Details
+// 🟢 UPGRADED: Pathao Tracking Component with robust response handling
 const PathaoTracker = ({ consignmentId }) => {
   const [trackingData, setTrackingData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [errorText, setErrorText] = useState("");
 
   const fetchTracking = async () => {
     if (!consignmentId) return;
     setLoading(true);
+    setErrorText("");
     try {
       const res = await fetch('/api/track-order', {
         method: 'POST',
@@ -39,19 +42,30 @@ const PathaoTracker = ({ consignmentId }) => {
         body: JSON.stringify({ consignmentId }),
       });
       const result = await res.json();
-      setTrackingData(result.data);
+      
+      if (result.success && result.data) {
+        setTrackingData(result.data);
+      } else {
+        setErrorText(result.message || "Status unavailable");
+      }
     } catch (err) {
       console.error("Tracking Error:", err);
+      setErrorText("Network error");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (consignmentId) fetchTracking();
+    if (consignmentId) {
+      fetchTracking();
+    }
   }, [consignmentId]);
 
   if (!consignmentId) return null;
+
+  // Extract status safely regardless of Pathao API payload variant
+  const currentStatus = trackingData?.order_status || trackingData?.status || trackingData?.delivery_status;
 
   return (
     <div className="max-w-3xl mx-auto mb-16">
@@ -66,23 +80,33 @@ const PathaoTracker = ({ consignmentId }) => {
           </div>
         </div>
 
-        <div className="flex flex-col items-center md:items-end">
+        <div className="flex flex-col items-center md:items-end gap-1">
           {loading ? (
             <div className="flex items-center gap-2 text-[#EA638C]">
               <Loader2 size={16} className="animate-spin" />
               <span className="text-[10px] font-black uppercase">Locating Parcel...</span>
             </div>
-          ) : trackingData ? (
+          ) : currentStatus ? (
             <>
               <div className="px-5 py-2 bg-[#EA638C] text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
-                {trackingData.order_status}
+                {currentStatus}
               </div>
-              <p className="text-[9px] font-bold text-gray-400 mt-2 uppercase tracking-tighter">Last Update: {trackingData.updated_at}</p>
+              {trackingData?.updated_at && (
+                <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-tighter">
+                  Updated: {trackingData.updated_at}
+                </p>
+              )}
             </>
           ) : (
-            <button onClick={fetchTracking} className="text-[10px] font-black uppercase text-[#3E442B] underline decoration-[#EA638C] decoration-2">
-              Refresh Status
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              <button 
+                onClick={fetchTracking} 
+                className="px-4 py-2 bg-[#3E442B] text-white rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-[#EA638C] transition-all cursor-pointer"
+              >
+                {errorText ? "Retry Fetch" : "Fetch Status"}
+              </button>
+              {errorText && <span className="text-[8px] text-red-500 font-bold">{errorText}</span>}
+            </div>
           )}
         </div>
       </div>
@@ -241,7 +265,7 @@ export default function OrderDetailsPage({ params: paramsPromise }) {
               </div>
 
               {/* 🟢 Pathao Tracker Only shows if not cancelled */}
-              <PathaoTracker consignmentId={order.consignmentId} />
+              <PathaoTracker consignmentId={order.trackingNumber} />
             </>
           ) : (
             <div className="p-10 mb-20 text-center border-2 border-dashed border-red-100 bg-red-50/30 rounded-[3rem] flex flex-col items-center gap-3">
