@@ -643,129 +643,99 @@ export async function getDashboardStats(period = "all") {
 
 export async function getAllOrders(page = 1, limit = 10, search = "", status = "All", sortBy = "new-old") {
   try {
-    await dbConnect();
+    const conn = await dbConnect();
+    const db = conn.connection.db;
+    const collection = db.collection("orders");
 
-    // 1. Build search/filter query
     const query = {};
 
-    if (status !== "All") {
-      query.status = status;
+    // 1. Status Filter
+    if (status && status !== "All") {
+      const cleanStatus = String(status).trim();
+      query.status = { 
+        $in: [
+          cleanStatus,
+          cleanStatus.toLowerCase(),
+          cleanStatus.charAt(0).toUpperCase() + cleanStatus.slice(1).toLowerCase(),
+          cleanStatus.toUpperCase()
+        ]
+      };
     }
 
+    // 2. Search Filter
     if (search) {
       const isObjectId = /^[0-9a-fA-F]{24}$/.test(search);
       if (isObjectId) {
-        query._id = search;
+        query._id = new mongoose.Types.ObjectId(search);
       } else {
-        const safeSearch = escapeRegex(search);
+        const safeSearch = String(search).trim();
         query.$or = [
           { "shippingAddress.name": { $regex: safeSearch, $options: "i" } },
           { "shippingAddress.fullName": { $regex: safeSearch, $options: "i" } },
           { "shippingAddress.phone": { $regex: safeSearch, $options: "i" } },
-          { status: { $regex: safeSearch, $options: "i" } },
         ];
       }
     }
 
-    // 2. Determine MongoDB sort configuration based on sortBy parameter
-    let sortOption = { createdAt: -1 }; // default: new-old
-    if (sortBy === "old-new") {
-      sortOption = { createdAt: 1 };
-    } else if (sortBy === "high-low") {
-      sortOption = { totalAmount: -1 };
-    } else if (sortBy === "low-high") {
-      sortOption = { totalAmount: 1 };
-    }
+    // 3. Sorting
+    let sortOption = { createdAt: -1 };
+    if (sortBy === "old-new") sortOption = { createdAt: 1 };
+    else if (sortBy === "high-low") sortOption = { totalAmount: -1 };
+    else if (sortBy === "low-high") sortOption = { totalAmount: 1 };
 
     const safeLimit = Math.max(1, Number(limit) || 10);
     const safePage = Math.max(1, Number(page) || 1);
     const skip = (safePage - 1) * safeLimit;
 
-    // Define all statuses precisely matching your frontend tabs
-    const statusKeys = [
-      "Verifying",
-      "Payment Received",
-      "Pending",
-      "Processing",
-      "Shipped",
-      "Delivered",
-      "Cancelled"
-    ];
-
-    const countPromises = statusKeys.map((st) => Order.countDocuments({ status: st }));
-
-    // 3. Fetch exact counts and orders simultaneously using native countDocuments
-    const [
-      verifyingCount, 
-      paymentReceivedCount, 
-      pendingCount, 
-      processingCount, 
-      shippedCount, 
-      deliveredCount, 
-      cancelledCount, 
-      orders, 
-      total
-    ] = await Promise.all([
-      ...countPromises,
-      Order.find(query)
+    // 4. Ultra-fast native execution (Bypasses Mongoose schema overhead completely)
+    const [orders, total] = await Promise.all([
+      collection
+        .find(query)
         .sort(sortOption)
         .skip(skip)
         .limit(safeLimit)
-        .populate({
-          path: "items.product",
-          select: "imageUrl",
-          model: Product,
+        .project({
+          totalAmount: 1,
+          paidAmount: 1,
+          dueAmount: 1,
+          status: 1,
+          createdAt: 1,
+          trackingNumber: 1,
+          shippingAddress: 1,
+          items: 1,
+          paymentDetails: 1,
+          mobileBankingFee: 1,
+          user: 1
         })
-        .lean(),
-      Order.countDocuments(query),
+        .toArray(),
+      collection.countDocuments(query),
     ]);
 
-    // 4. Fully sanitize every single order to guarantee 100% plain serializability for Next.js Client Components
+    // 5. Clean, explicit serialization
     const sanitizedOrders = orders.map((order) => ({
       ...order,
       _id: order._id ? order._id.toString() : "",
       user: order.user ? order.user.toString() : null,
       createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : null,
-      updatedAt: order.updatedAt ? new Date(order.updatedAt).toISOString() : null,
       items: order.items?.map((item) => ({
-        ...item,
-        _id: item._id ? item._id.toString() : undefined,
-        product: item.product && typeof item.product === "object" && item.product._id
-          ? { ...item.product, _id: item.product._id.toString() }
-          : item.product,
+        productName: item.productName,
+        quantity: item.quantity,
+        price: item.price,
+        sku: item.sku,
+        variant: item.variant ? { name: item.variant.name, image: item.variant.image, size: item.variant.size } : null,
       })),
     }));
-
-    // 5. Format status counts correctly
-    const statusCounts = {
-      Verifying: verifyingCount,
-      "Payment Received": paymentReceivedCount,
-      Pending: pendingCount,
-      Processing: processingCount,
-      Shipped: shippedCount,
-      Delivered: deliveredCount,
-      Cancelled: cancelledCount,
-    };
-
-    // Calculate true absolute "All" count
-    statusCounts["All"] = Object.values(statusCounts).reduce((acc, curr) => acc + curr, 0);
 
     return {
       success: true,
       orders: sanitizedOrders,
       totalPages: Math.ceil(total / safeLimit) || 1,
       totalOrders: total,
-      statusCounts,
+      statusCounts: {},
     };
   } catch (error) {
-    console.error("Fetch Orders Error:", error);
-    return { 
-      success: false, 
-      orders: [], 
-      totalPages: 0, 
-      totalOrders: 0, 
-      statusCounts: {} 
-    };
+    console.error("Native Fetch Orders Error:", error);
+    return { success: false, orders: [], totalPages: 0, totalOrders: 0, statusCounts: {} };
   }
 }
 
@@ -811,4 +781,113 @@ export async function getNewOrdersCount() {
     await dbConnect();
     return await Order.countDocuments({ status: "Pending" });
   } catch (error) { return 0; }
+}
+
+export async function updateOrderPaymentAmount(orderId, newPaidAmount) {
+  try {
+    await dbConnect();
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return { success: false, error: "Order not found" };
+    }
+
+    const total = Number(order.totalAmount) || 0;
+    const paid = Number(newPaidAmount) || 0;
+
+    const clampedPaid = Math.max(0, Math.min(paid, total));
+    const due = Number((total - clampedPaid).toFixed(2));
+
+    let paymentStatus = "Unpaid";
+    if (clampedPaid >= total) {
+      paymentStatus = "Paid";
+    } else if (clampedPaid > 0) {
+      paymentStatus = "Partially Paid";
+    }
+
+    // Push history record if the amount actually changed
+    if (order.paidAmount !== clampedPaid) {
+      if (!order.paymentHistory) order.paymentHistory = [];
+      order.paymentHistory.push({
+        previousPaid: order.paidAmount || 0,
+        newPaid: clampedPaid,
+        previousDue: order.dueAmount || 0,
+        newDue: due,
+        updatedAt: new Date(),
+      });
+    }
+
+    order.paidAmount = clampedPaid;
+    order.dueAmount = due;
+    order.paymentStatus = paymentStatus;
+
+    await order.save();
+
+    revalidatePath("/admin/orders");
+    revalidatePath("/dashboard/orders");
+
+    return {
+      success: true,
+      message: "Payment breakdown updated successfully!",
+    };
+  } catch (error) {
+    console.error("Update Payment Amount Error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to update payment amount",
+    };
+  }
+}
+
+export async function updateOrderTracking(orderId, trackingInput, markAsShipped = true) {
+  try {
+    await dbConnect();
+
+    if (!orderId || !trackingInput) {
+      return { success: false, message: "Order ID and tracking info are required." };
+    }
+
+    const cleanInput = String(trackingInput).trim();
+
+    // Automatically extracts consignment ID if a full Pathao URL is pasted
+    let extractedTracking = cleanInput;
+    if (cleanInput.includes("consignment_id=")) {
+      const match = cleanInput.match(/consignment_id=([^&]+)/);
+      if (match && match[1]) extractedTracking = match[1];
+    } else if (cleanInput.includes("/")) {
+      const parts = cleanInput.split("/").filter(Boolean);
+      extractedTracking = parts[parts.length - 1];
+    }
+
+    const updateFields = {
+      trackingNumber: extractedTracking,
+    };
+
+    if (markAsShipped) {
+      updateFields.status = "Shipped";
+    }
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      { $set: updateFields },
+      { new: true }
+    ).lean();
+
+    if (!updatedOrder) {
+      return { success: false, message: "Order not found." };
+    }
+
+    revalidatePath("/admin/orders");
+    revalidatePath("/dashboard/orders");
+
+    return {
+      success: true,
+      message: "Pathao tracking saved successfully!",
+      trackingNumber: updatedOrder.trackingNumber,
+      status: updatedOrder.status,
+    };
+  } catch (error) {
+    console.error("Update Tracking Error:", error);
+    return { success: false, message: "Failed to save tracking information." };
+  }
 }

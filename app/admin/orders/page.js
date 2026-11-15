@@ -2,51 +2,21 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Image from "next/image";
-import { getAllOrders, updateOrderStatus, deleteOrder } from "@/actions/order";
+import { getAllOrders, updateOrderStatus, deleteOrder, updateOrderPaymentAmount } from "@/actions/order";
 import {
   Search, Eye, CheckSquare, Square, 
   ChevronLeft, ChevronRight, Trash2, 
   CreditCard, Banknote, Info, Trash,
-  Wallet, Receipt, Truck, Loader2, PhoneCall, Hash,
-  QrCode, X, Image as ImageIcon, ZoomIn, Bookmark, Check, Filter, ArrowUpDown
+  Wallet, Receipt, QrCode, 
+  Bookmark, Check, Filter, ArrowUpDown, Pencil
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrderDetailsModal from "@/components/admin/OrderDetailsModal";
+import PathaoStatus from "@/components/admin/orders/PathaoStatus";
+import PaymentEditorModal from "@/components/admin/orders/PaymentEditorModal";
+import PaymentProofModal from "@/components/admin/orders/PaymentProofModal";
 
 // Brand Colors: Green: #3E442B | Pink: #EA638C | LightPink: #FBB6E6
-
-const PathaoStatus = ({ trackingId }) => {
-  const [status, setStatus] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!trackingId) return;
-    const fetchStatus = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch('/api/track-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ consignmentId: trackingId }),
-        });
-        const result = await res.json();
-        if (result.success) setStatus(result.data.order_status);
-      } catch (err) { 
-        console.error("Pathao status fetch error:", err); 
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchStatus();
-  }, [trackingId]);
-
-  return (
-    <span className="font-black text-[#EA638C] uppercase inline-flex items-center gap-1 bg-[#EA638C]/10 px-1.5 py-0.5 rounded-md text-[8px]">
-      {loading ? <Loader2 size={8} className="animate-spin" /> : <Truck size={8} />}
-      {status || "Syncing..."}
-    </span>
-  );
-};
 
 const statusColors = {
   Verifying: "bg-purple-50 text-purple-600 border-purple-100",
@@ -68,12 +38,14 @@ export default function AdminOrdersPage() {
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [viewingOrder, setViewingOrder] = useState(null);
   const [paymentInfoModal, setPaymentInfoModal] = useState(null);
-  const [fullscreenImage, setFullscreenImage] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
 
-  // Sorting state: 'new-old' | 'old-new' | 'high-low' | 'low-high'
+  // Payment Adjustment Modal State
+  const [editingPaymentOrder, setEditingPaymentOrder] = useState(null);
+
+  // Sorting state
   const [sortBy, setSortBy] = useState("new-old");
 
   useEffect(() => {
@@ -99,44 +71,17 @@ export default function AdminOrdersPage() {
     );
   };
 
-  const fetchGlobalStatusCounts = useCallback(async () => {
-    try {
-      const res = await getAllOrders(1, 1, "", "All");
-      if (res.success && res.statusCounts) {
-        setStatusCounts(res.statusCounts);
-      }
-    } catch (err) {
-      console.error("Failed to fetch global status counts", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchGlobalStatusCounts();
-  }, [fetchGlobalStatusCounts]);
-
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getAllOrders(currentPage, 10, searchTerm, statusFilter);
+      const res = await getAllOrders(currentPage, 10, searchTerm, statusFilter, sortBy);
       if (res.success) {
-        let fetchedOrders = res.orders || [];
-
-        fetchedOrders.sort((a, b) => {
-          const dateA = new Date(a.createdAt || 0);
-          const dateB = new Date(b.createdAt || 0);
-          const totalA = Number(a.totalAmount || 0);
-          const totalB = Number(b.totalAmount || 0);
-
-          if (sortBy === "new-old") return dateB - dateA;
-          if (sortBy === "old-new") return dateA - dateB;
-          if (sortBy === "high-low") return totalB - totalA;
-          if (sortBy === "low-high") return totalA - totalB;
-          return 0;
-        });
-
-        setOrders(fetchedOrders);
+        setOrders(res.orders || []);
         setTotalPages(res.totalPages);
         setTotalOrders(res.totalOrders);
+        if (res.statusCounts) {
+          setStatusCounts(res.statusCounts);
+        }
       }
     } catch (error) { 
       toast.error("Failed to load orders"); 
@@ -146,7 +91,7 @@ export default function AdminOrdersPage() {
   }, [currentPage, searchTerm, statusFilter, sortBy]);
 
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => { fetchOrders(); }, 500);
+    const delayDebounceFn = setTimeout(() => { fetchOrders(); }, 300);
     return () => clearTimeout(delayDebounceFn);
   }, [fetchOrders]);
 
@@ -155,7 +100,6 @@ export default function AdminOrdersPage() {
     if (res.success) {
       toast.success(`Updated to ${newStatus}`);
       fetchOrders();
-      fetchGlobalStatusCounts();
     } else {
       toast.error(res.message || "Failed to update status");
     }
@@ -168,9 +112,23 @@ export default function AdminOrdersPage() {
       toast.success("Order deleted");
       setSelectedOrders(prev => prev.filter(id => id !== orderId));
       fetchOrders();
-      fetchGlobalStatusCounts();
     } else {
       toast.error(res.message || "Failed to delete order");
+    }
+  };
+
+  const handleSaveCustomPayment = async (orderId, customPaidInput) => {
+    try {
+      const res = await updateOrderPaymentAmount(orderId, customPaidInput);
+      if (res.success) {
+        toast.success(res.message || "Payment updated!");
+        setEditingPaymentOrder(null);
+        fetchOrders();
+      } else {
+        toast.error(res.error || "Failed to update payment");
+      }
+    } catch (err) {
+      toast.error("Something went wrong");
     }
   };
 
@@ -227,7 +185,7 @@ export default function AdminOrdersPage() {
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-col items-center w-full gap-3 sm:flex-row md:w-auto">
             {/* SEARCH INPUT */}
             <div className="relative w-full sm:w-52">
               <Search className="absolute text-[#3E442B]/20 -translate-y-1/2 left-4 md:left-5 top-1/2" size={16} />
@@ -239,9 +197,8 @@ export default function AdminOrdersPage() {
               />
             </div>
 
-            {/* FILTER & SORT ROW FOR MOBILE AND DESKTOP */}
-            <div className="grid grid-cols-2 sm:flex items-center gap-3 w-full sm:w-auto">
-              {/* STATUS FILTER DROPDOWN */}
+            {/* FILTER & SORT ROW */}
+            <div className="grid items-center w-full grid-cols-2 gap-3 sm:flex sm:w-auto">
               <div className="relative w-full sm:w-44">
                 <Filter className="absolute text-[#3E442B]/30 -translate-y-1/2 left-4 top-1/2 pointer-events-none" size={14} />
                 <select
@@ -260,7 +217,6 @@ export default function AdminOrdersPage() {
                 </select>
               </div>
 
-              {/* SORT DROPDOWN WITH ICON */}
               <div className="relative w-full sm:w-48">
                 <ArrowUpDown className="absolute text-[#EA638C] -translate-y-1/2 left-4 top-1/2 pointer-events-none" size={14} />
                 <select
@@ -281,9 +237,9 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        {/* STATUS TABS SECTION WITH TOTAL AMOUNTS */}
-        <div className="bg-white p-3 md:p-4 rounded-3xl border border-gray-100 shadow-sm mb-6">
-          <div className="flex items-center justify-between mb-2 px-2">
+        {/* STATUS TABS SECTION */}
+        <div className="p-3 mb-6 bg-white border border-gray-100 shadow-sm md:p-4 rounded-3xl">
+          <div className="flex items-center justify-between px-2 mb-2">
             <span className="text-[9px] font-black uppercase tracking-widest text-[#3E442B]/40">
               Quick Filter Tabs & Status Totals
             </span>
@@ -292,7 +248,7 @@ export default function AdminOrdersPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <div className="flex items-center gap-2 pb-1 overflow-x-auto scrollbar-none">
             {allStatuses.map((status) => {
               const isActive = statusFilter === status;
               const isDefault = defaultTab === status;
@@ -417,7 +373,7 @@ export default function AdminOrdersPage() {
                           <div className="w-8 h-8 rounded-xl bg-[#3E442B] flex items-center justify-center text-white font-black text-[10px] shrink-0">
                             {order.shippingAddress?.fullName?.charAt(0) || order.shippingAddress?.name?.charAt(0) || "C"}
                           </div>
-                          <div className="overflow-hidden min-w-0">
+                          <div className="min-w-0 overflow-hidden">
                             <p className="text-xs font-black uppercase text-[#3E442B] truncate leading-tight">
                               {order.shippingAddress?.fullName || order.shippingAddress?.name || "N/A"}
                             </p>
@@ -431,11 +387,21 @@ export default function AdminOrdersPage() {
                           <p className="text-sm font-black text-[#3E442B]">
                             ৳{order.totalAmount?.toLocaleString()}
                           </p>
-                          <div className="flex items-center justify-end gap-1 mt-0.5">
-                            <span className={`inline-flex items-center gap-1 text-[8px] font-black uppercase px-2 py-0.5 rounded-md border ${isPaid ? 'bg-green-50 text-green-600 border-green-100' : 'bg-pink-50 text-[#EA638C] border-[#FBB6E6]'}`}>
-                              {isPaid ? <CreditCard size={8}/> : <Banknote size={8}/>}
+                          <div className="flex flex-wrap items-center justify-end gap-1.5 mt-1">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase border ${isPaid ? 'bg-green-50 text-green-600 border-green-100' : 'bg-pink-50 text-[#EA638C] border-[#FBB6E6]'}`}>
+                              {isPaid ? <CreditCard size={9}/> : <Banknote size={9}/>}
                               {isPaid ? 'Settled' : `Due: ৳${order.dueAmount?.toLocaleString()}`}
                             </span>
+
+                            <button
+                              onClick={() => setEditingPaymentOrder(order)}
+                              type="button"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase bg-[#3E442B] text-white hover:bg-[#EA638C] transition-all shadow-xs cursor-pointer"
+                              title="Edit Due / Paid Amount"
+                            >
+                              <Pencil size={8} /> Edit
+                            </button>
+
                             {(qrSender || qrTxnId || qrScreenshot) && (
                               <button
                                 onClick={() => setPaymentInfoModal({ sender: qrSender, txnId: qrTxnId, screenshot: qrScreenshot, orderId: order._id })}
@@ -496,11 +462,11 @@ export default function AdminOrdersPage() {
                         <PathaoStatus trackingId={order.trackingNumber} />
                       </div>
 
-                      <div className="flex items-center gap-3 min-w-0 pr-2">
+                      <div className="flex items-center min-w-0 gap-3 pr-2">
                         <div className="w-10 h-10 rounded-xl bg-[#3E442B] flex items-center justify-center text-white font-black text-xs shrink-0">
                           {order.shippingAddress?.fullName?.charAt(0) || order.shippingAddress?.name?.charAt(0) || "C"}
                         </div>
-                        <div className="overflow-hidden min-w-0">
+                        <div className="min-w-0 overflow-hidden">
                           <p className="text-[10px] font-black uppercase text-[#3E442B] truncate" title={order.shippingAddress?.fullName || order.shippingAddress?.name || "N/A"}>
                             {order.shippingAddress?.fullName || order.shippingAddress?.name || "N/A"}
                           </p>
@@ -522,19 +488,28 @@ export default function AdminOrdersPage() {
                           {order.mobileBankingFee > 0 && <Info size={12} className="text-[#EA638C]" />}
                         </div>
 
-                        <div className="flex items-center gap-1.5 mt-1.5">
-                          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[8px] font-black uppercase border ${isPaid ? 'bg-green-50 text-green-600 border-green-100' : 'bg-pink-50 text-[#EA638C] border-[#FBB6E6]'}`}>
-                            {isPaid ? <CreditCard size={10}/> : <Banknote size={10}/>}
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase border ${isPaid ? 'bg-green-50 text-green-600 border-green-100' : 'bg-pink-50 text-[#EA638C] border-[#FBB6E6]'}`}>
+                            {isPaid ? <CreditCard size={9}/> : <Banknote size={9}/>}
                             {isPaid ? 'Settled' : `Due: ৳${order.dueAmount?.toLocaleString()}`}
-                          </div>
+                          </span>
+
+                          <button
+                            onClick={() => setEditingPaymentOrder(order)}
+                            type="button"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase bg-[#3E442B] text-white hover:bg-[#EA638C] transition-all shadow-xs cursor-pointer"
+                            title="Edit Due / Paid Amount"
+                          >
+                            <Pencil size={8} /> Edit
+                          </button>
 
                           {(qrSender || qrTxnId || qrScreenshot) && (
                             <button
                               onClick={() => setPaymentInfoModal({ sender: qrSender, txnId: qrTxnId, screenshot: qrScreenshot, orderId: order._id })}
-                              className="p-1.5 bg-[#FBB6E6]/20 text-[#EA638C] hover:bg-[#EA638C] hover:text-white rounded-xl transition-all shadow-xs cursor-pointer flex items-center justify-center"
+                              className="p-1.5 bg-[#FBB6E6]/20 text-[#EA638C] hover:bg-[#EA638C] hover:text-white rounded-lg transition-all shadow-xs cursor-pointer flex items-center justify-center"
                               title="View Payment Proof & Details"
                             >
-                              <QrCode size={14} />
+                              <QrCode size={12} />
                             </button>
                           )}
                         </div>
@@ -644,69 +619,21 @@ export default function AdminOrdersPage() {
           />
         )}
 
-        {/* PAYMENT PROOF & DETAILS POP-UP MODAL */}
-        {paymentInfoModal && (
-          <div 
-            onClick={() => setPaymentInfoModal(null)}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
-          >
-            <div 
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4"
-            >
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                <h3 className="text-xs font-black uppercase text-[#3E442B] tracking-wider">Payment Verification</h3>
-                <button onClick={() => setPaymentInfoModal(null)} className="p-1 rounded-xl bg-gray-50 text-gray-400 hover:text-[#EA638C]">
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div className="space-y-3 text-[10px] font-black uppercase">
-                <div className="flex justify-between bg-gray-50 p-3 rounded-2xl">
-                  <span className="text-gray-400">Sender Number:</span>
-                  <span className="text-[#3E442B] font-mono">{paymentInfoModal.sender || "N/A"}</span>
-                </div>
-                <div className="flex justify-between bg-gray-50 p-3 rounded-2xl">
-                  <span className="text-gray-400">Transaction ID:</span>
-                  <span className="text-[#EA638C] font-mono">{paymentInfoModal.txnId || "N/A"}</span>
-                </div>
-              </div>
-
-              {paymentInfoModal.screenshot && (
-                <div className="space-y-1">
-                  <span className="text-[9px] font-black uppercase text-gray-400">Payment Screenshot</span>
-                  <div className="relative w-full h-48 rounded-2xl overflow-hidden bg-gray-100 border border-gray-100">
-                    <Image 
-                      src={paymentInfoModal.screenshot} 
-                      fill 
-                      alt="Payment proof" 
-                      className="object-contain cursor-pointer"
-                      onClick={() => setFullscreenImage(paymentInfoModal.screenshot)}
-                      unoptimized 
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+        {/* PAYMENT & DUE ADJUSTMENT MODAL */}
+        {editingPaymentOrder && (
+          <PaymentEditorModal
+            order={editingPaymentOrder}
+            onClose={() => setEditingPaymentOrder(null)}
+            onSave={handleSaveCustomPayment}
+          />
         )}
 
-        {/* FULLSCREEN IMAGE MODAL */}
-        {fullscreenImage && (
-          <div 
-            onClick={() => setFullscreenImage(null)}
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
-          >
-            <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center">
-              <Image src={fullscreenImage} fill alt="Fullscreen Screenshot" className="object-contain" unoptimized />
-              <button 
-                onClick={() => setFullscreenImage(null)}
-                className="absolute top-4 right-4 p-2 bg-white/10 text-white rounded-full hover:bg-white hover:text-black transition-all"
-              >
-                <X size={20} />
-              </button>
-            </div>
-          </div>
+        {/* PAYMENT PROOF MODAL */}
+        {paymentInfoModal && (
+          <PaymentProofModal
+            data={paymentInfoModal}
+            onClose={() => setPaymentInfoModal(null)}
+          />
         )}
 
       </div>

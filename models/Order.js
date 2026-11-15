@@ -16,12 +16,12 @@ const OrderSchema = new mongoose.Schema(
           name: String,
           image: String,
           size: String,
-          variantId: { type: String, default: null }, // Standardized to String to avoid BSON type mismatches
+          variantId: { type: String, default: null },
         },
         quantity: { type: Number, required: true },
         price: { type: Number, required: true },
         sku: String,
-        note: { type: String, default: "" }, // <-- Added customer item note support
+        note: { type: String, default: "" },
       },
     ],
     totalAmount: Number,
@@ -64,14 +64,14 @@ const OrderSchema = new mongoose.Schema(
     tran_id: { type: String, sparse: true },
 
     paymentDetails: {
-      source: String, // Phone number (MFS) or Account Number
-      sourcePhone: String, // Sender phone number
-      transactionId: String, // Transaction ID copy
-      gatewayStatus: String, // Gateway verification state
-      cardType: String, // Visa, Mastercard, AMEX
-      cardIssuer: String, // City Bank, EBL, etc.
-      bankApp: String, // City Touch, EBL Skybank, etc.
-      gatewayResponse: Object, // Raw JSON
+      source: String,
+      sourcePhone: String,
+      transactionId: String,
+      gatewayStatus: String,
+      cardType: String,
+      cardIssuer: String,
+      bankApp: String,
+      gatewayResponse: Object,
       screenshot: String,
     },
 
@@ -86,16 +86,26 @@ const OrderSchema = new mongoose.Schema(
       },
     ],
     isStockReduced: { type: Boolean, default: false, index: true },
+    paymentHistory: [
+      {
+        previousPaid: Number,
+        newPaid: Number,
+        previousDue: Number,
+        newDue: Number,
+        updatedAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   {
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-  }
+  },
 );
 
-// SEARCH INDEXES
+// SEARCH & SORT INDEXES (Crucial for sub-second query performance)
 OrderSchema.index({ createdAt: -1 });
+OrderSchema.index({ status: 1, createdAt: -1 });
 OrderSchema.index({
   "shippingAddress.name": "text",
   "shippingAddress.phone": "text",
