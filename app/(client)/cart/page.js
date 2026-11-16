@@ -23,12 +23,11 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
   const {
     cart: globalCart,
     addToCart,
+    updateItemNote,
     deleteSelectedItems,
     clearCart,
   } = useCart();
 
-  // Local state to track item notes: { [uniqueKey]: "note content" }
-  const [itemNotes, setItemNotes] = useState({});
   // Track which variant item's note drawer is currently open
   const [activeNoteKey, setActiveNoteKey] = useState(null);
   const [tempNoteText, setTempNoteText] = useState("");
@@ -52,10 +51,10 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
         variantId: item.variantId || item.variant?._id || null,
         uniqueKey: generatedKey,
         basePrice: Number(item.basePrice) || itemPrice,
-        note: itemNotes[generatedKey] !== undefined ? itemNotes[generatedKey] : (item.note || ""),
+        note: item.note || "",
       };
     });
-  }, [rawCart, itemNotes]);
+  }, [rawCart]);
 
   // Items are UNSELECTED initially by default
   const [selectedItems, setSelectedItems] = useState([]);
@@ -158,11 +157,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
   const handleDeleteItem = (uniqueKey) => {
     deleteSelectedItems([uniqueKey]);
     setSelectedItems((prev) => prev.filter((id) => id !== uniqueKey));
-    setItemNotes((prev) => {
-      const copy = { ...prev };
-      delete copy[uniqueKey];
-      return copy;
-    });
   };
 
   // Note Handlers
@@ -172,10 +166,7 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
   };
 
   const handleSaveNote = (uniqueKey) => {
-    setItemNotes((prev) => ({
-      ...prev,
-      [uniqueKey]: tempNoteText,
-    }));
+    updateItemNote(uniqueKey, tempNoteText);
     setActiveNoteKey(null);
     toast.success("Note saved for this item!", {
       style: {
@@ -261,6 +252,50 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
 
   return (
     <div className={`w-full bg-[#FAFAFA] ${!isAdminPreview ? 'min-h-screen pt-32 pb-20 px-4' : 'p-2'}`}>
+      
+      {/* Custom Styles for Full-Width Traversing Gradient Object Animation & Pulse */}
+      <style jsx global>{`
+        @keyframes traverseGradient {
+          0% { transform: translateX(-120%); }
+          50% { transform: translateX(120%); }
+          100% { transform: translateX(-120%); }
+        }
+        .animate-traverse-gradient {
+          animation: traverseGradient 7s ease-in-out infinite;
+        }
+
+        @keyframes vibrantPulse {
+          0%, 100% {
+            transform: scale(1);
+            box-shadow: 0 8px 32px 0 rgba(234, 99, 140, 0.25), inset 0 0 15px rgba(251, 182, 230, 0.4);
+            border-color: rgba(234, 99, 140, 0.8);
+          }
+          50% {
+            transform: scale(1.012);
+            box-shadow: 0 14px 45px 0 rgba(234, 99, 140, 0.45), inset 0 0 25px rgba(251, 182, 230, 0.8);
+            border-color: rgba(234, 99, 140, 1);
+          }
+        }
+        .animate-vibrant-pulse {
+          animation: vibrantPulse 2.5s ease-in-out infinite;
+        }
+      `}</style>
+
+      {/* Sticky iPhone Glass Effect Banner with Full-Width Traversing Gradient Object & Pulse */}
+      <div className="sticky top-20 z-40 mx-auto max-w-7xl mb-8 px-4">
+        <div className="relative overflow-hidden p-4 bg-white/70 backdrop-blur-2xl border-2 border-[#EA638C] rounded-3xl animate-vibrant-pulse shadow-xl flex items-center justify-center text-center">
+          
+          {/* Gradient Color Object Traversing Complete Width */}
+          <div className="absolute inset-y-0 left-0 w-full overflow-hidden pointer-events-none opacity-60 filter blur-xl">
+            <div className="absolute top-0 bottom-0 w-64 bg-gradient-to-r from-[#FBB6E6] via-[#EA638C] to-[#3E442B]/30 rounded-full animate-traverse-gradient"></div>
+          </div>
+
+          <p className="relative z-10 text-xs font-black tracking-wide text-[#3E442B] uppercase drop-shadow-sm">
+            ✨ If you need to add a hook with any charm just add a text note under that specific item. ✨
+          </p>
+        </div>
+      </div>
+
       <div className="mx-auto max-w-7xl">
         {/* Header Controls */}
         <div className="flex flex-col items-start justify-between gap-4 mb-10 md:flex-row md:items-end">
