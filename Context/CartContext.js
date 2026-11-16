@@ -10,7 +10,7 @@ export const CartProvider = ({ children }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const isFetchingServerCart = useRef(false);
 
-  // Helper sanitizer to guarantee basePrice, uniqueKey, and clean IDs
+  // Helper sanitizer to guarantee basePrice, uniqueKey, clean IDs, and note
   const sanitizeItems = (items) => {
     if (!Array.isArray(items)) return [];
     return items.map((item) => {
@@ -26,6 +26,7 @@ export const CartProvider = ({ children }) => {
         basePrice: Number(item.basePrice || calculatedPrice),
         price: calculatedPrice,
         pricingTiers: item.pricingTiers || [],
+        note: item.note || "",
       };
     });
   };
@@ -68,7 +69,7 @@ export const CartProvider = ({ children }) => {
     }
   }, [status, session?.user]);
 
-  // 2. Sync Cart Changes
+  // 2. Sync Cart Changes (Automatically saves notes to DB / localStorage too!)
   useEffect(() => {
     if (!isLoaded || isFetchingServerCart.current) return;
 
@@ -167,11 +168,23 @@ export const CartProvider = ({ children }) => {
         stock: availableStock,
         quantity: Math.min(availableStock, Math.max(itemMoq, qChange)),
         sku: variantOrDelta?.sku || product.sku || "N/A",
+        note: product.note || "",
       };
 
       return [...prev, newItem];
     });
   };
+
+  // NEW: Update note for a specific cart item (triggers automatic DB / localStorage sync)
+  const updateItemNote = useCallback((uniqueKey, noteText) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.uniqueKey === uniqueKey
+          ? { ...item, note: (noteText || "").trim() }
+          : item
+      )
+    );
+  }, []);
 
   const processedCart = useMemo(() => {
     const productTotals = cart.reduce((acc, item) => {
@@ -204,6 +217,7 @@ export const CartProvider = ({ children }) => {
         uniqueKey: item.uniqueKey || `${pId}-${vId}`,
         basePrice: calculatedPrice,
         price: activePrice,
+        note: item.note || "",
       };
     });
   }, [cart]);
@@ -256,6 +270,7 @@ export const CartProvider = ({ children }) => {
         rawCart: cart,
         isLoaded,
         addToCart,
+        updateItemNote,
         removeFromCart,
         deleteSelectedItems,
         clearCart,

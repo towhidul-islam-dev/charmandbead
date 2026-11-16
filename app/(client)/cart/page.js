@@ -23,12 +23,11 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
   const {
     cart: globalCart,
     addToCart,
+    updateItemNote,
     deleteSelectedItems,
     clearCart,
   } = useCart();
 
-  // Local state to track item notes: { [uniqueKey]: "note content" }
-  const [itemNotes, setItemNotes] = useState({});
   // Track which variant item's note drawer is currently open
   const [activeNoteKey, setActiveNoteKey] = useState(null);
   const [tempNoteText, setTempNoteText] = useState("");
@@ -52,10 +51,10 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
         variantId: item.variantId || item.variant?._id || null,
         uniqueKey: generatedKey,
         basePrice: Number(item.basePrice) || itemPrice,
-        note: itemNotes[generatedKey] !== undefined ? itemNotes[generatedKey] : (item.note || ""),
+        note: item.note || "",
       };
     });
-  }, [rawCart, itemNotes]);
+  }, [rawCart]);
 
   // Items are UNSELECTED initially by default
   const [selectedItems, setSelectedItems] = useState([]);
@@ -158,11 +157,6 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
   const handleDeleteItem = (uniqueKey) => {
     deleteSelectedItems([uniqueKey]);
     setSelectedItems((prev) => prev.filter((id) => id !== uniqueKey));
-    setItemNotes((prev) => {
-      const copy = { ...prev };
-      delete copy[uniqueKey];
-      return copy;
-    });
   };
 
   // Note Handlers
@@ -172,10 +166,7 @@ export default function CartPage({ initialItems = [], isAdminPreview = false, us
   };
 
   const handleSaveNote = (uniqueKey) => {
-    setItemNotes((prev) => ({
-      ...prev,
-      [uniqueKey]: tempNoteText,
-    }));
+    updateItemNote(uniqueKey, tempNoteText);
     setActiveNoteKey(null);
     toast.success("Note saved for this item!", {
       style: {
