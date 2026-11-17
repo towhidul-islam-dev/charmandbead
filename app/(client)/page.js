@@ -1,7 +1,9 @@
 import { getProducts } from "@/lib/data";
+import { getRandomArchiveProducts } from "@/actions/productActions";
 import HeroCarousel from "@/components/HeroCarousel";
 import { getSlides } from "@/actions/sliderActions";
 import BilingualSlider from "@/components/BilingualSlider";
+import RandomProductsSlider from "@/components/RandomProductsSlider";
 import ProductCard from "@/components/ProductCard";
 import Link from "next/link";
 import {
@@ -26,19 +28,16 @@ export default async function HomePage({ searchParams }) {
   const currentPage = Number(params.page) || 1;
   const limit = 8; // Showing 8 products per page for the homepage grid
 
-  // Fetching products and slides concurrently with pagination parameters
-  const [productsData, slidesData] = await Promise.all([
+  // Fetching paginated products, slides, and random archive pool concurrently
+  const [productsData, slidesData, archiveProductsData] = await Promise.all([
     getProducts(false, null, currentPage, limit),
     getSlides(),
+    getRandomArchiveProducts(10),
   ]);
 
-  const {
-    products: rawProducts,
-    success,
-    totalCount,
-  } = productsData;
-
+  const { products: rawProducts, success, totalCount } = productsData;
   const slides = slidesData.success ? slidesData.slides : [];
+  const archiveProducts = archiveProductsData.success ? archiveProductsData.products : [];
 
   const instagramUrl = "https://www.instagram.com/charm.and.bead";
 
@@ -79,6 +78,10 @@ export default async function HomePage({ searchParams }) {
     <main className="min-h-screen bg-white">
       <HeroCarousel />
       <BilingualSlider slides={slides} />
+      
+      {/* --- Random Archive Discovery Section (Refreshes every minute with 10 random items from entire DB) --- */}
+      <RandomProductsSlider initialProducts={archiveProducts} />
+
       {/* Hero Section - UI Unchanged */}
       <section className="px-4 py-16 text-center md:py-24 bg-gradient-to-b from-white to-gray-50/50">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#EA638C]/10 text-[#EA638C] text-[10px] font-black uppercase tracking-[0.2em] mb-6 border border-[#EA638C]/10">
